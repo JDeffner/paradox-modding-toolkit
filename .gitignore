@@ -4,6 +4,7 @@ dist/
 .vscode-test/
 .webview-dev/
 .claude/
+.local/
 # docs/ is local-only by default: working notes and design history never land
 # in git (plans belong in PR descriptions). Tracked exceptions:
 docs/*

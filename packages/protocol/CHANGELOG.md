@@ -8,6 +8,10 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ## Unreleased
 
+- Add optional file selectors to event-detail and definition-form requests. Clients can address an exact source without changing requests that use the existing name-based lookup.
+
+- Add an optional language to localization lookups, so a selected translation can be edited without changing the configured completion language.
+
 ## 0.2.5
 
 Ships with the toolkit's 0.4.4 release.

@@ -76,6 +76,7 @@ import { createSessionToolbar } from "./sessionToolbar";
 import { connectHost } from "./host";
 import { iconEl, type IconName } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
+import { setSourceContext, sourceContextKeys } from "../../shared/sourceContext";
 import {
   closePopover,
   confirmDialog,
@@ -648,6 +649,51 @@ function renderTree(): void {
   for (const row of treeRows(scene, collapsed, focusIndex)) {
     const node = el("div", "px-item row");
     node.style.paddingLeft = `${4 + row.depth * 12}px`;
+    node.tabIndex = row.index === (selected ?? 0) ? 0 : -1;
+    node.setAttribute("role", "treeitem");
+    node.setAttribute("aria-level", String(row.depth + 1));
+    if (row.hasChildren) node.setAttribute("aria-expanded", String(!row.collapsed));
+    const item = scene.items[row.index];
+    if (item.editable && item.line !== undefined)
+      setSourceContext(node, {
+        webviewSection: "px.guiWidget",
+        pxSourceFile: file,
+        pxSourceLine: item.line,
+        pxDefinitionId: item.name ?? item.key,
+      });
+    node.addEventListener("keydown", (ev) => {
+      if (sourceContextKeys(ev, node)) return;
+      const rows = [...rowEls.keys()];
+      const at = rows.indexOf(row.index);
+      if (["ArrowUp", "ArrowDown", "Home", "End"].includes(ev.key)) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const next =
+          ev.key === "Home"
+            ? 0
+            : ev.key === "End"
+              ? rows.length - 1
+              : Math.max(0, Math.min(rows.length - 1, at + (ev.key === "ArrowDown" ? 1 : -1)));
+        select(rows[next], { reveal: false });
+        rowEls.get(rows[next])?.focus();
+      } else if (ev.key === "Enter" || ev.key === " ") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        select(row.index, { reveal: false });
+        if (ev.key === "Enter" && item.editable && item.line !== undefined)
+          host.send({ type: "revealAt", file, line: item.line });
+      } else if (ev.key === "ArrowLeft" || ev.key === "ArrowRight") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (row.hasChildren) {
+          const key = rowKey(item.path);
+          if (ev.key === "ArrowLeft") collapsed.add(key);
+          else collapsed.delete(key);
+          renderTree();
+          rowEls.get(row.index)?.focus();
+        }
+      }
+    });
     const twisty = el("span", "twisty");
     if (row.hasChildren) {
       twisty.appendChild(iconEl("chevronRight"));
@@ -685,6 +731,9 @@ function renderTree(): void {
     fragment.appendChild(node);
   }
   treeEl.textContent = "";
+  treeEl.setAttribute("role", "tree");
+  treeEl.setAttribute("aria-label", "Widgets");
+  treeEl.setAttribute("aria-multiselectable", "true");
   treeEl.appendChild(fragment);
   highlightTree(false);
 }
@@ -698,6 +747,8 @@ function setSelected(node: HTMLElement, on: boolean): void {
 function highlightTree(scrollTo: boolean): void {
   const members = new Set(others);
   for (const [index, node] of rowEls) {
+    node.tabIndex =
+      index === (selected !== null && rowEls.has(selected) ? selected : rowEls.keys().next().value) ? 0 : -1;
     const isPrimary = index === selected;
     setSelected(node, isPrimary || members.has(index));
     if (isPrimary && scrollTo) node.scrollIntoView({ block: "nearest" });
@@ -4654,6 +4705,22 @@ function renderUses(): void {
 function revealLink(name: string, atFile: string | undefined, atLine: number | undefined): HTMLElement {
   if (!atFile || atLine === undefined) return el("span", undefined, name);
   const node = el("span", "link", name);
+  node.tabIndex = 0;
+  node.setAttribute("role", "link");
+  setSourceContext(node, {
+    webviewSection: "px.definition",
+    pxSourceFile: atFile,
+    pxSourceLine: atLine,
+    pxDefinitionId: name,
+  });
+  node.addEventListener("keydown", (ev) => {
+    if (sourceContextKeys(ev, node)) return;
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      ev.stopPropagation();
+      node.click();
+    }
+  });
   node.title = `${atFile}:${atLine + 1}`;
   node.addEventListener("click", () => host.send({ type: "revealAt", file: atFile, line: atLine }));
   return node;
@@ -5963,8 +6030,8 @@ modeInteractEl.addEventListener("click", () => setMode("interact"));
 // ---- the context menu (edit mode) ----------------------------------------------
 
 stage.addEventListener("contextmenu", (ev) => {
-  ev.preventDefault();
   if (mode !== "edit" || gesture || marquee || paletteDrag) return;
+  ev.preventDefault();
   const world = toWorld(ev);
   const hit = hitStack(scene, world.x, world.y, skipMask)[0] ?? null;
   // A right-click on a member keeps the selection; on anything else it selects that first.

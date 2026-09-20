@@ -271,23 +271,19 @@
       },
       {
         "command": "px.runTiger",
-        "category": "Paradox Tiger",
-        "title": "Run Validation"
+        "title": "PX: Validate Mod"
       },
       {
         "command": "px.editLocalization",
-        "category": "Paradox Localization",
-        "title": "Edit Key at Cursor"
+        "title": "PX: Edit Key at Cursor"
       },
       {
         "command": "px.openLocalizationSideBySide",
-        "category": "Paradox Localization",
-        "title": "Open Side by Side"
+        "title": "PX: Open Side by Side"
       },
       {
         "command": "px.jumpToScriptReference",
-        "category": "Paradox Localization",
-        "title": "Go to Script Usage"
+        "title": "PX: Go to Script Usage"
       },
       {
         "command": "px.declareCalendar",
@@ -296,8 +292,7 @@
       },
       {
         "command": "px.insertDate",
-        "category": "Paradox",
-        "title": "Insert Date (Display Calendar)"
+        "title": "PX: Insert Date (Display Calendar)"
       },
       {
         "command": "px.generateCalendarLoc",
@@ -352,14 +347,12 @@
       },
       {
         "command": "px.openInfoDocs",
-        "category": "Paradox",
-        "title": "Open Format Docs (.info) for This File",
+        "title": "PX: Open Format Docs (.info) for This File",
         "icon": "$(book)"
       },
       {
         "command": "px.openVanillaExamples",
-        "category": "Paradox",
-        "title": "Open Vanilla Examples",
+        "title": "PX: Open Vanilla Examples",
         "icon": "$(go-to-file)"
       },
       {
@@ -370,8 +363,7 @@
       },
       {
         "command": "px.showEventGraph",
-        "category": "Paradox",
-        "title": "Show Event Graph",
+        "title": "PX: Show Event Graph",
         "icon": "$(type-hierarchy)"
       },
       {
@@ -394,20 +386,17 @@
       },
       {
         "command": "px.simulateEvent",
-        "category": "Paradox",
-        "title": "Simulate Event",
+        "title": "PX: Simulate Event",
         "icon": "$(debug-alt)"
       },
       {
         "command": "px.showDependencies",
-        "category": "Paradox",
-        "title": "Show Dependencies of Definition at Cursor",
+        "title": "PX: Show Dependencies of Definition at Cursor",
         "icon": "$(type-hierarchy-sub)"
       },
       {
         "command": "px.showGuiTree",
-        "category": "Paradox",
-        "title": "Show GUI Widget Tree",
+        "title": "PX: Show GUI Widget Tree",
         "icon": "$(list-tree)"
       },
       {
@@ -418,8 +407,7 @@
       },
       {
         "command": "px.openGuiEditor",
-        "category": "Paradox",
-        "title": "Open GUI Editor",
+        "title": "PX: Open GUI Editor",
         "icon": "$(preview)"
       },
       {
@@ -532,25 +520,26 @@
       },
       {
         "command": "px.openWorkshopManager",
-        "category": "Paradox",
-        "title": "Open Steam Workshop Panel",
+        "title": "PX: Open Steam Workshop Panel",
         "icon": "$(cloud)"
       },
       {
         "command": "px.translateNext",
-        "category": "Paradox Localization",
-        "title": "Translate Missing Keys (one by one)",
+        "title": "PX: Translate Missing Keys (one by one)",
         "icon": "$(arrow-right)"
       },
       {
         "command": "px.newContent",
-        "category": "Paradox",
-        "title": "New Content (event, decision, …)"
+        "title": "PX: New Content (event, decision, …)"
       },
       {
         "command": "px.insertSnippet",
+        "title": "PX: Insert Snippet (definition skeleton, block)"
+      },
+      {
+        "command": "px.saveWithUtf8Bom",
         "category": "Paradox",
-        "title": "Insert Snippet (definition skeleton, block)"
+        "title": "Save as UTF-8 with BOM..."
       },
       {
         "command": "px.exportSnippets",
@@ -569,8 +558,7 @@
       },
       {
         "command": "px.convertToDds",
-        "category": "Paradox",
-        "title": "Convert Image to DDS",
+        "title": "PX: Convert Image to DDS",
         "icon": "$(file-media)"
       },
       {
@@ -669,15 +657,26 @@
         "icon": "$(comment-discussion)"
       },
       {
-        "command": "px.openBBCodePreview",
+        "command": "px.customizeSidebar",
         "category": "Paradox",
-        "title": "Open BBCode Preview",
+        "title": "Customize Project Panel Rows",
+        "shortTitle": "Customize",
+        "icon": "$(list-selection)"
+      },
+      {
+        "command": "px.openSettings",
+        "category": "Paradox",
+        "title": "Extension Settings",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "px.openBBCodePreview",
+        "title": "PX: Open BBCode Preview",
         "icon": "$(preview)"
       },
       {
         "command": "px.openBBCodePreviewSide",
-        "category": "Paradox",
-        "title": "Open BBCode Preview to the Side",
+        "title": "PX: Open BBCode Preview to the Side",
         "icon": "$(open-preview)"
       },
       {
@@ -694,38 +693,98 @@
       },
       {
         "command": "px.editBBCodeAsMarkdown",
-        "category": "Paradox",
-        "title": "Edit as Markdown",
+        "title": "PX: Edit BBCode as Markdown",
         "icon": "$(markdown)"
       },
       {
         "command": "px.backToBBCode",
         "category": "Paradox",
-        "title": "Back to BBCode",
+        "title": "Show BBCode Source",
         "icon": "$(go-to-file)"
       },
       {
         "command": "px.convertBBCodeToMarkdown",
-        "category": "Paradox",
-        "title": "Convert to Markdown File"
+        "title": "PX: Convert to Markdown File"
       },
       {
         "command": "px.convertMarkdownToBBCode",
-        "category": "Paradox",
-        "title": "Convert to BBCode",
+        "title": "PX: Convert to BBCode File",
         "icon": "$(file-code)"
       },
       {
-        "command": "px.customizeSidebar",
-        "category": "Paradox",
-        "title": "Customize Project Panel Rows",
-        "icon": "$(list-selection)"
+        "command": "px.openToSideFromView",
+        "title": "Open to the Side",
+        "category": "Paradox"
       },
       {
-        "command": "px.openSettings",
+        "command": "px.editDefinitionFromView",
+        "title": "Edit in Creator",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.compareOverrideSource",
+        "title": "Compare with This Source",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.compareOverrideVanilla",
+        "title": "Compare with Vanilla",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.openOverrideBoth",
+        "title": "Open Both Sources",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.focusThisMod",
+        "title": "PX: Focus This Mod"
+      },
+      {
+        "command": "px.includeThisMod",
+        "title": "PX: Include This Mod in Indexing"
+      },
+      {
+        "command": "px.excludeThisMod",
+        "title": "PX: Exclude This Mod from Indexing"
+      },
+      {
+        "command": "px.addThisModAsDependency",
+        "title": "PX: Add This Mod as Read-Only Dependency"
+      },
+      {
+        "command": "px.copyLocalizationKey",
+        "title": "PX: Copy Localization Key"
+      },
+      {
+        "command": "px.allTools",
         "category": "Paradox",
-        "title": "Extension Settings",
-        "icon": "$(settings-gear)"
+        "title": "All Tools"
+      },
+      {
+        "command": "px.eventGraph.focusNode",
+        "title": "Focus Here",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.eventGraph.simulateNode",
+        "title": "Simulate",
+        "category": "Paradox"
+      },
+      {
+        "command": "px.convertImages",
+        "title": "PX: Convert Images...",
+        "icon": "$(file-media)"
+      },
+      {
+        "command": "px.convertDdsToImage",
+        "title": "PX: Convert DDS to Images...",
+        "icon": "$(file-media)"
+      },
+      {
+        "command": "px.openDdsPreview",
+        "title": "PX: Open DDS Preview",
+        "icon": "$(file-media)"
       }
     ],
     "customEditors": [
@@ -738,6 +797,16 @@
           }
         ],
         "priority": "default"
+      },
+      {
+        "viewType": "px.bbcodePreview",
+        "displayName": "BBCode Preview",
+        "selector": [
+          {
+            "filenamePattern": "*.bbcode"
+          }
+        ],
+        "priority": "option"
       }
     ],
     "walkthroughs": [
@@ -748,13 +817,13 @@
         "steps": [
           {
             "id": "px.step.setup",
-            "title": "Run automatic setup",
+            "title": "Check workspace readiness",
             "description": "Detects your game install, reports whether each dump set is toolkit-provided or generated by you, and offers the game's tiger validator.\n[Run Setup & Health Check](command:px.setup)",
             "media": {
               "markdown": "media/walkthrough/setup.md"
             },
             "completionEvents": [
-              "onCommand:px.setup"
+              "onContext:px.setupReady"
             ]
           },
           {
@@ -765,7 +834,7 @@
               "markdown": "media/walkthrough/mod.md"
             },
             "completionEvents": [
-              "onCommand:workbench.action.files.openFolder"
+              "onContext:px.modReady"
             ]
           },
           {
@@ -776,25 +845,25 @@
               "markdown": "media/walkthrough/scriptdocs.md"
             },
             "completionEvents": [
-              "onCommand:px.reloadScriptDocs"
+              "onContext:px.dumpsReady"
             ]
           },
           {
             "id": "px.step.tiger",
             "title": "Enable tiger diagnostics",
-            "description": "tiger validates your whole mod and shows problems as squiggles. Run it with Ctrl+Alt+V or from the tiger item in the status bar; set px.tigerRunOn to 'save' to run it on every save. EU5 has no tiger build yet.\n[Download tiger](command:px.downloadTiger)",
+            "description": "The game's validator checks your mod and shows problems in the editor. Download it, then use Validate Mod in Project or the validator in the status bar.\n[Download validator](command:px.downloadTiger)",
             "media": {
               "markdown": "media/walkthrough/tiger.md"
             },
             "completionEvents": [
-              "onCommand:px.downloadTiger",
-              "onSettingChanged:px.tigerPath"
-            ]
+              "onContext:px.tigerReady"
+            ],
+            "when": "px.hasTiger"
           },
           {
             "id": "px.step.explore",
             "title": "Try it",
-            "description": "Open an event file: hover an effect, F12 a scripted effect, check the inline localization.\n[Insert Snippet](command:px.insertSnippet)\n[Export all generated snippets](command:px.exportSnippets) as searchable HTML with previews and printing.",
+            "description": "Open an event file, hover an effect, then right-click an event or localization key and choose an action from the Paradox menu. Press Shift+F10 for the same menu from the keyboard.\n[Insert Snippet](command:px.insertSnippet)\n[Export Generated Snippets](command:px.exportSnippets)",
             "media": {
               "markdown": "media/walkthrough/explore.md"
             },
@@ -861,6 +930,12 @@
               "Europa Universalis V (community-sourced schema; not yet verified against a live install)"
             ],
             "markdownDescription": "Which game this workspace mods. `auto` detects from the mod's descriptor shape and is right for almost everyone; set explicitly when detection guesses wrong. `px.gamePath`/`px.logsPath`/`px.tigerPath` always describe the ACTIVE game and are honored when set; unset paths are auto-detected per game (Steam library / Documents). Games without a tiger build (EU5) skip tiger integration."
+          },
+          "px.notifications.startup": {
+            "type": "boolean",
+            "default": true,
+            "scope": "window",
+            "markdownDescription": "Show optional setup notices when a mod workspace opens. Configuration errors still appear. Notice details are recorded in the Paradox Modding Toolkit output."
           }
         }
       },
@@ -1126,7 +1201,7 @@
       "activitybar": [
         {
           "id": "px",
-          "title": "Paradox Modding Toolkit",
+          "title": "PX Toolkit",
           "icon": "media/px-view.svg"
         }
       ]
@@ -1137,13 +1212,42 @@
           "id": "px.tools",
           "type": "webview",
           "name": "Project",
+          "contextualTitle": "Project",
           "icon": "media/px-view.svg",
           "visibility": "visible",
           "when": "px.isCk3Workspace"
         },
         {
+          "id": "px.utils",
+          "type": "webview",
+          "name": "Utils",
+          "contextualTitle": "Utils",
+          "icon": "media/px-view.svg",
+          "visibility": "collapsed",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "id": "px.test",
+          "type": "webview",
+          "name": "Test & Troubleshoot",
+          "contextualTitle": "Test & Troubleshoot",
+          "icon": "media/px-view.svg",
+          "visibility": "collapsed",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "id": "px.paths",
+          "type": "webview",
+          "name": "Paths",
+          "contextualTitle": "Paths",
+          "icon": "media/px-view.svg",
+          "visibility": "collapsed",
+          "when": "px.isCk3Workspace"
+        },
+        {
           "id": "px.overview",
           "name": "Mod Overview",
+          "contextualTitle": "Mod Overview",
           "icon": "media/px-view.svg",
           "visibility": "collapsed",
           "when": "px.isCk3Workspace"
@@ -1151,13 +1255,15 @@
         {
           "id": "px.problems",
           "name": "Problems by Type",
+          "contextualTitle": "Problems by Type",
           "icon": "media/px-view.svg",
-          "visibility": "collapsed",
+          "visibility": "hidden",
           "when": "px.isCk3Workspace"
         },
         {
           "id": "px.locCoverage",
           "name": "Localization Coverage",
+          "contextualTitle": "Localization Coverage",
           "icon": "media/px-view.svg",
           "visibility": "collapsed",
           "when": "px.isCk3Workspace"
@@ -1165,15 +1271,17 @@
         {
           "id": "px.overrides",
           "name": "Overrides & Conflicts",
+          "contextualTitle": "Overrides & Conflicts",
           "icon": "media/px-view.svg",
-          "visibility": "collapsed",
+          "visibility": "hidden",
           "when": "px.isCk3Workspace"
         },
         {
           "id": "px.dependencies",
           "name": "Dependencies",
+          "contextualTitle": "Dependencies",
           "icon": "media/px-view.svg",
-          "visibility": "collapsed",
+          "visibility": "hidden",
           "when": "px.isCk3Workspace"
         }
       ]
@@ -1310,7 +1418,7 @@
         },
         {
           "command": "px.showEventGraph",
-          "when": "px.isCk3Workspace"
+          "when": "px.isCk3Workspace && px.eventGraphSupported"
         },
         {
           "command": "px.showExamplesWiki",
@@ -1326,7 +1434,7 @@
         },
         {
           "command": "px.simulateEvent",
-          "when": "px.isCk3Workspace"
+          "when": "px.isCk3Workspace && px.eventGraphSupported"
         },
         {
           "command": "px.showDependencies",
@@ -1441,6 +1549,10 @@
           "when": "editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/"
         },
         {
+          "command": "px.saveWithUtf8Bom",
+          "when": "px.isCk3Workspace && resourceScheme == file && ((resourceExtname == .txt && editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/) || editorLangId == paradox-loc)"
+        },
+        {
           "command": "px.convertToDds",
           "when": "px.isCk3Workspace"
         },
@@ -1457,38 +1569,6 @@
           "when": "px.isCk3Workspace"
         },
         {
-          "command": "px.openBBCodePreview",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
-        },
-        {
-          "command": "px.openBBCodePreviewSide",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
-        },
-        {
-          "command": "px.editBBCodeAsMarkdown",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
-        },
-        {
-          "command": "px.backToBBCode",
-          "when": "resourceScheme == pxmd"
-        },
-        {
-          "command": "px.openBBCodeSource",
-          "when": "activeWebviewPanelId == px.bbcodePreview"
-        },
-        {
-          "command": "px.openBBCodeHelp",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd"
-        },
-        {
-          "command": "px.convertBBCodeToMarkdown",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode"
-        },
-        {
-          "command": "px.convertMarkdownToBBCode",
-          "when": "editorLangId == markdown"
-        },
-        {
           "command": "px.customizeSidebar",
           "when": "px.isCk3Workspace"
         },
@@ -1499,6 +1579,90 @@
         {
           "command": "px.exportSnippets",
           "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openBBCodePreview",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd"
+        },
+        {
+          "command": "px.openBBCodePreviewSide",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd"
+        },
+        {
+          "command": "px.openBBCodeSource",
+          "when": "activeCustomEditorId == px.bbcodePreview"
+        },
+        {
+          "command": "px.backToBBCode",
+          "when": "resourceScheme == pxmd"
+        },
+        {
+          "command": "px.editBBCodeAsMarkdown",
+          "when": "resourceExtname == .bbcode && resourceScheme == file"
+        },
+        {
+          "command": "px.convertBBCodeToMarkdown",
+          "when": "resourceExtname == .bbcode && resourceScheme == file"
+        },
+        {
+          "command": "px.convertMarkdownToBBCode",
+          "when": "editorLangId == markdown && resourceScheme == file"
+        },
+        {
+          "command": "px.openBBCodeHelp",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd"
+        },
+        {
+          "command": "px.openToSideFromView",
+          "when": "false"
+        },
+        {
+          "command": "px.editDefinitionFromView",
+          "when": "false"
+        },
+        {
+          "command": "px.compareOverrideSource",
+          "when": "false"
+        },
+        {
+          "command": "px.compareOverrideVanilla",
+          "when": "false"
+        },
+        {
+          "command": "px.openOverrideBoth",
+          "when": "false"
+        },
+        {
+          "command": "px.focusThisMod",
+          "when": "false"
+        },
+        {
+          "command": "px.includeThisMod",
+          "when": "false"
+        },
+        {
+          "command": "px.excludeThisMod",
+          "when": "false"
+        },
+        {
+          "command": "px.addThisModAsDependency",
+          "when": "false"
+        },
+        {
+          "command": "px.copyLocalizationKey",
+          "when": "false"
+        },
+        {
+          "command": "px.allTools",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.eventGraph.focusNode",
+          "when": "false"
+        },
+        {
+          "command": "px.eventGraph.simulateNode",
+          "when": "false"
         }
       ],
       "view/title": [
@@ -1510,27 +1674,27 @@
         {
           "command": "px.refreshViews",
           "when": "view =~ /^px\\./",
-          "group": "navigation"
+          "group": "1_actions"
         },
         {
           "command": "px.showEventGraph",
-          "when": "view == px.overview",
-          "group": "navigation"
+          "when": "view == px.overview && px.eventGraphSupported",
+          "group": "1_actions"
         },
         {
           "command": "px.modReport",
           "when": "view == px.overview",
-          "group": "navigation"
+          "group": "1_actions"
         },
         {
           "command": "px.createTranslation",
           "when": "view == px.locCoverage",
-          "group": "navigation"
+          "group": "1_actions"
         },
         {
           "command": "px.translateNext",
           "when": "view == px.locCoverage",
-          "group": "navigation"
+          "group": "1_actions"
         },
         {
           "command": "px.createTranslationMod",
@@ -1545,12 +1709,12 @@
         {
           "command": "px.dependenciesClear",
           "when": "view == px.dependencies",
-          "group": "navigation@2"
+          "group": "1_actions"
         },
         {
           "command": "px.dependenciesInfo",
           "when": "view == px.dependencies",
-          "group": "navigation@3"
+          "group": "1_actions"
         },
         {
           "command": "px.openProblemsPanel",
@@ -1565,7 +1729,7 @@
         {
           "command": "px.openKeybindings",
           "when": "view == px.tools",
-          "group": "navigation@2"
+          "group": "1_actions"
         },
         {
           "command": "px.openSettings",
@@ -1575,7 +1739,12 @@
         {
           "command": "px.customizeSidebar",
           "when": "view == px.tools",
-          "group": "1_configure@2"
+          "group": "navigation@2"
+        },
+        {
+          "command": "px.allTools",
+          "when": "view == px.tools",
+          "group": "navigation@1"
         }
       ],
       "view/item/context": [
@@ -1638,13 +1807,183 @@
           "command": "px.nextProblemInFile",
           "when": "view == px.problems && viewItem == px.problemFile",
           "group": "1_navigate@2"
+        },
+        {
+          "command": "px.dependenciesForItem",
+          "when": "view == px.overview && viewItem =~ /^px\\.definition\\./",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.findReferencesFromView",
+          "when": "view == px.overview && viewItem =~ /^px\\.definition\\./",
+          "group": "navigation@2"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "view == px.overview && viewItem =~ /^px\\.definition\\./",
+          "group": "navigation@3"
+        },
+        {
+          "command": "px.openToSideFromView",
+          "when": "view == px.overview && viewItem =~ /^px\\.definition\\./",
+          "group": "navigation@4"
+        },
+        {
+          "command": "px.showEventGraph",
+          "when": "view == px.overview && viewItem == px.definition.event && px.eventGraphSupported",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.simulateEvent",
+          "when": "view == px.overview && viewItem == px.definition.event && px.eventGraphSupported",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.editDefinitionFromView",
+          "when": "view == px.overview && viewItem =~ /\\.creator$/",
+          "group": "paradox@2"
+        },
+        {
+          "command": "px.compareOverrideSource",
+          "when": "view == px.overrides && viewItem == px.overrideSource",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.openOverrideBoth",
+          "when": "view == px.overrides && viewItem == px.overrideSource",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.compareOverrideVanilla",
+          "when": "view == px.overrides && viewItem == px.override.vanilla",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "view == px.overrides && viewItem =~ /^px\\.override/",
+          "group": "paradox@1"
         }
       ],
       "editor/context": [
         {
           "command": "px.simulateEvent",
-          "when": "editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ && px.isCk3Workspace",
-          "group": "1_modification"
+          "when": "px.isCk3Workspace && editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ && px.eventGraphSupported && px.eventAtCursor",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.editLocalization",
+          "when": "(px.isCk3Workspace && (editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ || px.localizationReference || px.localizationDefinition)) && (px.localizationReference)",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.openLocalizationSideBySide",
+          "when": "(px.isCk3Workspace && (editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ || px.localizationReference || px.localizationDefinition)) && (px.localizationReference)",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.jumpToScriptReference",
+          "when": "(px.isCk3Workspace && (editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ || px.localizationReference || px.localizationDefinition)) && (px.localizationDefinition)",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.copyLocalizationKey",
+          "when": "(px.isCk3Workspace && (editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ || px.localizationReference || px.localizationDefinition)) && (px.localizationDefinition)",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.convertImages",
+          "when": "resourceScheme == file && resourceExtname =~ /\\.(dds|png|jpe?g|webp|gif|bmp|avif|ico|svg)$/i",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.convertToDds",
+          "when": "resourceScheme == file && resourceExtname =~ /\\.(png|jpe?g|webp|gif|bmp|avif|ico|svg)$/i",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.convertDdsToImage",
+          "when": "resourceScheme == file && resourceExtname =~ /\\.dds$/i",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.openDdsPreview",
+          "when": "resourceScheme == file && resourceExtname =~ /\\.dds$/i",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.convertBBCodeToMarkdown",
+          "when": "resourceScheme == file && resourceExtname == .bbcode",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.convertMarkdownToBBCode",
+          "when": "resourceScheme == file && resourceExtname == .md",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.insertSnippet",
+          "when": "px.isCk3Workspace && editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.insertDate",
+          "when": "px.isCk3Workspace && editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.showDependencies",
+          "when": "px.isCk3Workspace && editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ && px.definitionAtCursor",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.showEventGraph",
+          "when": "px.isCk3Workspace && editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ && px.eventGraphSupported && resourcePath =~ /[\\\\/]events[\\\\/]/",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.showGuiTree",
+          "when": "px.isCk3Workspace && resourceExtname == .gui",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.openGuiEditor",
+          "when": "px.isCk3Workspace && resourceExtname == .gui && px.guiEditorSupported",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.openInfoDocs",
+          "when": "px.hasInfoDoc",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.openVanillaExamples",
+          "when": "resourceLangId == paradox-info",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.translateNext",
+          "when": "px.isCk3Workspace && resourceFilename =~ /_l_[a-z_]+\\.yml$/",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.editLocalization",
+          "when": "px.localizationDefinition",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.openBBCodePreview",
+          "when": "resourceScheme == file && resourceExtname == .bbcode",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.openBBCodePreviewSide",
+          "when": "resourceScheme == file && resourceExtname == .bbcode",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.editBBCodeAsMarkdown",
+          "when": "resourceScheme == file && resourceExtname == .bbcode",
+          "group": "px_toolkit@2"
         }
       ],
       "editor/title/run": [
@@ -1666,44 +2005,9 @@
       ],
       "editor/title": [
         {
-          "command": "px.openBBCodePreviewSide",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode",
-          "group": "navigation@1"
-        },
-        {
-          "command": "px.openBBCodePreview",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode",
-          "group": "navigation@2"
-        },
-        {
-          "command": "px.backToBBCode",
-          "when": "resourceScheme == pxmd",
-          "group": "navigation@1"
-        },
-        {
-          "command": "px.openBBCodePreviewSide",
-          "when": "resourceScheme == pxmd",
-          "group": "navigation@2"
-        },
-        {
-          "command": "px.openBBCodeHelp",
-          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd",
-          "group": "navigation@3"
-        },
-        {
-          "command": "px.convertMarkdownToBBCode",
-          "when": "resourceFilename == description.md",
-          "group": "navigation@1"
-        },
-        {
-          "command": "px.openBBCodeSource",
-          "when": "activeWebviewPanelId == px.bbcodePreview",
-          "group": "navigation"
-        },
-        {
           "command": "px.showGuiTree",
-          "when": "resourceExtname == .gui && px.isCk3Workspace",
-          "group": "navigation"
+          "when": "resourceExtname == .gui && px.isCk3Workspace && px.guiEditorSupported",
+          "group": "1_actions@1"
         },
         {
           "command": "px.openGuiEditor",
@@ -1711,26 +2015,228 @@
           "group": "navigation"
         },
         {
-          "command": "px.showEventGraph",
-          "when": "resourceExtname == .txt && resourcePath =~ /events|on_action|decisions/ && px.isCk3Workspace",
-          "group": "navigation"
-        },
-        {
           "command": "px.openInfoDocs",
           "when": "px.hasInfoDoc && (resourceLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ || resourceLangId == paradox-gui || resourceLangId == paradox-loc)",
-          "group": "navigation"
+          "group": "2_help@1"
         },
         {
           "command": "px.openVanillaExamples",
           "when": "resourceLangId == paradox-info",
           "group": "navigation"
+        },
+        {
+          "command": "px.openBBCodePreviewSide",
+          "when": "((editorLangId == bbcode || resourceExtname == .bbcode) && activeCustomEditorId != px.bbcodePreview) || resourceScheme == pxmd",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.openBBCodeSource",
+          "when": "activeCustomEditorId == px.bbcodePreview",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.openBBCodePreview",
+          "when": "((editorLangId == bbcode || resourceExtname == .bbcode) && activeCustomEditorId != px.bbcodePreview) || resourceScheme == pxmd",
+          "group": "1_bbcode@1"
+        },
+        {
+          "command": "px.backToBBCode",
+          "when": "resourceScheme == pxmd",
+          "group": "1_bbcode@2"
+        },
+        {
+          "command": "px.editBBCodeAsMarkdown",
+          "when": "resourceExtname == .bbcode && resourceScheme == file",
+          "group": "1_bbcode@3"
+        },
+        {
+          "command": "px.convertBBCodeToMarkdown",
+          "when": "resourceExtname == .bbcode && resourceScheme == file",
+          "group": "1_bbcode@4"
+        },
+        {
+          "command": "px.convertMarkdownToBBCode",
+          "when": "editorLangId == markdown && resourceScheme == file",
+          "group": "1_bbcode@5"
+        },
+        {
+          "command": "px.openBBCodeHelp",
+          "when": "editorLangId == bbcode || resourceExtname == .bbcode || resourceScheme == pxmd",
+          "group": "2_help@1"
+        },
+        {
+          "command": "px.showGuiTree",
+          "when": "resourceExtname == .gui && px.isCk3Workspace && !px.guiEditorSupported",
+          "group": "navigation@1"
         }
       ],
       "explorer/context": [
         {
+          "command": "px.openGuiEditor",
+          "when": "px.isCk3Workspace && resourceScheme == file && resourceExtname == .gui && px.guiEditorSupported",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.showGuiTree",
+          "when": "px.isCk3Workspace && resourceScheme == file && resourceExtname == .gui",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.showEventGraph",
+          "when": "px.isCk3Workspace && resourceScheme == file && px.eventGraphSupported && resourceExtname == .txt && resourcePath =~ /[\\\\/]events[\\\\/]/",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.translateNext",
+          "when": "px.isCk3Workspace && resourceScheme == file && resourceFilename =~ /_l_[a-z_]+\\.yml$/",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.newContent",
+          "when": "px.isCk3Workspace && resourceScheme == file && explorerResourceIsFolder && resourcePath in px.contentFolders",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.focusThisMod",
+          "when": "px.isCk3Workspace && resourceScheme == file && resourcePath in px.indexedModResources",
+          "group": "px_toolkit@1"
+        },
+        {
+          "command": "px.runTiger",
+          "when": "(px.isCk3Workspace && resourceScheme == file && resourcePath in px.modResources) && (resourcePath in px.indexedModResources && px.hasTiger)",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.openWorkshopManager",
+          "when": "(px.isCk3Workspace && resourceScheme == file && resourcePath in px.modResources) && (resourcePath in px.indexedModResources)",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.excludeThisMod",
+          "when": "(px.isCk3Workspace && resourceScheme == file && resourcePath in px.modResources) && (resourcePath in px.indexedModResources)",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.includeThisMod",
+          "when": "(px.isCk3Workspace && resourceScheme == file && resourcePath in px.modResources) && (resourcePath in px.excludedModResources)",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.addThisModAsDependency",
+          "when": "(px.isCk3Workspace && resourceScheme == file && resourcePath in px.modResources) && (resourcePath in px.modResources)",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.openBBCodePreview",
+          "when": "resourceScheme == file && resourceExtname == .bbcode",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.openBBCodePreviewSide",
+          "when": "resourceScheme == file && resourceExtname == .bbcode",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.editBBCodeAsMarkdown",
+          "when": "resourceScheme == file && resourceExtname == .bbcode",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.convertImages",
+          "when": "resourceScheme == file && (explorerResourceIsFolder || resourceExtname =~ /\\.(dds|png|jpe?g|webp|gif|bmp|avif|ico|svg)$/i)",
+          "group": "px_toolkit@2"
+        },
+        {
           "command": "px.convertToDds",
-          "when": "resourceExtname =~ /\\.(png|jpe?g|webp)$/i",
-          "group": "7_modification"
+          "when": "resourceScheme == file && resourceExtname =~ /\\.(png|jpe?g|webp|gif|bmp|avif|ico|svg)$/i",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.convertDdsToImage",
+          "when": "resourceScheme == file && resourceExtname =~ /\\.dds$/i",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.openDdsPreview",
+          "when": "resourceScheme == file && resourceExtname =~ /\\.dds$/i",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.convertBBCodeToMarkdown",
+          "when": "resourceScheme == file && resourceExtname == .bbcode",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.convertMarkdownToBBCode",
+          "when": "resourceScheme == file && resourceExtname == .md",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.openVanillaExamples",
+          "when": "px.isCk3Workspace && resourceScheme == file && resourceFilename =~ /^_.*\\.info$/i",
+          "group": "px_toolkit@2"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "px.openFromView",
+          "when": "webviewId == px.eventGraph && webviewSection == px.graphNode && pxSourceFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.eventGraph.focusNode",
+          "when": "webviewId == px.eventGraph && webviewSection == px.graphNode",
+          "group": "navigation@2"
+        },
+        {
+          "command": "px.eventGraph.simulateNode",
+          "when": "webviewId == px.eventGraph && webviewSection == px.graphNode && pxDefinitionKind == event && px.eventGraphSupported",
+          "group": "navigation@3"
+        },
+        {
+          "command": "px.dependenciesForItem",
+          "when": "webviewId == px.eventGraph && webviewSection == px.graphNode && pxSourceFile && pxDefinitionKind",
+          "group": "2_inspect@1"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "webviewId == px.eventGraph && webviewSection == px.graphNode && pxDefinitionId",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "px.openFromView",
+          "when": "webviewId == px.guiEditor && webviewSection == px.guiWidget && pxSourceFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "webviewId == px.guiEditor && webviewSection == px.guiWidget && pxDefinitionId",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "px.openFromView",
+          "when": "webviewId == px.guiEditor && webviewSection == px.definition && pxSourceFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "webviewId == px.guiEditor && webviewSection == px.definition && pxDefinitionId",
+          "group": "3_copy@1"
+        },
+        {
+          "command": "px.openFromView",
+          "when": "webviewId == px.coaDesigner && webviewSection == px.coaDefinition && pxSourceFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.dependenciesForItem",
+          "when": "webviewId == px.coaDesigner && webviewSection == px.coaDefinition && pxSourceFile && pxDefinitionKind",
+          "group": "2_inspect@1"
+        },
+        {
+          "command": "px.copyNameFromView",
+          "when": "webviewId == px.coaDesigner && webviewSection == px.coaDefinition && pxDefinitionId",
+          "group": "3_copy@1"
         }
       ]
     },
@@ -1939,7 +2445,22 @@
         "key": "ctrl+alt+shift+i",
         "when": "px.isCk3Workspace"
       }
-    ]
+    ],
+    "viewsWelcome": [
+      {
+        "view": "px.overview",
+        "contents": "No mod content is indexed.\n[Open Mod Folder](command:vscode.openFolder)\n[Create Mod](command:px.createMod)"
+      },
+      {
+        "view": "px.locCoverage",
+        "contents": "No localization files in this mod.\n[Add Language](command:px.createTranslation)"
+      },
+      {
+        "view": "px.dependencies",
+        "contents": "Choose a definition in Mod Overview and use Show Dependencies from its menu.\n[Show Dependencies at Cursor](command:px.showDependencies)"
+      }
+    ],
+    "submenus": []
   },
   "scripts": {
     "compile": "pnpm --filter @px-lsp/server run compile && pnpm run compile:client && pnpm run compile:webview && node ../../scripts/copy-server.mjs && node ../../scripts/copy-steamwand.mjs && node ../../scripts/copy-docs.mjs",

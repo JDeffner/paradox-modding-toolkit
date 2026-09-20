@@ -21,7 +21,7 @@ const UI_KEY = "px.eventGraph.ui";
 
 /** Host-side actions the graph needs. Everything that touches disk is here. */
 export interface EventGraphActions {
-  fetchDetail(id: string): Promise<EventDetail | null>;
+  fetchDetail(id: string, file?: string): Promise<EventDetail | null>;
   fetchVocabulary(): Promise<EventVocabularyResult>;
   /** The value set `value` belongs to (all secrets, all traits…), or null. */
   fetchValueOptions(value: string): Promise<EventValueOptionsResult | null>;
@@ -60,8 +60,8 @@ export class EventGraphPanel {
 
   private readonly panel: vscode.WebviewPanel;
   private readonly context: vscode.ExtensionContext;
-  private readonly fetchGraph: (params: EventGraphParams) => Promise<EventGraph>;
-  private readonly actions: EventGraphActions | null;
+  private fetchGraph: (params: EventGraphParams) => Promise<EventGraph>;
+  private actions: EventGraphActions | null;
   private readonly state: vscode.Memento;
   private textures: GuiTextureCache;
   private disposables: vscode.Disposable[] = [];
@@ -101,6 +101,21 @@ export class EventGraphPanel {
       }
     );
 
+    for (const action of ["focus", "simulate"] as const) {
+      this.disposables.push(
+        vscode.commands.registerCommand(`px.eventGraph.${action}Node`, (target: unknown) => {
+          if (!target || typeof target !== "object") return;
+          const source = target as Record<string, unknown>;
+          if (source.webviewSection !== "px.graphNode" || typeof source.pxDefinitionId !== "string") return;
+          this.post({
+            type: "nodeAction",
+            action,
+            id: source.pxDefinitionId,
+            file: typeof source.pxSourceFile === "string" ? source.pxSourceFile : undefined,
+          });
+        })
+      );
+    }
     this.panel.iconPath = tabIcon("event-graph");
     this.panel.webview.html = this.buildHtml(this.panel.webview);
     // Every boot requests its session after installing the message listener.
@@ -127,6 +142,8 @@ export class EventGraphPanel {
   ): EventGraphPanel {
     const existing = EventGraphPanel.instance;
     if (existing) {
+      existing.actions = actions;
+      existing.fetchGraph = fetchGraph;
       existing.panel.reveal(vscode.ViewColumn.Active);
       void existing.load(params);
       return existing;
@@ -217,10 +234,10 @@ export class EventGraphPanel {
         await this.exportSvg(msg.svg);
         break;
       case "select":
-        await this.sendDetail(msg.id, "detail");
+        await this.sendDetail(msg.id, "detail", msg.file);
         break;
       case "simulate":
-        await this.sendDetail(msg.id, "sim");
+        await this.sendDetail(msg.id, "sim", msg.file);
         break;
       case "state":
         this.session = msg.state;
@@ -316,10 +333,10 @@ export class EventGraphPanel {
     this.actions?.notifyChanged(edit.file);
   }
 
-  private async sendDetail(id: string, as: "detail" | "sim"): Promise<void> {
+  private async sendDetail(id: string, as: "detail" | "sim", file?: string): Promise<void> {
     if (!this.actions) return;
     try {
-      const detail = await this.actions.fetchDetail(id);
+      const detail = await this.actions.fetchDetail(id, file);
       this.post(as === "detail" ? { type: "detail", detail, id } : { type: "sim", detail, id });
     } catch {
       this.post(as === "detail" ? { type: "detail", detail: null, id } : { type: "sim", detail: null, id });

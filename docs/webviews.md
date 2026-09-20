@@ -14,6 +14,16 @@ documents the host contract idea in full.
 
 ## The pattern
 
+After `pnpm run package:test`, run `node scripts/test-editor-improvements.mjs "<Code executable>"` to check the packaged sidebar, view movement, direct DDS context actions, image conversion, BBCode preview and encoding fixes. The runner uses disposable user data and extensions under `.local/testing/`, with the PXTK Development profile. It saves screenshots and a result file beside the test workspace.
+
+The sidebar uses four webview views in `dashboard/view.ts`. Project (`px.tools`) holds the game and focus summary, Workspace Mods, View, Create, Publish and Info in one scrolling body. Its internal groups collapse to their content height, and `getState`/`setState` preserve their expansion state. Utils, Test & Troubleshoot and Paths each retain a separate view ID and contextual title so users can move them. VS Code owns the outer views' position, visibility and size. The shared action catalogue applies the active game profile and `px.sidebar.hidden`; the bodies retain the existing SVG icons.
+
+Scope inlay hints live in Project's View group and in the normal `px.scopeInlayHints` setting. The option stays off by default. It shows inferred scope types beside scope-changing script blocks, without changing source text. There is no Advanced Settings view.
+
+Utils exposes `px.convertImages`, `px.convertToDds`, `px.convertDdsToImage` and the existing BBCode converters. Explorer conversion commands accept the clicked resource and multi-selection. Folder conversion can include subfolders; an output folder retains their relative paths. Each batch selects one format and collision policy. JPEG uses an explicit white or black background. PNG and WebP preserve transparency. Existing outputs are skipped by default. Inputs and duplicate output targets are protected even with overwrite enabled. Progress is cancellable between files and while waiting for Chromium. Errors name the failed files.
+
+`imageCodec.ts` uses the existing DDS decoder and DDS/PNG encoders. Chromium supplies other image codecs through a temporary webview with a ready handshake. DDS export converts the surface shown by the DDS preview, not every mipmap or cubemap face. Animated source formats produce a single image. `imageBatch.ts` handles enumeration and publication separately, so collisions, failures and cancellation can be tested with real files outside the editor.
+
 A panel is a folder `packages/vscode/src/webviews/<name>/` with four parts:
 
 | File | Runs where | What it is |
@@ -151,7 +161,7 @@ carrying a Dark/Light toggle that stands in for the VS Code theme:
 
 Use the browser's developer tools to inspect the page. In VS Code, **Developer: Open Webview Developer Tools** provides the equivalent tools. This browser loop uses a stub host; use the next loop to test real host behavior.
 
-**Live Webview, for app work in VS Code.** Build the companion checkout with `pnpm build`, package it with `pnpm package`, and install its `artifacts/live-webview-<version>.vsix` into the VS Code profile used by the Extension Development Host. The companion's current extension ID is `local.live-webview`. Set `liveWebviewPath` in this repo's ignored `dev-paths.json` to that checkout root, or set `PX_LIVE_WEBVIEW_PATH` before starting VS Code. This local helper is optional and unpublished; normal builds need no helper installation.
+**Live Webview, for app work in VS Code.** Install [Live Webview from the Marketplace](https://marketplace.visualstudio.com/items?itemName=JDeffner.live-webview) with `code --profile "PXTK Development" --install-extension JDeffner.live-webview`. The companion must be enabled in the Extension Development Host that runs the toolkit. The current build also needs its helper: build the Live Webview checkout with `pnpm build`, then set `liveWebviewPath` in this repo's ignored `dev-paths.json` to that checkout root, or set `PX_LIVE_WEBVIEW_PATH` before starting VS Code. Marketplace installation supplies the companion, not the helper. Normal builds need neither.
 
 Select **Run Extension + Live Webview** in Run and Debug, then press F5. The launch task builds the toolkit with the helper enabled and starts `pnpm run watch:webviews:live`. Open a mod folder in the development host, then open the panel you want to test. Each successful app build writes its own signal under `packages/vscode/.webview-dev/`; the companion reloads the registered instances of that app. Failed builds leave the current panel running. Use the **Live Webview** Explorer view to pause, resume, or reload an instance, and **Live Webview: Open Logs** to inspect callbacks. Stop the debug session and terminate the **live webviews** task when finished.
 
@@ -159,6 +169,4 @@ The command-line equivalent is `pnpm run compile:webview-dev`, followed by `pnpm
 
 The existing loop remains available: run `pnpm run watch:webviews` and use **Run Extension**. An installed test VSIX can load and watch these bundles through `px.dev.webviewSource`, set to the checkout's `packages/vscode/dist/webview` folder. The companion takes over reload scheduling only in the explicit Live Webview development build. Normal compilation and packaging remove the helper, and the VSIX excludes build signals.
 
-**The real artifact.** `pnpm run package:test` builds a .vsix and installs
-it into your own VS Code. Do this before calling a panel done; it is the
-only loop that runs exactly what ships.
+**The real artifact.** `pnpm run package:test` builds a .vsix and installs it into the **PXTK Development** profile. Run **Developer: Reload Window** in that profile and check the panel before calling it done; this loop runs the packaged build.

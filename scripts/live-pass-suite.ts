@@ -17,8 +17,10 @@ async function check(name: string, fn: () => Promise<string | void>): Promise<vo
   try {
     const detail = await fn();
     results.push({ name, ok: true, detail: detail ?? undefined });
+    console.log(`PASS ${name}${detail ? `: ${detail}` : ""}`);
   } catch (err) {
     results.push({ name, ok: false, detail: String(err).slice(0, 300) });
+    console.error(`FAIL ${name}: ${String(err)}`);
   }
 }
 
@@ -176,6 +178,39 @@ export async function run(): Promise<void> {
     return hover.replace(/\s+/g, " ").slice(0, 100);
   });
 
+  const checkLocalizationEdits = async (): Promise<string> => {
+    await vscode.commands.executeCommand("workbench.view.extension.px");
+    await vscode.commands.executeCommand("px.locCoverage.focus");
+    const ed = await vscode.window.showTextDocument(locEditor!.document, { preview: false });
+    const edits: number[] = [];
+    const completions: number[] = [];
+    let last = performance.now();
+    let maxHeartbeatDelay = 0;
+    const heartbeat = setInterval(() => {
+      const now = performance.now();
+      maxHeartbeatDelay = Math.max(maxHeartbeatDelay, now - last - 20);
+      last = now;
+    }, 20);
+    try {
+      for (let i = 0; i < 12; i++) {
+        const start = performance.now();
+        const pos = await appendText(ed, `\n lp_responsiveness_${i}:0 "text #`);
+        edits.push(performance.now() - start);
+        const completionStart = performance.now();
+        const labels = await completionsAt(ed.document.uri, pos, "#");
+        completions.push(performance.now() - completionStart);
+        if (!labels.includes("G")) throw new Error(`Missing tag suggestions during edit ${i}`);
+        await appendText(ed, 'G green#!"');
+        await sleep(700); // Includes the debounced index and coverage refresh.
+      }
+      const max = (values: number[]) => Math.round(Math.max(...values));
+      return `12 unsaved edits; max edit ${max(edits)}ms; max completion ${max(completions)}ms; host heartbeat delay ${Math.round(maxHeartbeatDelay)}ms; completion samples ${completions.map(Math.round).join(",")}ms`;
+    } finally {
+      clearInterval(heartbeat);
+    }
+  };
+  await check("localization edits and suggestions near startup", checkLocalizationEdits);
+
   await check("data-binding macro completion in [ ] (gui)", async () => {
     const ed = await openFirst("gui/**/*.gui");
     const pos = await appendText(ed, '\n# live-pass scratch\nlp_probe = { text = "[IsZ');
@@ -222,6 +257,11 @@ export async function run(): Promise<void> {
     await vscode.commands.executeCommand("px.showEventGraph");
     await sleep(2000);
   });
+
+  await check("mod report with localization coverage", async () => {
+    await vscode.commands.executeCommand("px.modReport");
+  });
+  await check("localization edits and suggestions after the mod report", checkLocalizationEdits);
 
   fs.writeFileSync(process.env.CK3_LIVE_RESULTS!, JSON.stringify(results, null, 2));
   const failed = results.filter((r) => !r.ok);

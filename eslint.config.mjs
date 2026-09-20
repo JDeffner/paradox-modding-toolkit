@@ -18,6 +18,7 @@ export default tseslint.config(
       // Agent worktrees are full checkouts of this repo; without this every
       // finding is reported once per worktree.
       ".claude/**",
+      ".local/**",
       ".vscode-test/**",
       "packages/vscode/data/**",
       "packages/server/data/**",

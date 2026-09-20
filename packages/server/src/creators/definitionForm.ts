@@ -44,6 +44,7 @@ import type { ServerData } from "../serverData";
 import { definitionsOfKind, short } from "../overview/eventVocabulary";
 import { activeProfile } from "../games/active";
 import type { ConditionValueSource } from "../games/profile";
+import { matchesSourceFile } from "../sourceFile";
 
 /**
  * Same cap as the overview's per-kind definition list. It holds a whole game's
@@ -466,10 +467,15 @@ export function computeDefinitionForm(
 
   const wanted = params.name?.trim();
   if (wanted) {
-    // Mod first: editing "the trait called X" means the one this mod ships,
-    // and the vanilla copy only when the mod has none (last-in-wins order).
-    const defs = data.index.lookup(wanted).filter((d) => d.kind === kind);
-    const def = defs.find((d) => d.source === "mod" && inFocus(d.file)) ?? defs[0];
+    // An explicit source wins. Name-only requests retain mod-first lookup.
+    const requestedFile = params.file;
+    const definitions =
+      requestedFile === undefined ? data.index.lookup(wanted) : data.index.lookupAll(wanted);
+    const defs = definitions.filter((d) => d.kind === kind);
+    const def =
+      requestedFile !== undefined
+        ? defs.find((d) => matchesSourceFile(d.file, requestedFile))
+        : (defs.find((d) => d.source === "mod" && inFocus(d.file)) ?? defs[0]);
     const parsed = def ? parsedFile(def.file, files).get(wanted) : undefined;
     if (def && parsed) {
       form.current = { file: def.file, line: def.line, source: def.source, text: parsed.source };

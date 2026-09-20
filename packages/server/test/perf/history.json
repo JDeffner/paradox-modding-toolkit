@@ -1235,6 +1235,62 @@
         "peakRssMb": 852,
         "rssSamples": 20
       }
+    },
+    {
+      "version": "source-before-editor-split",
+      "recordedAt": "2026-09-20",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 26992,
+        "definitions": 481510,
+        "completionCold": 257,
+        "completionWarm": 12,
+        "semanticTokens": 2,
+        "hover": 6,
+        "documentSymbol": 1,
+        "completionAfterSave": 149,
+        "tokensAfterSave": 1,
+        "heapMb": 271,
+        "rssAtBuildMb": 696,
+        "internedIdentifiers": 559734,
+        "peakRssMb": 758,
+        "rssSamples": 61
+      }
+    },
+    {
+      "version": "editor-improvements-split",
+      "recordedAt": "2026-09-20",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "dist/server.js of a worktree (F:\\Projets\\paradox-modding-toolkit\\.local\\worktrees\\px-editor-improvements\\packages\\server\\dist\\server.js)",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 14015,
+        "definitions": 481510,
+        "completionCold": 693,
+        "completionWarm": 13,
+        "semanticTokens": 1,
+        "hover": 4,
+        "documentSymbol": 1,
+        "completionAfterSave": 195,
+        "tokensAfterSave": 1,
+        "heapMb": 271,
+        "rssAtBuildMb": 693,
+        "internedIdentifiers": 559734,
+        "peakRssMb": 834,
+        "rssSamples": 30
+      }
     }
   ]
 }

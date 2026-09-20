@@ -86,6 +86,16 @@ export function computeScriptDiagnostics(
 
   const rel = modRelPath(ctx);
   if (rel) {
+    if (rel.endsWith(".txt") && ctx.bomOnDisk === false) {
+      out.push(
+        diag(
+          TOP_OF_FILE,
+          DiagnosticSeverity.Warning,
+          "missing-bom",
+          'This mod script file is not saved as UTF-8 with BOM. Save with encoding "UTF-8 with BOM".'
+        )
+      );
+    }
     // Only games whose schema reads common/on_action (singular) get the
     // plural-folder trap check (in other games the plural IS the real folder).
     const singular = activeProfile().schema.some((e) => e.path === "common/on_action");

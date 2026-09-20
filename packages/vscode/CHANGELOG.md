@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Group Workspace Mods, View, Create, Publish and Info inside one scrolling Project view. Keep Utils, Test & Troubleshoot and Paths independently movable. Remove Advanced Settings and move its optional scope inlay hints switch into View. Preserve tool icons, hidden-tool preferences and group expansion state.
+- Add batch image conversion between DDS, PNG, JPEG and WebP, with folder input, preserved subfolders, progress, cancellation and file-specific failure reports. Existing outputs are skipped unless overwrite is selected; source files are preserved.
+- Put applicable actions labelled PX: directly in editor and Explorer context menus. Add image conversion, snippets, dates, GUI tools, format references and BBCode conversion without a submenu.
+
+- Add context actions to Mod Overview, Overrides, Explorer and localization references. Commands use the selected file or definition, including creator edits and source comparisons. Add native source menus and keyboard navigation to Event Graph, GUI Editor and Coat of Arms Designer.
+- Offer BBCode Preview through VS Code's editor selector, with source and side-by-side preview actions. Preview reflects unsaved edits and leaves the file's language unchanged.
+- Warn when a mod script `.txt` file is missing its UTF-8 BOM. Add a quick fix for script and localization files that opens VS Code's native encoding picker for the affected file, preserving current editor text.
+- Simplify Project with All Tools and Customize in its title bar, matching tool icons, a bounded Workspace Mods list and focused Create, Publish and troubleshooting sections. Shorten the sidebar title to PX Toolkit and give detached views their own names. Hide Problems by Type, Overrides & Conflicts and Dependencies by default. Add useful empty views, readiness-based walkthrough steps and one optional setup notice instead of several startup prompts.
+- Improve localization and game-log responsiveness with cooperative coverage scans, bounded log processing and incremental localization parsing. Worker-based parsing remains deferred.
+
 ## 0.4.4 (beta) - editing fixes and release checks
 
 - Validate release tags against package versions, prepare notes as a GitHub prerelease, and publish manually with a pre-release option. Send Discord announcements only after Marketplace publishing succeeds.

@@ -130,7 +130,7 @@ export class DynastyTreePanel {
   private static readonly viewType = "px.dynastyTree";
 
   private readonly panel: vscode.WebviewPanel;
-  private readonly actions: DynastyTreeActions;
+  private actions: DynastyTreeActions;
   private readonly textures: GuiTextureCache;
   private options: DynastyTreeOptions;
   private disposables: vscode.Disposable[] = [];
@@ -216,6 +216,7 @@ export class DynastyTreePanel {
     const existing = DynastyTreePanel.instance;
     if (existing) {
       existing.options = options;
+      existing.actions = actions;
       existing.panel.reveal(vscode.ViewColumn.Active);
       if (dynasty) void existing.loadTree(dynasty);
       return;

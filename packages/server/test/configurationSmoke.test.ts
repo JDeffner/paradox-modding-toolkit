@@ -10,10 +10,13 @@ import {
   configChangedNotification,
   configurationSection,
   indexStatsRequest,
+  locCoverageRequest,
+  lookupLocRequest,
   modFileChangedNotification,
   progressNotification,
   type ParadoxSettings,
   type ProgressPayload,
+  type LocCoverage,
 } from "@px-lsp/protocol/protocol";
 import { allProfiles } from "../src/games/registry";
 import { indexConfigWatchPatterns } from "@px-lsp/protocol/configDir";
@@ -162,6 +165,99 @@ async function client(
 }
 
 describe.skipIf(!fs.existsSync(SERVER))("configuration over stdio", () => {
+  it("keeps distinct case-sensitive localization buffers in their own indexed files", async (context) => {
+    const f = fixture();
+    const upper = f.write("mod/localization/A_l_english.yml", 'l_english:\n upper_disk:0 "Upper disk"\n');
+    const lower = path.join(path.dirname(upper), "a_l_english.yml");
+    try {
+      fs.writeFileSync(lower, 'l_english:\n lower_disk:0 "Lower disk"\n', { flag: "wx" });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      context.skip();
+      return;
+    }
+    const c = await client(f, { settings: { modPath: f.mod, locLanguage: "english" } });
+    await c.built(1);
+    await c.conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri: URI.file(upper).toString(),
+        languageId: "paradox-loc",
+        version: 1,
+        text: 'l_english:\n upper_buffer:0 "Upper buffer"\n',
+      },
+    });
+    expect(await c.conn.sendRequest(lookupLocRequest, { key: "upper_buffer" })).toEqual([
+      { file: upper, line: 1, source: "mod", value: "Upper buffer" },
+    ]);
+    await c.conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri: URI.file(lower).toString(),
+        languageId: "paradox-loc",
+        version: 1,
+        text: 'l_english:\n lower_buffer:0 "Lower buffer"\n',
+      },
+    });
+    expect(await c.conn.sendRequest(lookupLocRequest, { key: "lower_buffer" })).toEqual([
+      { file: lower, line: 1, source: "mod", value: "Lower buffer" },
+    ]);
+    expect(await c.conn.sendRequest(lookupLocRequest, { key: "upper_buffer" })).toEqual([
+      { file: upper, line: 1, source: "mod", value: "Upper buffer" },
+    ]);
+    const coverage = await c.conn.sendRequest<LocCoverage[]>(locCoverageRequest, { modRoot: f.mod });
+    expect(coverage[0].orphaned.map((issue) => issue.key).sort()).toEqual(["lower_buffer", "upper_buffer"]);
+  });
+
+  it.each(allProfiles())(
+    "keeps $id coverage fresh for translations, open buffers and rebuilds",
+    async (profile) => {
+      const f = fixture();
+      const locPath = profile.schema.find((entry) => entry.kind === "loc_key")!.path;
+      const source = `mod/${locPath}/source_l_english.yml`;
+      const translated = `mod/${locPath}/translation_l_french.yml`;
+      f.write(source, '\uFEFFl_english:\n key:0 "Source"\n');
+      const file = f.write(translated, '\uFEFFl_french:\n key:0 "Source"\n');
+      const c = await client(f, { settings: { gameId: profile.id, modPath: f.mod, locLanguage: "english" } });
+      await c.built(1);
+      const coverage = () => c.conn.sendRequest<LocCoverage[]>(locCoverageRequest, { modRoot: f.mod });
+      const french = async () => (await coverage()).find((language) => language.language === "french")!;
+      expect((await french()).untranslated).toHaveLength(1);
+      // A language excluded from the definition index still updates coverage.
+      f.write(translated, '\uFEFFl_french:\n key:0 "Traduit"\n');
+      await c.conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: URI.file(file).toString(), type: 2 }],
+      });
+      expect((await french()).untranslated).toEqual([]);
+      // Windows editor URIs may use different casing than the directory walk.
+      const uri = URI.file(process.platform === "win32" ? file.toUpperCase() : file).toString();
+      await c.conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri, languageId: "paradox-loc", version: 1, text: 'l_french:\n key:0 "Source"\n' },
+      });
+      expect((await french()).untranslated).toHaveLength(1);
+      // Rapid edits coalesce; the next request observes the last buffer version.
+      for (let version = 2; version <= 8; version++) {
+        await c.conn.sendNotification("textDocument/didChange", {
+          textDocument: { uri, version },
+          contentChanges: [{ text: `l_french:\n key:0 "Traduction ${version}"\n` }],
+        });
+      }
+      expect((await french()).untranslated).toEqual([]);
+      // Closing must discard the buffer even if disk changed without a watcher event.
+      f.write(translated, '\uFEFFl_french:\n key:0 "Source"\n');
+      await c.conn.sendNotification("textDocument/didClose", { textDocument: { uri } });
+      expect((await french()).untranslated).toHaveLength(1);
+      const added = f.write(`mod/${locPath}/added_l_french.yml`, '\uFEFFl_french:\n added:0 "Ajout"\n');
+      await c.conn.sendNotification(modFileChangedNotification, { fsPath: added });
+      expect((await french()).defined).toBe(2);
+      fs.unlinkSync(added);
+      await c.conn.sendNotification(modFileChangedNotification, { fsPath: added });
+      expect((await french()).defined).toBe(1);
+      await c.patch({ locLanguage: "french" });
+      await c.built(2);
+      expect((await french()).untranslated).toEqual([]);
+      expect(c.starts).toBe(2);
+    }
+  );
+
   it("retains inferred unopened roots, replaces explicit roots and applies patch versus replacement semantics", async () => {
     const f = fixture();
     const c = await client(f);

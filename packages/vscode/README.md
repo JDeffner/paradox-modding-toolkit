@@ -19,7 +19,7 @@ For Crusader Kings III, Victoria 3 and Europa Universalis V.
 
 1. Install **Paradox Modding Toolkit** (`JDeffner.px-toolkit`), then open your mod folder or run **Paradox: New Mod**.
 2. Run **Paradox: Run Setup & Health Check**. Check the detected game, mod and data paths. CK3 and Victoria 3 include vocabulary snapshots; EU5 needs your own `script_docs` dump.
-3. Open a script file. Completion offers engine words and indexed definitions; hover explains the word under the cursor. The Project panel opens the visual tools, validation and publishing commands.
+3. Open a script file. Completion offers engine words and indexed definitions; hover explains the word under the cursor. The Project panel opens the visual tools and publishing commands. Use **Paradox: Validate Mod** from the Command Palette to check your mod.
 
 New to modding? Follow [Your first CK3 mod](https://github.com/JDeffner/paradox-modding-toolkit/wiki/First-Mod). For an existing project, use [Getting Started](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Getting-Started). If setup does not work, start with [Troubleshooting](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Troubleshooting).
 
@@ -35,6 +35,8 @@ This is a beta. Check generated content in the game before publishing it. After 
 - **Section folding:** `### Title` or longer hash headings fold through the next heading or the end of the file, across closing braces.
 - **Validation:** instant structural checks for malformed files, encodings and folder mistakes. CK3 and Victoria 3 also integrate tiger for deeper validation.
 - **Localization:** coverage, inlay hints, quick fixes and workflows for adding languages or making a translation mod.
+- **Context actions:** right-click files, definitions, overrides and localization references to open, compare or edit the selected source. Project shows the current mod, with **All Tools** and **Customize** in its title bar.
+- **BBCode preview:** choose **BBCode Preview** from VS Code's editor selector or open it beside the source. Preview includes unsaved edits and preserves the BBCode language mode.
 
 ## Build and inspect content
 

@@ -8,6 +8,14 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- Warn about missing UTF-8 BOMs in mod script `.txt` files across all game profiles, using the existing `missing-bom` diagnostic code. Other script file types and files outside the mod are excluded.
+
+- Accept an optional source file when loading event details or creator forms, so duplicate names resolve to the selected definition. Existing clients retain their current lookup behavior.
+
+- Resolve explicit localization languages, including unsaved text, without substituting values from another language or changing the completion index.
+
+- Keep localization coverage responsive during large scans and reuse unchanged localization lines after edits. Preserve full-parse results when incremental reuse is not safe.
+
 ## 0.3.5
 
 Ships with the toolkit's 0.4.4 release.

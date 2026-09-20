@@ -59,6 +59,7 @@ localization (`*_l_<lang>.yml`, UTF-8 with BOM).
   construction: loc yml = UTF-8 **with BOM** + `l_<lang>:` header +
   `_l_<lang>.yml` filename; script `.txt` = UTF-8 with BOM; event files
   START with their `namespace =` line.
+- **Writers preserve user work.** Use the current editor document when it has unsaved edits; do not overwrite it from a stale disk snapshot. Before applying a preview or merge, check that its source documents and files still match. Reject stale results and require a fresh preview. Preserve unrelated content and keep vanilla and reference inputs read-only. Report write failures as failures.
 - **`localization/replace/` only overrides vanilla keys.** New keys go to
   the mod loc file holding their siblings (`writeLocSmart` /
   `upsertNewModLoc` in `packages/vscode/src/locCommands.ts`).
@@ -72,16 +73,15 @@ localization (`*_l_<lang>.yml`, UTF-8 with BOM).
 
 ## Hit-every-surface checklist
 
-The most common defect: a change that works on the path you tested and is
-missing everywhere else. Before calling work done, walk these and say which
-applied:
+Before calling work done, check which existing surfaces the change affects and verify those paths. Add entry points or capabilities only when the requested behavior needs them. Report the affected surfaces and any verification gaps.
 
 | Axis | Question |
 |---|---|
 | Games | One decision per GameProfile (`ck3`, `vic3`, `eu5`), even "not supported". Gate on profile data, not `if (gameId === ...)`; the boundary check enforces it. |
 | Clients | VS Code is the rich client; bare LSP clients and the Studio get degraded-but-honest behavior via capability gates (`clientCommands`, `snippetSupport`, `fileLinks`), never broken markup or dead links. |
-| Entry points | A feature usually also needs: command palette entry, Project-panel row, `when`-scoped keybinding, walkthrough mention. |
-| Contracts | Anything on the wire is typed in `packages/protocol` and documented in `docs/PROTOCOL.md`; embedder-visible behavior also in `docs/EMBEDDING.md`. Changing either doc means porting it to its wiki mirror in the same session. |
+| Browser service | Shared server/protocol changes must preserve the browser language service. Keep Node-only dependencies out of its reachable code and run the browser build when that code or its bundled data changes. |
+| Entry points | Check affected command palette entries, Project-panel actions, keybindings, and walkthrough instructions. Do not add all four by default. |
+| Contracts | Anything on the wire is typed in `packages/protocol` and documented in `docs/PROTOCOL.md`; embedder-visible behavior also in `docs/EMBEDDING.md`. Update canonical docs with the implementation; publish their wiki mirrors as part of a requested release or wiki update. |
 | Data | Per-game bundled data lives in `data/<id>/`; a new harvest needs a regen script row below and a `--game` flag. |
 | Change notes | The changelog bullet ships in the same PR. |
 
@@ -126,6 +126,10 @@ Env overrides: `PX_<GAMEID>_GAME_PATH`, `_LOGS_PATH`, `_MOD_PATH`,
 `_MOD_CORPUS`, `_TIGER_PATH`. Loader: `scripts/devPaths.ts`. Corpus-gated
 tests skip when a path is unset. The shipped extension reads none of this.
 
+For real-data compatch tests, set `games.<gameId>.compatchBasePath` and `games.<gameId>.compatchTargetPath`. Both point to game-data folders containing `common/`, `events/`, etc., not the installation root. Environment overrides are `PX_<GAMEID>_COMPATCH_BASE_PATH` and `PX_<GAMEID>_COMPATCH_TARGET_PATH`; read them through `devPath` / `requireDevPath` in `scripts/devPaths.ts`. Each developer chooses their own installations. Keep personal paths in the ignored file.
+
+The default CK3 exercise uses the current installed vanilla data as the base and a saved 1.18 version as the target. This deliberately tests a downgrade. "Base" means the vanilla version the test mod was built against; "target" means the version it must work with. Do not swap them based on version order. Use a scratch mod based on the configured base, keep both game sources read-only, and record their actual versions with the test results because Steam updates change the current installation. This exercise does not replace forward-update coverage or target-version validation. If either path is unset, skip corpus-gated tests with a reason; an explicitly requested real-data run must report the missing setting.
+
 The base game files are THE source of truth for script syntax. Grep the game
 folder or the `_*.info` docs; never guess names.
 
@@ -134,14 +138,16 @@ folder or the `_*.info` docs; never guess names.
 ```bash
 pnpm install
 pnpm run compile        # server bundle + extension bundle + data copy
-npx tsc --noEmit        # typecheck (esbuild does not check types)
+pnpm run typecheck     # root + separate webview projects; esbuild does not check types
 pnpm run lint           # eslint + prettier --check (both gate CI)
-npx vitest run          # suite (corpus-gated tests skip without dev-paths)
-node scripts/check-game-boundary.mjs   # run whenever you touch packages/server/src
+pnpm test               # suite (corpus-gated tests skip without dev-paths)
+node scripts/check-game-boundary.mjs   # server or protocol source changes
 ```
 
 - Verify what you changed: touched tests + typecheck + lint. The full
   corpus-gated suite is for cross-cutting changes (rank-eval alone ~4 min).
+- For focused tests, use `pnpm exec vitest run <test-path>`. Compile first when tests exercise a bundled server. Report relevant skipped tests and missing corpus settings; a skipped check is not verification.
+- When browser-reachable server/protocol code or its bundled data changes, run `pnpm run bake:browser` followed by `pnpm --filter @px-lsp/server run compile:browser`, matching CI.
 - Two corpus timing tests can fail under full-suite load; re-run them alone
   before believing a red run.
 - Completion changes MUST be justified with `fuzzy-diag`/`rank-eval`
@@ -150,42 +156,59 @@ node scripts/check-game-boundary.mjs   # run whenever you touch packages/server/
   and CK3 `freqs.json` regenerating byte-identical.
 - Protocol additions extend `lspSmoke.test.ts`. Scaffold/writer changes get
   validated against real ck3-tiger on a scratch mod.
+- Writer changes also verify preservation of unrelated content and, where applicable, unsaved edits, stale-preview rejection, and failure reporting. Validator success alone does not prove that an edit preserved user work.
 - Every release adds a row to the performance history: `pnpm run perf:history`
   over a real `.code-workspace` (recipe in `docs/PERFORMANCE.md`, rows in
   `packages/server/test/perf/history.json`). Server changes that touch the
   index or completion add a row before and after.
 
-**Test builds finish extension work.** When a change alters what the editor
-does, end with:
+**Verify editor behavior in the packaged build.** When a change alters what the editor does, prepare the test profile described below, then run:
 
 ```bash
-pnpm run package:test   # compile, vsce package, code --install-extension --force
+pnpm run package:test   # compile, package, install into PXTK Development
 ```
 
-then say it is installed and VS Code needs `Developer: Reload Window`.
-Skip only for changes with nothing to try in the editor, and say so. Never
-commit a vsix.
+Launch or reload the `PXTK Development` test window so it loads the new build. Exercise the affected user action through its actual entry point, check the visible or saved result, and test a relevant failure case. For UI changes, inspect the rendered UI; calling an internal handler alone does not verify that the user can reach it. Automated editor checks may use the isolated extension-host setup below with the same build.
+
+Report packaging/installation and observed behavior separately. If the host could not be reloaded or a behavior could not be exercised, state the remaining check and the blocker. Installation alone does not establish that the feature works. Skip editor verification only for changes with no editor behavior to exercise, and say so. Never commit a vsix.
+
+### VS Code test profile
+
+Use the separate **PXTK Development** profile for agent-driven editor checks and manual toolkit development. Always specify `--profile "PXTK Development"` when launching VS Code or installing a test extension. The F5 launches and `package:test` script select this profile. Do not automate the developer's normal window.
+
+```bash
+code --new-window --profile "PXTK Development" <test-workspace>
+```
+
+Launch the command above once before the first test installation: VS Code creates a missing profile on launch, but `--install-extension --profile` requires the profile to exist already. Profiles separate settings and enabled extensions, but are not complete test isolation. Automated extension-host suites should use disposable `--user-data-dir` and `--extensions-dir` folders under `.local/testing/`. Existing runners that already use isolated directories can retain their own test profiles. Use the same isolation arguments for installation and launch, and keep generated mods and test output in the ignored local folders. Unit tests and bare LSP tests do not need VS Code.
+
+### Live Webview development
+
+For live webview work, install [Live Webview from the Marketplace](https://marketplace.visualstudio.com/items?itemName=JDeffner.live-webview) into **PXTK Development**:
+
+```bash
+code --profile "PXTK Development" --install-extension JDeffner.live-webview
+```
+
+The companion must be enabled in the Extension Development Host that runs the toolkit. The current build also needs the built helper from a Live Webview checkout: set `liveWebviewPath` in the ignored `dev-paths.json`, or `PX_LIVE_WEBVIEW_PATH`, to that checkout. Marketplace installation supplies the companion, not this helper. Use **Run Extension + Live Webview** for frontend iteration; host-code changes require a rebuild and host restart. See `docs/webviews.md` for the build loop. Finish with a normal packaged-build check, since production builds remove the helper.
 
 ## Landing work
 
 1. **Branch first** (`feat/`, `fix/`, `docs/`, `chore/`), never from a
    `main` checkout. Commit messages explain the WHY, with measured numbers.
-2. **A feature or fix PR writes changelog bullets, nothing else.** One bullet
-   under "Unreleased" in `packages/vscode/CHANGELOG.md`; server or protocol
-   changes also get one in that package's own `CHANGELOG.md`. Do NOT touch
-   release notes, README feature lists or the wiki from a feature PR.
-3. Push and open the PR:
+2. **Feature and fix PRs update changelogs and affected technical documentation.** Add a bullet under "Unreleased" in `packages/vscode/CHANGELOG.md`; server or protocol changes also get one in that package's own `CHANGELOG.md`. Keep canonical protocol, embedding, and other affected technical docs correct in the same change. Update source attribution when adding an upstream source. Release notes, README feature lists, and wiki publication belong to release work.
+3. **Commit, push, or open a PR only when requested.** For a requested push and PR:
    ```bash
    git push -u origin <branch>
    gh pr create --base main --title "<title>" --body "<why, with numbers>"
    ```
    Multi-PR efforts may target an `integration/<version>` branch.
-4. **Stop and hand over the PR link.** The squash merge is the maintainer's call.
+4. If a PR was requested, hand over its link after verification and required review follow-up. Otherwise report the local changes and checks. The squash merge is the maintainer's call.
 5. Sourcery reviews every PR (`gh pr checks <n>`). A finding is a pointer,
    not a verdict: verify, fix what is real, dismiss false positives with a
    written reason. With stacked PRs, fix on the branch the file belongs to.
 
-**The release PR writes everything else.** Cutting `<v>`:
+**A requested release updates release material.** Cutting `<v>`:
 
 - Roll "Unreleased" into `<v>` headings; check `git log v<prev>..HEAD`
   against the changelog.
@@ -200,17 +223,17 @@ commit a vsix.
   `--pre-release` to vsce only when the manual Release workflow option is selected.
 - Full runbook: `docs/RELEASING.md`.
 
-**Wiki mirrors:** `docs/EMBEDDING.md` → wiki "Embedding", `docs/PROTOCOL.md`
-→ wiki "Protocol Reference" (repo copies canonical). Port changes to the
-wiki in the same session (clone `paradox-modding-toolkit.wiki.git`).
+**Wiki mirrors:** `docs/EMBEDDING.md` → wiki "Embedding", `docs/PROTOCOL.md` → wiki "Protocol Reference". The repo copies are canonical and change with the implementation. Sync the wiki from the corresponding release revision during a requested release, or from the revision specified for a requested wiki update. A feature or fix request alone does not authorize wiki publication.
 
 **Work artifacts stay out of the repo.** Plans live in PR descriptions;
 durable decisions in the tracked docs, present tense; the merged PR is the
 record. Do not create notes under `docs/`.
 
+Keep local test projects and compatch fixtures in the ignored `.local/testing/` folder. Put temporary worktrees in `.local/worktrees/` and test artifacts in `.local/artifacts/`. Do not create sibling project folders for this work. The current test VSIX lives in `packages/vscode/`; older local builds can be kept in `.local/builds/archive/`.
+
 ## Regenerating bundled data (per game patch)
 
-`npx esbuild scripts/<name>.ts --bundle --platform=node --outfile=dist/<name>.cjs && node dist/<name>.cjs`
+`pnpm exec esbuild scripts/<name>.ts --bundle --platform=node --outfile=dist/<name>.cjs && node dist/<name>.cjs`
 (then delete the .cjs). Per-game scripts take `--game <id>`, default `ck3`.
 
 | Script | Output | What it does |

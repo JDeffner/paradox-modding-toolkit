@@ -200,6 +200,8 @@ export const indexStatsRequest = "paradox/indexStats";
 export const lookupLocRequest = "paradox/lookupLoc";
 export interface LookupLocParams {
   key: string;
+  /** Exact language identifier; omitted uses the configured localization language. */
+  language?: string;
 }
 export interface LocEntryInfo {
   file: string;
@@ -367,6 +369,8 @@ export interface OverrideInfo {
 export const eventDetailRequest = "paradox/eventDetail";
 export interface EventDetailParams {
   id: string;
+  /** Exact source (absolute path or file URI); no matching event returns null. */
+  file?: string;
 }
 /** A localizable field: key, resolved text, and (for mod entries) the editable site. */
 export interface EventLocField {
@@ -1871,6 +1875,8 @@ export interface DefinitionFormParams {
   kind: string;
   /** Load this definition into `current` (edit rather than create). */
   name?: string;
+  /** Exact source for `name` (absolute path or file URI); no match leaves `current` absent. */
+  file?: string;
   /** Restrict mod-side entries to one workspace mod (plus vanilla/parents). */
   modRoot?: string | null;
 }

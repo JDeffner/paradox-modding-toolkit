@@ -6,6 +6,7 @@ Open an event or scripted-effect file in your mod:
 - Press **Ctrl+Alt+I** on an empty line to insert a snippet derived from the game's definitions. Fill the fields with Tab. `px.completion.mode` selects Minimal, Examples or Names.
 - Type inside a trigger or effect block to see context-aware suggestions. Scope information ranks and labels suggestions.
 - Press **F12** on a referenced definition to open its source.
+- Right-click an event or localization key and open the **Paradox** menu. Choose an action for that object. For keyboard access, place the cursor on it and press **Shift+F10**.
 - Look beside a localization key for its text. Use the lightbulb to edit the value without leaving the script file.
 - Hover a DDS texture path to preview it. Open the DDS file and use the background palette to change the shared editor and hover background; checkerboard is the default.
 

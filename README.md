@@ -39,6 +39,8 @@ default amount of configuration is none. Full walkthrough:
 
 ## What you get
 
+Right-click files, definitions, overrides or localization references to act on that source. The Project panel shows the current mod, with **All Tools** and **Customize** in its title bar. BBCode files offer **BBCode Preview** in VS Code's editor selector and can preview unsaved edits beside the source.
+
 Choose minimal completion templates, full examples or names only, with insertion previews and expected-value hints. Export the generated snippets to a searchable, printable catalogue. The flag, coat-of-arms and DDS tools also offer dark, light and custom preview backgrounds.
 
 ![The Project panel](packages/vscode/media/screenshots/project-panel-compact.png)
