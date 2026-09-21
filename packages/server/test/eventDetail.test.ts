@@ -8,6 +8,7 @@ import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { pathToFileURL } from "url";
 import { computeEventDetail } from "../src/overview/eventDetail";
 import { computeEventGraph } from "../src/overview/eventGraph";
 import { extractReferences } from "../src/index/references";
@@ -166,6 +167,22 @@ afterAll(() => {
 });
 
 describe("computeEventDetail", () => {
+  it("targets the requested duplicate source and never falls back to another file", () => {
+    const other = path.join(dir, "other events.txt");
+    fs.writeFileSync(other, EVENT_TXT.replace("theme = intrigue", "theme = requested"));
+    const duplicates = new ServerData();
+    duplicates.index.addAll([
+      { name: "det.1", kind: "event", file, line: 2, source: "mod" },
+      { name: "det.1", kind: "event", file: other, line: 2, source: "vanilla" },
+    ]);
+    expect(computeEventDetail(duplicates, schema, "det.1", other)?.theme).toBe("requested");
+    expect(computeEventDetail(duplicates, schema, "det.1", pathToFileURL(other).href)?.file).toBe(other);
+    expect(computeEventDetail(duplicates, schema, "det.1", path.join(dir, "missing.txt"))).toBeNull();
+    expect(computeEventDetail(duplicates, schema, "det.1", "")).toBeNull();
+    fs.unlinkSync(other);
+    expect(computeEventDetail(duplicates, schema, "det.1", other)).toBeNull();
+  });
+
   it("resolves the event with type/theme and loc fields", () => {
     const d = computeEventDetail(data, schema, "det.1")!;
     expect(d).not.toBeNull();

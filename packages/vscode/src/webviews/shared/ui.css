@@ -21,24 +21,26 @@
   --px-font: var(--vscode-font-family, system-ui, sans-serif);
   --px-font-mono: var(--vscode-editor-font-family, ui-monospace, monospace);
   --px-text: var(--vscode-font-size, 13px);
-  --px-text-xs: 11px;
-  --px-text-sm: 12px;
+  --px-text-xs: max(11px, 0.85rem);
+  --px-text-sm: max(12px, 0.92rem);
 
   /* Nova neutral ratios, dark theme (overridden for light below). */
   --px-mix-muted: 13%;
   --px-mix-popover: 7%;
   --px-mix-border: 10%;
   --px-mix-input: 15%;
-  --px-mix-ring: 45%;
   --px-mix-muted-fg: 62%;
   --px-mix-fg-60: 60%;
 
   --px-muted: color-mix(in oklch, var(--px-bg), var(--px-fg) var(--px-mix-muted));
   --px-muted-strong: color-mix(in oklch, var(--px-bg), var(--px-fg) calc(var(--px-mix-muted) + 5%));
   --px-popover: color-mix(in oklch, var(--px-bg), var(--px-fg) var(--px-mix-popover));
-  --px-border: color-mix(in oklch, var(--px-bg), var(--px-fg) var(--px-mix-border));
+  --px-border: var(
+    --vscode-contrastBorder,
+    color-mix(in oklch, var(--px-bg), var(--px-fg) var(--px-mix-border))
+  );
   --px-input: color-mix(in oklch, var(--px-bg), var(--px-fg) var(--px-mix-input));
-  --px-ring: color-mix(in oklch, var(--px-bg), var(--px-fg) var(--px-mix-ring));
+  --px-ring: var(--vscode-focusBorder, var(--vscode-contrastBorder, #007fd4));
   --px-ring-soft: color-mix(in oklch, var(--px-ring) 50%, transparent);
   --px-muted-fg: color-mix(in oklch, var(--px-bg), var(--px-fg) var(--px-mix-muted-fg));
   --px-fg-60: color-mix(in oklch, var(--px-fg) var(--px-mix-fg-60), transparent);
@@ -79,13 +81,14 @@
   --px-radius: 10px;
   --px-radius-md: 8px;
   --px-radius-sm: 6px;
-  --px-h: 32px;
-  --px-h-sm: 28px;
-  --px-h-xs: 24px;
+  --px-h: max(32px, 2.45rem);
+  --px-h-sm: max(28px, 2.15rem);
+  --px-h-xs: max(24px, 1.85rem);
   --px-ease: 120ms cubic-bezier(0.2, 0, 0, 1);
 }
 
-body.vscode-light {
+body.vscode-light,
+body.vscode-high-contrast-light {
   /* The chart green reads as a pale mint on a white ground; a darker one keeps
      the same meaning legible. */
   --px-good: var(--vscode-charts-green, #1a7f37);
@@ -93,7 +96,6 @@ body.vscode-light {
   --px-mix-popover: 0%;
   --px-mix-border: 9%;
   --px-mix-input: 9%;
-  --px-mix-ring: 34%;
   --px-mix-muted-fg: 50%;
   --px-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
   --px-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
@@ -103,6 +105,8 @@ body.vscode-high-contrast,
 body.vscode-high-contrast-light {
   --px-mix-border: 60%;
   --px-mix-input: 60%;
+  --px-muted-fg: var(--px-fg);
+  --px-ring-soft: transparent;
 }
 
 /* ---------------------------------------------------------------- base --- */
@@ -125,7 +129,8 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 :focus-visible {
-  outline: none;
+  outline: 2px solid var(--px-ring);
+  outline-offset: 2px;
 }
 ::selection {
   background: var(--vscode-editor-selectionBackground, color-mix(in oklch, var(--px-fg) 25%, transparent));
@@ -1782,4 +1787,15 @@ button.px-swatch:focus-visible {
    div (a class rule with display:flex would otherwise keep drawing it). */
 [hidden] {
   display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

@@ -57,11 +57,11 @@ describe("hover ref-field disambiguation", () => {
     expect(md).not.toContain("event target");
   });
 
-  it("faith in key position keeps all meanings", () => {
+  it("faith in key position excludes an unrelated event theme", () => {
     const text = "cultivation.5 = {\n\ttrigger = { faith = faith:catholic }\n}";
     const md = hoverMd(makeData(), text, 1, text.split("\n")[1].indexOf("faith") + 1);
     expect(md).toContain("event target");
-    expect(md).toContain("event theme");
+    expect(md).not.toContain("event theme");
   });
 
   it("list-form ref fields disambiguate bare elements", () => {

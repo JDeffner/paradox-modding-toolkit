@@ -11,6 +11,8 @@ import { provideDocumentSymbols } from "../src/features/symbols";
 import { lspSymbolKind } from "../src/features/symbolKind";
 import { provideFoldingRanges } from "../src/features/folding";
 import { isScriptLanguage } from "../src/documents";
+import { activeProfile, setActiveProfile } from "../src/games/active";
+import { allProfiles } from "../src/games/registry";
 
 let uriCounter = 0;
 /** Unique per test: the parse cache keys by uri+version. */
@@ -22,8 +24,8 @@ function scriptCtx(fsPath: string, bom: boolean | null = null): FileContext {
   return { fsPath, modPath: MOD, bomOnDisk: bom };
 }
 
-function scriptDiags(text: string, fsPath = `${MOD}\\events\\my_events.txt`) {
-  return computeScriptDiagnostics(parseScript(text), new LineIndex(text), scriptCtx(fsPath));
+function scriptDiags(text: string, fsPath = `${MOD}\\events\\my_events.txt`, bom: boolean | null = null) {
+  return computeScriptDiagnostics(parseScript(text), new LineIndex(text), scriptCtx(fsPath, bom));
 }
 
 function locDiags(text: string, fsPath: string, bom: boolean | null) {
@@ -43,6 +45,39 @@ describe("script structural diagnostics", () => {
 
   it("clean file produces no diagnostics", () => {
     expect(scriptDiags("my.1 = {\n\ttrigger = { is_adult = yes }\n}\n")).toEqual([]);
+  });
+
+  it.each(allProfiles())("warns about missing script BOMs for $id", (profile) => {
+    const previous = activeProfile();
+    try {
+      setActiveProfile(profile);
+      const diags = scriptDiags("effect = {}\n", `${MOD}\\common\\scripted_effects\\mine.TXT`, false);
+      expect(diags).toEqual([
+        expect.objectContaining({
+          code: "missing-bom",
+          severity: 2,
+          source: profile.diagnosticSource,
+          message: expect.stringContaining("UTF-8 with BOM"),
+        }),
+      ]);
+    } finally {
+      setActiveProfile(previous);
+    }
+  });
+
+  it.each([true, null])("does not warn about a present or unknown BOM (%s)", (bom) => {
+    expect(scriptDiags("effect = {}\n", `${MOD}\\common\\scripted_effects\\mine.txt`, bom)).toEqual([]);
+  });
+
+  it.each([
+    "D:\\game\\common\\scripted_effects\\vanilla.txt",
+    "C:\\mods\\dependency\\common\\scripted_effects\\parent.txt",
+    `${MOD}_other\\events\\mine.txt`,
+    `${MOD}\\gui\\mine.gui`,
+    `${MOD}\\gfx\\mine.asset`,
+    `${MOD}\\descriptor.mod`,
+  ])("does not apply the script BOM warning to %s", (file) => {
+    expect(scriptDiags("effect = {}\n", file, false)).toEqual([]);
   });
 
   it("flags a stray closing brace", () => {

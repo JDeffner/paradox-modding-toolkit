@@ -23,6 +23,17 @@ export const ck3Profile: GameProfile = {
   refFields: REF_FIELDS,
   prefixRefs: PREFIX_REFS,
   blockRefFields: BLOCK_REF_FIELDS,
+  // events/elder_events.txt: elder_events.1000.t, .desc, .a and .b.
+  eventLocalization: { fields: { title: ".t", desc: ".desc" }, optionSuffix: ".a" },
+  // DumpDataTypes 1.19 and vanilla GUI/loc calls; these literals name databases.
+  dataFunctionRefs: {
+    ScriptValue: "script_value",
+    GetTrait: "trait",
+    GetScriptedGui: "scripted_gui",
+    Custom: "customizable_localization",
+    Custom2: "customizable_localization",
+    Custom2_Title: "customizable_localization",
+  },
   structureSources: STRUCTURE_SOURCES,
   // Events declare `scope = character|landed_title|…` and default to character
   // when the key is absent (events/_events.info); custom loc `type = all` → any

@@ -10,7 +10,15 @@
  * No `vscode` imports here: this module is unit-tested in plain Node.
  */
 import { classifyKeyword } from "./contextKeywords";
-import { nodeAtOffset, parseScript, type BlockNode, type ParseResult, type Statement } from "./parser";
+import {
+  nodeAtOffset,
+  parseScript,
+  walkStatements,
+  type BlockNode,
+  type ParseResult,
+  type RootNode,
+  type Statement,
+} from "./parser";
 
 export type BlockContext = "trigger" | "effect" | "value" | "unknown";
 
@@ -59,11 +67,62 @@ export function blockPathFromParse(parse: ParseResult, offset: number): Array<St
  * changes) are skipped; an unrecognized keyword yields "unknown" (never hide
  * results when unsure).
  */
-export function detectContextFromParse(parse: ParseResult, offset: number): ContextResult {
-  const stack = blockStackFromParse(parse, offset);
+export function detectContextFromParse(parse: ParseResult, offset: number, rootKind?: string): ContextResult {
+  return contextFromStatements(parse.root, blockPathFromParse(parse, offset), rootKind);
+}
+
+const inlineKinds = new WeakMap<RootNode, Map<Statement, string>>();
+
+/** The parser represents an inline declaration as a marker then an assignment. */
+export function inlineKind(root: RootNode, statement: Statement): string | undefined {
+  let kinds = inlineKinds.get(root);
+  if (!kinds) {
+    kinds = new Map();
+    walkStatements(root, (stmt, ancestors) => {
+      if (stmt.kind !== "value" || stmt.value.kind !== "scalar" || stmt.value.quoted) return;
+      const kind = stmt.value.text;
+      if (kind !== "scripted_trigger" && kind !== "scripted_effect") return;
+      const parent = ancestors.at(-1);
+      const siblings = parent?.kind === "block" ? parent.statements : root.statements;
+      const next = siblings[siblings.indexOf(stmt) + 1];
+      if (next?.kind === "assignment") kinds!.set(next, kind);
+    });
+    inlineKinds.set(root, kinds);
+  }
+  return kinds.get(statement);
+}
+
+export function contextFromStatements(
+  root: RootNode,
+  statements: readonly (Statement | BlockNode | null)[],
+  rootKind?: string
+): ContextResult {
+  const stack: string[] = [];
+  for (const stmt of statements) {
+    if (stmt?.kind !== "assignment") continue;
+    const kind = inlineKind(root, stmt);
+    if (kind) {
+      stack.length = 0;
+      rootKind = kind;
+    }
+    stack.push(stmt.key.text);
+  }
+  return contextFromKeywords(stack, rootKind);
+}
+
+/** Shared by cursor features and the reference extractor's ancestor walk. */
+export function contextFromKeywords(stack: readonly string[], rootKind?: string): ContextResult {
   for (let i = stack.length - 1; i >= 0; i--) {
     const keyword = stack[i];
     if (keyword === "<anon>") continue;
+    if (i === 0) {
+      if (rootKind === "scripted_trigger") return { context: "trigger", keyword };
+      if (rootKind === "scripted_effect") return { context: "effect", keyword };
+      if (rootKind === "script_value") return { context: "value", keyword };
+    }
+    // script_docs random_list: each weighted child contains effects. The
+    // child's label is a weight expression, not a new grammar context.
+    if (i > 0 && stack[i - 1].toLowerCase() === "random_list") continue;
     const cls = classifyKeyword(keyword);
     if (cls === "trigger" || cls === "effect" || cls === "value") return { context: cls, keyword };
     if (cls === "transparent") continue;

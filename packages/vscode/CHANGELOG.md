@@ -2,6 +2,82 @@
 
 ## Unreleased
 
+## 0.5.0 (beta) - editor improvements
+
+- Keep the new-mod wizard open when focus changes, show the created folder with opening actions if the final step is canceled, and show Explorer when adding the new mod to the workspace.
+
+- Keep Problems in open scripts current when an event or required localization changes in another file, including unsaved edits and discarded changes.
+
+- Start Here offers Add to Current Workspace or Open in New Window after creating or finding a mod. Cancelling leaves existing windows unchanged; a newly created mod remains on disk.
+
+- Project shows a visible selected focus indicator, compact New Mod and Add Existing Mod buttons beside Workspace Mods, a package icon for All Tools, and a distinct Getting Started icon. Row customization is in the overflow menu and lists only Project rows.
+- Add Mod or Base Game to Workspace searches Documents mods, configured projects or Steam Workshop for the active game and adds the selected folder to the current window. The base game can also be added for reference.
+- The first-mod tutorial action enables scope inlay hints. The tutorial explains Victoria 3 metadata and launcher links.
+- Image conversion opens a multi-file picker directly. An overwrite-or-skip toast appears only when an output already exists; dismissing it stops the batch. Folder conversion remains available from Explorer.
+
+
+### Getting started
+
+- Keep a Start Here view available before a mod is detected, with Create a Mod, Find Existing Mod and the tutorial. Find local mods by name in the games' user folders and the configured projects folder, including launcher-linked projects. Browse custom folders without closing an existing workspace. Discovery runs on request and leaves unrelated projects quiet.
+- Rebuild the tutorial around opening or creating a mod, connecting the game and making a first edit. Put optional validation and generated reference data later, and add a short path for existing projects, multi-mod workspaces and custom tools. Explain where each tool lives and how to return to the tutorial. Each step can open its full instructions in a Markdown preview when the window is too narrow for the tutorial side panel.
+- Separate editing readiness from optional validator setup. Setup offers a game-folder picker for custom installations and does not start a validator download unless requested. Running setup without a mod offers concrete start actions instead of configuring a default game.
+- Create the launcher link when making a CK3 mod in the recommended game folder, preserve existing links on name conflicts, and remember the selected game in each new project's settings. Detect the game version from that game's installation.
+
+### Completion and navigation
+
+- Restore automatic suggestions while typing unfinished script keywords and unquoted values. Treat these tokens as code without changing their syntax colors or the user's suggestion settings.
+- Suggest event localization keys before their text exists. CK3 title and description fields use `<event ID>.t` and `.desc`; Victoria 3 uses `.t`, `.d` and `.f` for title, description and flavor text. Option names use successive `.a` through `.z` suffixes and avoid names already assigned to another option.
+- Build proposed localization keys from the current unsaved event, including incomplete text. Label new keys, keep existing localization suggestions and insert only the reference. Accepting a suggestion does not create a localization entry. EU5 retains existing-key completion without an assumed naming convention.
+- Fix missing trait suggestions when a mod localization key has the same name. Apply override priority separately to each definition kind, so unrelated kinds no longer hide one another.
+- Keep scripted GUI definitions out of scripted-trigger navigation. Use the type required at the cursor consistently for Go to Definition, Find References, hover, signature help, highlighting, event lookup and dependency results. Retain all same-kind override locations.
+- Preserve trigger and effect context inside scripted definitions and weighted random-list bodies. Do not substitute unrelated values when a known reference field has no matching definitions.
+- Respect VS Code's word-suggestion setting for every Paradox language. Empty reference completions allow the editor's word suggestions to remain available.
+
+### Unsaved edits and rename
+
+- Refresh script definitions and references from unsaved editor text. Closing the document restores saved content or removes unsaved-only definitions. File watcher updates do not replace an open buffer.
+- Invalidate cached dependency references after files change, so reference and dependency results do not retain old call sites.
+- Restrict rename to the selected symbol kind and verify declaration sites and reference text before returning edits. Reject ambiguous, stale, unreadable or read-only sources and target names already used by that kind, instead of changing unrelated text.
+- Return versioned rename edits to editors that support them. Other LSP clients must save changed source documents first. Graphics and GUI symbols with incomplete reference coverage remain unavailable for rename; ambiguous same-line declarations require separate lines.
+
+### Project and Explorer
+
+- Move Mod Overview, Localization Coverage, Problems by Type, Overrides & Conflicts and Dependencies to Explorer by default. The first two start collapsed; the other three stay hidden until opened. Preserve custom view placements.
+- Keep Workspace Mods, View, Create, Publish, Info and Settings in one scrolling Project view. Utils, Test & Troubleshoot and Paths remain independently movable. Preserve hidden-tool preferences, icons and group expansion state.
+- Add Project > Settings controls for scope inlay hints, suggestion verbosity and hover detail, plus All settings. Show current values, apply changes immediately and reflect changes made elsewhere. Keep an existing workspace override; otherwise save the choice in user settings. Cancelling a picker preserves the previous value, and defaults are unchanged.
+- Replace Advanced Settings with the controls in Project. Keep Settings collapsed initially and remember its expansion state.
+- Put All Tools and Customize in Project's title bar, show the focused mod and scroll Workspace Mods after five visible rows. Use PX Toolkit as the sidebar title and give detached views their own names.
+- Add useful actions to empty views, make walkthrough steps reflect actual readiness and combine startup notices into one optional message. Preserve prior dismissals while keeping actionable configuration failures visible.
+
+### File and definition actions
+
+- Put applicable actions labelled `PX:` directly in editor and Explorer context menus. Expose image conversion, snippets, dates, GUI tools, format references and BBCode conversion without a submenu.
+- Add context actions to Mod Overview, Overrides and localization references. Use the selected file, definition and mod even when another editor is active. Invalid explicit targets do not fall back to the active file, and game or dependency sources remain read-only.
+- Load the exact selected source in Event Graph and creator forms when several files define the same name. Reopening a creator, graph or dynasty panel updates its source callbacks to the selected mod.
+- Add native source menus to Event Graph, GUI Editor and Coat of Arms Designer, with keyboard access through Shift+F10 or the context-menu key and improved selection navigation.
+
+### Images and BBCode
+
+- Convert batches between DDS, PNG, JPEG and WebP from Utils or file context menus. Select files or folders, optionally include subfolders, and preserve relative folders when writing to a separate output directory.
+- Choose automatic, BC1/DXT1, BC3/DXT5 or uncompressed DDS output. JPEG conversion asks for a white or black background for transparent pixels.
+- Preserve source images and skip existing outputs by default; overwriting outputs requires an explicit choice. Show progress, allow cancellation and report converted, skipped and failed files with per-file error details.
+- Offer BBCode Preview through VS Code's editor selector, with source and side-by-side preview actions. Preview follows the current document, including unsaved edits, and leaves its language mode unchanged.
+
+### Localization and encoding
+
+- Scope localization editing, reference navigation and Translate Next to the selected mod, file and language. Look up the requested translation without changing the configured completion language or substituting another language's value.
+- Let Add Language create the first localization file in a mod with no localization folder, with the correct language header, filename and UTF-8 BOM.
+- Warn when a mod script `.txt` file is missing its UTF-8 BOM. Exclude other script extensions and files outside the mod.
+- Add Save as UTF-8 with BOM as a quick fix for script and localization files. Open the affected file in VS Code's native encoding picker without losing current editor text. Choose Save with Encoding, then UTF-8 with BOM to finish.
+
+### Responsiveness and development
+
+- Cache localization coverage, reread only affected languages and share concurrent loads. Yield during large scans and restart pending reads after cache resets so stale translations cannot survive an index rebuild.
+- Reuse unchanged localization lines after edits, with a full parse when reuse is unsafe. Whole-file definition rebuilding remains; worker-based parsing is deferred.
+- Match open localization paths according to the host platform, preserving distinct buffers for filenames that differ only in case on case-sensitive filesystems.
+- Process game-log bursts in bounded reads without losing partial lines or split UTF-8 characters. Continue correctly after log truncation or replacement.
+- Use PXTK Development for F5 launches and test-package installation. Document the separate Live Webview helper checkout, add packaged-editor regression checks, and record localization and symbol-resolution performance measurements.
+
 ## 0.4.4 (beta) - editing fixes and release checks
 
 - Validate release tags against package versions, prepare notes as a GitHub prerelease, and publish manually with a pre-release option. Send Discord announcements only after Marketplace publishing succeeds.

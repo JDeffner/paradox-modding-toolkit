@@ -48,20 +48,26 @@ export interface ActionGroup {
   items: ActionItem[];
 }
 
-/**
- * Every command launcher the panel offers, built per game (labels carry the
- * active game's name). The panel is the discoverable home for EVERY tool:
- * editor-title buttons, the status bar and the keyboard chords stay as the
- * fast path in context, and a row here is the place you find the tool when
- * you do not already know where its button hides. Rows you never use go away
- * via `px.sidebar.hidden` (the Customize command), so a longer list costs
- * nothing. Two rows are still conditional on facts, not taste: tiger's
- * occasional commands need a game with a tiger, and clearing the error.log
- * Problems only appears while there is something to clear. The error.log
- * watcher itself is a toggle above, not a launcher.
- */
+/** The discoverable tool catalogue, gated by the active profile. */
 export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[] {
-  return [
+  const groups: ActionGroup[] = [
+    {
+      label: "Workspace Mods",
+      items: [
+        {
+          label: "Find Existing Mod...",
+          command: "px.openMod",
+          icon: "folderOpen",
+          tip: "Find local mods by name or browse to a project folder.",
+        },
+        {
+          label: "New Mod…",
+          command: "px.createMod",
+          icon: "package",
+          tip: "Create a new mod folder with its descriptor.",
+        },
+      ],
+    },
     {
       label: "View",
       items: [
@@ -81,24 +87,53 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           label: "GUI Widget Tree",
           command: "px.showGuiTree",
           icon: "listTree",
-          tip: "The widget tree of the .gui file you are editing.",
+          tip: "Choose a .gui file to inspect its widget tree.",
         },
         {
           label: "GUI Editor",
           command: "px.openGuiEditor",
           icon: "layoutTemplate",
-          tip: "Render and edit the .gui window you are editing.",
-        },
-        {
-          label: "Convert Image to DDS",
-          command: "px.convertToDds",
-          icon: "image",
-          tip: "Convert PNG, JPEG or WebP files to DDS.",
+          tip: "Choose a .gui file to render and edit its windows.",
         },
       ],
     },
     {
-      label: "Share",
+      label: "Utils",
+      items: [
+        {
+          label: "Convert Images...",
+          command: "px.convertImages",
+          icon: "image",
+          tip: "Batch-convert images to PNG, JPEG, WebP or DDS.",
+        },
+        {
+          label: "Convert Images to DDS...",
+          command: "px.convertToDds",
+          icon: "image",
+          tip: "Convert images to DDS with a choice of compression.",
+        },
+        {
+          label: "Convert DDS to Images...",
+          command: "px.convertDdsToImage",
+          icon: "image",
+          tip: "Export DDS textures to PNG, JPEG or WebP.",
+        },
+        {
+          label: "BBCode to Markdown...",
+          command: "px.convertBBCodeToMarkdown",
+          icon: "fileText",
+          tip: "Write a Markdown copy of a BBCode file.",
+        },
+        {
+          label: "Markdown to BBCode...",
+          command: "px.convertMarkdownToBBCode",
+          icon: "fileText",
+          tip: "Write a BBCode copy of a Markdown file.",
+        },
+      ],
+    },
+    {
+      label: "Publish",
       items: [
         {
           label: "Steam Workshop Panel",
@@ -117,6 +152,12 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
     {
       label: "Info",
       items: [
+        {
+          label: "Getting Started",
+          command: "px.getStarted",
+          icon: "flag",
+          tip: "Create your first mod or connect an existing workflow.",
+        },
         {
           label: "Join the Discord",
           command: "px.openDiscord",
@@ -141,30 +182,18 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
           icon: "bookOpen",
           tip: "Search every trigger, effect and datafunction the game has.",
         },
-        {
-          label: "Export Generated Snippets",
-          command: "px.exportSnippets",
-          icon: "download",
-          tip: "Open a searchable HTML catalogue with snippet previews, copying and printing.",
-        },
       ],
     },
     {
       label: "Create",
       items: [
         {
-          label: "New Mod…",
-          command: "px.createMod",
-          icon: "package",
-          tip: "Create a new mod folder with its descriptor.",
-        },
-        {
           label: "New Content…",
           command: "px.newContent",
           icon: "plus",
           tip: "Scaffold an event, decision or trait into the right folder.",
         },
-        // The visual creators follow the two scaffolds: same group, richer tool.
+        // Visual creators use the active game's own definitions.
         ...creatorItems(meta),
         // ONE row for the designer, in Create. It used to be listed twice (a
         // View row that opened the blank canvas and a Create row that asked
@@ -204,8 +233,7 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
               },
             ] satisfies ActionItem[])
           : []),
-        // Tiger quick actions — only for games a tiger exists for. Setup &
-        // Health Check has no row: the PX Toolkit status bar item runs it.
+        // Validator tools follow the active profile.
         ...(meta.tiger
           ? ([
               {
@@ -237,6 +265,14 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
       ],
     },
   ];
+  return groups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => {
+      if (item.command === "px.openGuiEditor") return meta.guiTextMetrics !== undefined;
+      if (item.command === "px.newContent") return (meta.scaffolds?.length ?? 0) > 0;
+      return true;
+    }),
+  }));
 }
 
 /**

@@ -20,6 +20,10 @@ export const vic3Profile: GameProfile = {
   refFields: VIC3_REF_FIELDS,
   prefixRefs: VIC3_PREFIX_REFS,
   blockRefFields: VIC3_BLOCK_REF_FIELDS,
+  // events/vampire_panic_events.txt: vampire_panic.1.t, .d, .f, .a and .b.
+  eventLocalization: { fields: { title: ".t", desc: ".d", flavor: ".f" }, optionSuffix: ".a" },
+  // character_panel.gui: je_meiji_restoration_japanese_emperor_check_sgui.
+  dataFunctionRefs: { GetScriptedGui: "scripted_gui", ScriptValue: "script_value" },
   guiSchema: GUI_SCHEMA,
   skeletons: (SKELETONS as unknown as SkeletonData).kinds,
   // guiTextMetrics live on the meta (the client reads them too, for the GUI

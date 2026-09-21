@@ -45,6 +45,14 @@ full contract below including `serverInfo` in the `initialize` result, the
   `.yml`), `paradox-gui` (`.gui`). The client decides which files get which
   id; the server keys per-request behavior off it.
 
+### Symbol lookup and rename
+
+Symbol identity includes its definition kind. Source priority applies within each kind, so a mod localization key does not hide a vanilla trait with the same name. Definition and reference requests use the schema and grammar at the cursor when the type is known. Definition results retain all same-kind override sites. Scope inference continues to rank and annotate candidates without removing them.
+
+Open script and localization documents are indexed from their current text. Send `didChange` before requesting completion, navigation or rename; a file watcher does not replace an open document's text. `didClose` restores the saved content or removes an unsaved-only definition. Watcher notifications also invalidate cached reference searches in dependency roots.
+
+For rename, declare standard `capabilities.workspace.workspaceEdit.documentChanges: true` and enforce each returned `TextDocumentEdit.textDocument.version`. Closed files carry a null version. Without this capability, rename returns `WorkspaceEdit.changes` only when all open sources match disk; otherwise the request fails and asks the user to save first. Rename rejects ambiguous symbol types, stale or unreadable source text, read-only targets and a target name already used by that kind. Graphics and GUI symbol types whose reference forms are not fully indexed cannot be renamed. A declaration with several occurrences of its name on one line must be split across lines before rename.
+
 ## Initialization
 
 The `initialize` result carries standard LSP `serverInfo`:
@@ -104,6 +112,8 @@ interface ParadoxSettings {
 `texturePreviewBackground` sets the display background for texture hover thumbnails: `checkerboard` (default), `dark`, `light`, or a six-digit hex color such as `#376694`. Invalid values use checkerboard. The server composites the background into its bounded PNG thumbnail, so clients need no custom hover styling. Changing it through `paradox/configChanged` affects subsequent hovers without rebuilding the index. Source textures are unchanged. VS Code shares this value with its DDS editors through `px.texturePreview.background`; the editor palette updates one workspace preference, and exported PNGs retain their original transparency.
 
 Completion documentation uses the first supported format in `textDocument.completion.completionItem.documentationFormat`, falling back to plain text when none is declared. Plain-text clients receive insertion previews and value hints without Markdown tables or code fences. `paradox/snippetCatalogue` always returns Markdown in its explicitly typed `preview` field, independently of the editor's completion capabilities.
+
+Standard event value completions include proposed localization keys for the current event's title, description and option names where the game profile has a verified convention (CK3 and Victoria 3, including Victoria 3 flavor text). New keys have a `detail` identifying them as new localization keys, with no file edits or client commands. Existing keys retain their definition metadata. Proposals use the current document's event ID and option order, skip names assigned to another option, and do not add entries to the definition index or localization files.
 
 `completionMode` controls ordinary script keyword insertion. `minimal` (the default) inserts the documented operator and blank values and the fields from valid documented examples or scripted parameters, omitting fields marked optional, with no example values. `examples` restores full documented blocks and scripted-call parameter snippets. `names` inserts only keyword names. Unknown syntax stays a name in Minimal mode. Explicit definition/child-block snippet items and `paradox/snippets` keep their full templates. Snippet-capable clients receive `CompletionItemKind.Snippet` for generated templates, so the editor shows its snippet icon. Reference/value completions are unchanged. Clients without standard LSP snippet support receive the same punctuation as plain text. Send `paradox/configChanged` to change the mode without restarting or rebuilding the index. Resolving a completion adds an insertion preview and expected-value descriptions from the token documentation or the definition's `@param` tags. Example values are not treated as confirmed datatypes. These hints are documentation only; `insertText` is unchanged.
 
@@ -168,12 +178,12 @@ Reloading a playset does not extend the client's watched roots. A host must watc
 | `paradox/modFileChanged` | notification | `{ fsPath: string }` — a mod file changed on disk (client-side watcher); re-indexes the file, or rebuilds for workspace schema/playset changes |
 | `paradox/reloadDocs` | request | `{ force: boolean }` → `{ tokens: number, status?: StatusPayload }`, reload both script docs and data types; return and notify their loaded sources |
 | `paradox/indexStats` | request | `null` → `IndexStats` (definition counts by kind/source) |
-| `paradox/lookupLoc` | request | `{ key: string }` → `LocEntryInfo[]` — localization entries for a key, mod first |
+| `paradox/lookupLoc` | request | `{ key: string, language?: string }` → `LocEntryInfo[]` — localization entries for a key, mod first; omitted `language` uses the configured language |
 | `paradox/locText` | request | `LocTextParams` → `LocTextResult` — the same values as the PLAYER reads them: `{ raw, text, resolved }` per key, with the game's markup stripped and its `[ … ]` datafunctions resolved. A key the loc index cannot find is absent from `values` |
 | `paradox/modOverview` | request | `ModScopedParams` → `ModOverview` — content inventory by kind |
 | `paradox/locCoverage` | request | `ModScopedParams` → `LocCoverage[]` — per-language missing/orphaned/untranslated keys |
 | `paradox/overrides` | request | `ModScopedParams` → `OverrideInfo[]` — mod definitions shadowing vanilla/parents, with LIOS/FIOS winner |
-| `paradox/eventDetail` | request | `{ id: string }` → `EventDetail \| null` — full event structure for an inspector UI |
+| `paradox/eventDetail` | request | `{ id: string, file?: string }` → `EventDetail \| null` — full event structure for an inspector UI; optional `file` selects one exact source |
 | `paradox/eventGraph` | request | `EventGraphParams` → `EventGraph` — event/on_action reference graph, plus the `suggestions` catalog a query box completes against |
 | `paradox/eventVocabulary` | request | `EventVocabularyParams` → `EventVocabularyResult` — the keys, value sets, effect and trigger tokens an event editor may offer, each with its own documentation |
 | `paradox/eventValueOptions` | request | `EventValueOptionsParams` → `EventValueOptionsResult \| null` — the value set one VALUE belongs to, resolved through the definition index (`secret_cultivator` is a `secret`, so the answer is every indexed secret, mod entries first); null when the value resolves to nothing enumerable |
@@ -335,6 +345,8 @@ from the mod's own `save_scope_as` sites. Docs are capped to one line for a
 menu row. A key whose value is free text is simply absent from `values`; that
 is the signal to render an input instead of a dropdown. `modRoot` scopes the
 definition-backed sets like the graph.
+
+`paradox/eventDetail` accepts an optional `file` selector as an absolute path or file URI. With it, only the event in that indexed file can match; a missing event or unreadable file returns `null`. Without it, the existing ID lookup order applies.
 
 `paradox/eventDetail` carries an event's blocks twice over: `keys` /
 `effectKeys` summarize them for an inspector, and `lines` / `totalLines` /
@@ -610,6 +622,8 @@ from the game's"; and `current` is the block's own
 bytes read off disk. A key with no widget in a client is still in `keys`, so a
 form can show it rather than hide it (AD-5).
 
+When loading `name`, an optional `file` (absolute path or file URI) selects its exact indexed source, including a source outside `modRoot`. This selector affects `current` only; `modRoot` still filters the form's mod-side option lists. If that source is missing or unreadable, `current` is absent. The server never substitutes another file with the same name. Without `file`, the existing mod-first lookup applies.
+
 Three more fields answer questions the flat lists cannot. An option (and an
 `existing` entry) carries `label` when the loc index resolves the kind's first
 loc pattern with `$` replaced by the definition name (`trait_$` →
@@ -682,6 +696,8 @@ direction in words ("5 days faster"). `lines` runs any loc key through the same
 chain: CK3 prints a tradition's cost as `PRESTIGE_COST` = `"[prestige_i]
 $VALUE|0$"`, and a client that asks for that key gets the prestige icon and the
 `$VALUE|0$` slot back as parts, with the number's decimals in the slot.
+
+`paradox/lookupLoc` accepts an optional `language` identifier containing lowercase letters and underscores, including custom languages. An explicit language searches only that language in the active profile's localization folders and includes unsaved open text. Invalid identifiers or missing translations return an empty list, never an entry from another language. The configured completion language and index stay unchanged.
 
 `paradox/locText` is the reading half of `paradox/lookupLoc`. `lookupLoc`
 answers a loc value VERBATIM, which is what an editor needs; a panel that shows
@@ -778,6 +794,8 @@ texture hover carries a `data:` URI, which a client that does not render
 images in markdown shows as link text). Completion, hover, definition,
 references, rename, symbols, formatting, folding, inlay hints, semantic
 tokens and structural diagnostics all work over plain LSP.
+
+The `missing-bom` diagnostic is an Error for localization files and a Warning for editable mod script `.txt` files. Hosts fix the encoding through their own save controls, then send `textDocument/didSave` so the server checks the disk BOM again. The VS Code encoding quick fix is local to that client and is not emitted as an LSP command.
 
 The `client` capabilities switch the remaining surface automatically, one
 capability at a time. A client declaring nothing (every field off) gets:

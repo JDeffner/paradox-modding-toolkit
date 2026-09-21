@@ -42,6 +42,7 @@ describe("capability resolution", () => {
     completionDocumentationFormat: "plaintext",
     fileLinks: false,
     hoverIcons: false,
+    documentChanges: false,
   };
   /** What a client declares in the STANDARD LSP initialize params. */
   const withSnippets = { textDocument: { completion: { completionItem: { snippetSupport: true } } } };
@@ -55,6 +56,7 @@ describe("capability resolution", () => {
       completionDocumentationFormat: "plaintext",
       fileLinks: true,
       hoverIcons: true,
+      documentChanges: false,
     });
   });
 

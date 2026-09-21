@@ -96,7 +96,6 @@ function saveUi(): void {
 const view = new GraphView(svg, {
   onSelect: (id) => selectNode(id),
   onOpen: (file, line) => send({ type: "open", file, line }),
-  onRefocus: (id) => refocus(id),
   onMove: (id, x, y) => {
     const positions = { ...history.state.positions, [id]: { x, y } };
     history.push(`move ${id}`, { ...history.state, positions });
@@ -148,7 +147,8 @@ const inspector = new Inspector($("inspector"), {
 
 const sim = new SimWindow($("sim"), {
   onOpen: (file, line) => send({ type: "open", file, line }),
-  onNeedDetail: (id) => send({ type: "simulate", id }),
+  onNeedDetail: (id) =>
+    send({ type: "simulate", id, file: currentGraph?.nodes.find((node) => node.id === id)?.file }),
   onMoved: (x, y) => {
     ui = { ...ui, simX: x, simY: y };
     saveUi();
@@ -170,7 +170,7 @@ function selectNode(id: string | null): void {
   }
   if (side.collapsed) side.toggle(false);
   inspector.showLoading(id);
-  send({ type: "select", id });
+  send({ type: "select", id, file: currentGraph?.nodes.find((node) => node.id === id)?.file });
 }
 
 function refocus(id: string): void {
@@ -527,7 +527,12 @@ window.addEventListener("keydown", (ev) => {
 // ---------------------------------------------------------------------------
 
 function baseParams(): EventGraphParams {
-  return { maxNodes: currentParams.maxNodes, themes: ui.banner, connectedOnly: ui.connectedOnly ?? true };
+  return {
+    modRoot: currentParams.modRoot,
+    maxNodes: currentParams.maxNodes,
+    themes: ui.banner,
+    connectedOnly: ui.connectedOnly ?? true,
+  };
 }
 function fetchGraph(params: EventGraphParams): void {
   send({ type: "fetch", params: { ...params, themes: ui.banner, connectedOnly: ui.connectedOnly ?? true } });
@@ -744,7 +749,7 @@ $("helpBtn").onclick = () =>
           { lead: "All nodes", text: "loads everything the mod has, connected or not." },
           {
             lead: "Source",
-            text: "opens the selected card's file beside the graph. Double-clicking a card and the small button on its corner do the same; right-click re-centres the graph on it instead.",
+            text: "opens the selected card's file beside the graph. Double-clicking a card and the small button on its corner do the same; right-click or Shift+F10 opens its action menu.",
           },
         ],
       },
@@ -996,6 +1001,16 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
   const msg = ev.data;
   if (!msg) return;
   switch (msg.type) {
+    case "nodeAction": {
+      const node = currentGraph?.nodes.find((node) => node.id === msg.id && node.file === msg.file);
+      if (!node) break;
+      if (msg.action === "focus") refocus(node.id);
+      else if (node.kind === "event") {
+        selectNode(node.id);
+        sim.open(node.id);
+      }
+      break;
+    }
     case "init":
       applyUi(msg.ui);
       if (msg.state) {

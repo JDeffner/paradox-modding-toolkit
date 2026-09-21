@@ -35,18 +35,21 @@ export async function createTranslationCommand(cfg: PxConfig, log: (msg: string)
     return;
   }
   const locDir = path.join(cfg.modPath, "localization");
-  if (!fs.existsSync(locDir)) {
-    void vscode.window.showWarningMessage(
-      `Paradox Modding Toolkit: the mod has no localization folder yet (${locDir}).`
-    );
-    return;
-  }
-
-  const present = languagesInMod(locDir);
+  const present = fs.existsSync(locDir) ? languagesInMod(locDir) : [];
   if (present.length === 0) {
-    void vscode.window.showWarningMessage(
-      "Paradox Modding Toolkit: no localization files with a language marker found in the mod."
-    );
+    const language = await vscode.window.showQuickPick([...LOC_LANGUAGES], {
+      title: `Add language to ${path.basename(cfg.modPath)}`,
+      placeHolder: "Choose the first localization language",
+    });
+    if (!language) return;
+    const file = path.join(locDir, language, `mod_l_${language}.yml`);
+    try {
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, `\uFEFFl_${language}:\n`, { encoding: "utf8", flag: "wx" });
+      await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file));
+    } catch (error) {
+      void vscode.window.showErrorMessage(`Could not add localization: ${String(error)}`);
+    }
     return;
   }
 

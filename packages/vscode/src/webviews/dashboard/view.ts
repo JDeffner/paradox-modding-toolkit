@@ -8,31 +8,65 @@ import { metaFor } from "../../meta";
 import type { FocusMod } from "../../views";
 import type { ErrorLogWatcher } from "../../errorLog";
 import uiCss from "../shared/ui.css";
-import { icon, ICON_NAMES } from "../shared/icons";
-import { visibleActionGroups, type ActionGroup } from "./actions";
+import { icon, ICON_NAMES, PATHS, type IconName } from "../shared/icons";
+import { actionGroups, visibleActionGroups, type ActionGroup } from "./actions";
 import { makeNonce } from "../nonce";
 import { tipScript } from "../shared/tips";
-import { helpScript, type HelpSpec } from "../shared/help";
 
-/** A collapsible section: the static ones ("mods", "toggles", "paths") plus
- * one id per tool group, slugged from its label by the webview script. */
-type SectionId = string;
+export const DASHBOARD_SECTIONS = {
+  "px.tools": "Project",
+  "px.utils": "Utils",
+  "px.test": "Test & Troubleshoot",
+  "px.paths": "Paths",
+} as const;
+export const PROJECT_GROUPS: readonly string[] = ["View", "Create", "Publish", "Info"];
+const EDITOR_CHOICES = {
+  completionMode: {
+    label: "Suggestion verbosity",
+    section: "completion.mode",
+    tip: "Choose what accepting a script keyword suggestion inserts.",
+    items: [
+      { label: "Names only", value: "names", detail: "Insert only the keyword name." },
+      {
+        label: "Minimal fields",
+        value: "minimal",
+        detail: "Insert documented fields with blank values and Tab stops. Omit optional fields.",
+      },
+      {
+        label: "Full examples",
+        value: "examples",
+        detail: "Insert documented examples and call parameters.",
+      },
+    ],
+  },
+  hoverDetail: {
+    label: "Hover detail",
+    section: "hover.detail",
+    tip: "Choose how much information appears when you hover over script.",
+    items: [
+      { label: "Compact", value: "compact", detail: "Show the heading, key facts and source." },
+      { label: "Standard", value: "standard", detail: "Include short documentation and example previews." },
+      { label: "Full", value: "full", detail: "Show longer examples, all meanings and the scope chain." },
+    ],
+  },
+} as const;
+type EditorChoice = keyof typeof EDITOR_CHOICES;
 
-/** workspaceState key holding the per-section collapse flags (absent = expanded). */
-const COLLAPSED_KEY = "px.dashboardCollapsed";
+export type DashboardSection = keyof typeof DASHBOARD_SECTIONS;
 
 /** Messages the webview sends to the host. */
 type InboundMessage =
   | { type: "ready" }
+  | { type: "help" }
   | { type: "run"; command: string }
   | { type: "focus"; root: string | null }
   | { type: "exclude"; root: string; excluded: boolean }
   | { type: "setting"; key: "diagnosticsVanilla" | "scopeInlayHints"; value: boolean }
+  | { type: "pickSetting"; key: EditorChoice }
   | { type: "watcher" }
   | { type: "baseline" }
   | { type: "openSettings" }
-  | { type: "pickPath"; setting: string }
-  | { type: "collapse"; section: SectionId; collapsed: boolean };
+  | { type: "pickPath"; setting: string };
 
 /** Messages the host sends to the webview. */
 type OutboundMessage = { type: "state"; state: DashboardState };
@@ -60,6 +94,7 @@ interface DashboardState {
   /** Active game (full name) and whether it came from auto-detection. */
   gameName: string;
   gameAuto: boolean;
+  focusLabel: string;
   paths: PathRow[];
   mods: ModState[];
   /** Raw pin, or null = follow the active editor. */
@@ -73,10 +108,10 @@ interface DashboardState {
   watcherAvailable: boolean;
   diagnosticsVanilla: boolean;
   scopeInlayHints: boolean;
+  completionMode: PxConfig["completionMode"];
+  hoverDetail: PxConfig["hoverDetail"];
   /** Game-aware launcher groups (per-game labels). */
   actions: ActionGroup[];
-  /** Persisted per-section collapse flags; every section defaults to expanded. */
-  collapsed: Record<SectionId, boolean>;
 }
 
 export interface DashboardDeps {
@@ -96,12 +131,15 @@ export interface DashboardDeps {
 class DashboardViewProvider implements vscode.WebviewViewProvider {
   private view: vscode.WebviewView | undefined;
 
-  constructor(private readonly deps: DashboardDeps) {}
+  constructor(
+    private readonly deps: DashboardDeps,
+    private readonly section: DashboardSection
+  ) {}
 
   resolveWebviewView(view: vscode.WebviewView): void {
     this.view = view;
     view.webview.options = { enableScripts: true, localResourceRoots: [] };
-    view.webview.html = buildHtml();
+    view.webview.html = buildHtml(this.section);
     view.webview.onDidReceiveMessage((msg: InboundMessage) => void this.onMessage(msg));
     view.onDidDispose(() => {
       if (this.view === view) this.view = undefined;
@@ -112,8 +150,10 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
   }
 
   refresh(): void {
-    if (!this.view) return;
-    const msg: OutboundMessage = { type: "state", state: this.collectState() };
+    if (!this.view?.visible) return;
+    const state = this.collectState();
+    if (this.section === "px.tools") this.view.description = state.focusLabel;
+    const msg: OutboundMessage = { type: "state", state };
     void this.view.webview.postMessage(msg);
   }
 
@@ -140,7 +180,14 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
         });
       }
     }
+    const focusRoot = this.deps.focus.current();
+    const pinned = this.deps.focus.pinnedRoot();
+    const focusLabel = focusRoot
+      ? `${pinned && normKey(pinned) === normKey(focusRoot) ? "Pin" : "Follow"}: ${readModName(focusRoot)}`
+      : "No mod selected";
+    const actions = visibleActionGroups(meta, this.deps.errorLog.problemCount, hiddenRows());
     return {
+      focusLabel,
       gameName: meta.name,
       gameAuto: (vscode.workspace.getConfiguration("px").get<string>("gameId") ?? "auto") === "auto",
       paths: collectPaths(cfg, meta.tiger !== undefined),
@@ -153,13 +200,10 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       watcherAvailable: cfg.logsPath !== null,
       diagnosticsVanilla: cfg.diagnosticsVanilla,
       scopeInlayHints: cfg.scopeInlayHints,
-      actions: visibleActionGroups(meta, this.deps.errorLog.problemCount, hiddenRows()),
-      collapsed: this.collapsedState(),
+      completionMode: cfg.completionMode,
+      hoverDetail: cfg.hoverDetail,
+      actions,
     };
-  }
-
-  private collapsedState(): Record<SectionId, boolean> {
-    return this.deps.workspaceState.get<Record<SectionId, boolean>>(COLLAPSED_KEY) ?? {};
   }
 
   private async onMessage(msg: InboundMessage): Promise<void> {
@@ -167,10 +211,23 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       case "ready":
         this.refresh();
         return;
-      case "run":
-        await vscode.commands.executeCommand(msg.command);
+      case "help":
+        await vscode.commands.executeCommand(
+          "workbench.action.openWalkthrough",
+          "JDeffner.px-toolkit#px.gettingStarted",
+          false
+        );
+        return;
+      case "run": {
+        const allowed = actionGroups(
+          metaFor(this.deps.getCfg().gameId),
+          this.deps.errorLog.problemCount
+        ).flatMap((group) => group.items.map((item) => item.command));
+        if (![...allowed, "px.createDescriptor", "px.addModToWorkspace"].includes(msg.command)) return;
+        await runDashboardAction(msg.command, this.deps);
         this.refresh();
         return;
+      }
       case "focus":
         await this.deps.focus.pin(msg.root);
         return; // onDidPin refreshes
@@ -189,8 +246,23 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
           diagnosticsVanilla: "diagnostics.vanilla",
           scopeInlayHints: "scopeInlayHints",
         } as const;
-        await updateSetting(sections[msg.key], msg.value);
-        this.refresh();
+        if (!Object.hasOwn(sections, msg.key) || typeof msg.value !== "boolean") return;
+        await this.saveSetting(sections[msg.key], msg.value);
+        return;
+      }
+      case "pickSetting": {
+        if (!Object.hasOwn(EDITOR_CHOICES, msg.key)) return;
+        const setting = EDITOR_CHOICES[msg.key];
+        const current = this.deps.getCfg()[msg.key];
+        const items = setting.items.map((item) => ({
+          ...item,
+          description: item.value === current ? "Current" : undefined,
+        }));
+        const picked = await vscode.window.showQuickPick(items, {
+          title: setting.label,
+          placeHolder: setting.tip,
+        });
+        if (picked) await this.saveSetting(setting.section, picked.value);
         return;
       }
       case "watcher":
@@ -228,14 +300,16 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
         await vscode.commands.executeCommand("px.tigerToggleBaseline");
         this.refresh();
         return;
-      case "collapse":
-        // The webview already moved; persist only, no state push back.
-        await this.deps.workspaceState.update(COLLAPSED_KEY, {
-          ...this.collapsedState(),
-          [msg.section]: msg.collapsed,
-        });
-        return;
     }
+  }
+
+  private async saveSetting(section: string, value: unknown): Promise<void> {
+    try {
+      await updateSetting(section, value);
+    } catch (error) {
+      void vscode.window.showErrorMessage(`Could not save px.${section}: ${String(error)}`);
+    }
+    this.refresh();
   }
 }
 
@@ -268,7 +342,7 @@ function collectPaths(cfg: PxConfig, hasTiger: boolean): PathRow[] {
   const rows = [
     row("Game", "px.gamePath", cfg.gamePath),
     row("script_docs logs", "px.logsPath", cfg.logsPath),
-    row("Mod", "px.modPath", cfg.modPath),
+    row("Configured mod", "px.modPath", cfg.modPath),
     {
       label: "Mod projects",
       setting: "px.modProjectsDir",
@@ -318,134 +392,83 @@ async function updateSetting(section: string, value: unknown): Promise<void> {
   await cfg.update(section, value, target);
 }
 
+/** Sidebar tasks use the visible mod as their explicit target. */
+async function runDashboardAction(command: string, deps: DashboardDeps): Promise<void> {
+  if (command === "px.convertBBCodeToMarkdown" || command === "px.convertMarkdownToBBCode") {
+    const ext = command === "px.convertBBCodeToMarkdown" ? "bbcode" : "md";
+    const picked = await vscode.window.showOpenDialog({
+      canSelectMany: false,
+      filters: { Source: [ext] },
+      title: "Select the file to convert",
+    });
+    if (picked?.[0]) await vscode.commands.executeCommand(command, picked[0]);
+    return;
+  }
+  const root = deps.focus.current();
+  const target =
+    root && command === "px.showEventGraph"
+      ? { modRoot: root }
+      : root && command === "px.newContent"
+        ? vscode.Uri.file(root)
+        : undefined;
+  await vscode.commands.executeCommand(command, target);
+}
+
 export function registerDashboardView(
   context: vscode.ExtensionContext,
   deps: DashboardDeps
 ): { refresh(): void } {
-  const provider = new DashboardViewProvider(deps);
+  const providers = (Object.keys(DASHBOARD_SECTIONS) as DashboardSection[]).map((id) => {
+    const provider = new DashboardViewProvider(deps, id);
+    context.subscriptions.push(vscode.window.registerWebviewViewProvider(id, provider));
+    return provider;
+  });
+  const refresh = () => providers.forEach((provider) => provider.refresh());
   context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider("px.tools", provider),
-    vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration("px")) provider.refresh();
+    vscode.commands.registerCommand("px.allTools", async () => {
+      const groups = actionGroups(metaFor(deps.getCfg().gameId), deps.errorLog.problemCount);
+      const items = groups.flatMap((group) =>
+        group.items.map((item) => ({
+          label: item.label,
+          description: group.label,
+          detail: item.tip,
+          command: item.command,
+          iconPath: quickPickIcon(item.icon),
+        }))
+      );
+      const picked = await vscode.window.showQuickPick(items, {
+        title: "Paradox: All Tools",
+        placeHolder: "Find a task",
+        matchOnDescription: true,
+        matchOnDetail: true,
+      });
+      if (picked) await runDashboardAction(picked.command, deps);
     }),
-    vscode.workspace.onDidChangeWorkspaceFolders(() => provider.refresh()),
+    vscode.workspace.onDidChangeConfiguration((e) => {
+      if (e.affectsConfiguration("px")) refresh();
+    }),
+    vscode.workspace.onDidChangeWorkspaceFolders(refresh),
     // Following the active editor can change the focus mod highlight.
-    vscode.window.onDidChangeActiveTextEditor(() => provider.refresh()),
-    deps.focus.onDidPin(() => provider.refresh()),
-    deps.errorLog.onDidChangeState(() => provider.refresh())
+    vscode.window.onDidChangeActiveTextEditor(refresh),
+    deps.focus.onDidPin(refresh),
+    deps.errorLog.onDidChangeState(refresh)
   );
-  return { refresh: () => provider.refresh() };
+  return { refresh };
 }
 
 // ---- html ------------------------------------------------------------------------------
 
-function escapeAttr(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+/** Quick picks accept image URIs, so use the dashboard glyph without a Codicon translation. */
+function quickPickIcon(name: IconName): { light: vscode.Uri; dark: vscode.Uri } {
+  const uri = (color: string) => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" color="${color}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${PATHS[name]}</svg>`;
+    return vscode.Uri.parse(`data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`);
+  };
+  return { light: uri("#424242"), dark: uri("#c5c5c5") };
 }
 
-/**
- * The ? button's tutorial. Every claim here is what the code above and the
- * webview script below actually do; the tooltips only name their control, so
- * this is where the depth lives.
- */
-const HELP: HelpSpec = {
-  title: "The Project panel",
-  intro:
-    "One place for what this workspace looks like and what the toolkit is doing with it: the game and folders in use, the mods it indexes, the switches that change its behaviour, and a row for every tool.",
-  sections: [
-    {
-      title: "Game and paths",
-      items: [
-        {
-          lead: "The top row",
-          text: "names the game the workspace mods, with a badge saying whether it was detected or set by hand. Click it to open the toolkit's settings.",
-        },
-        {
-          lead: "Paths",
-          text: "lists the folders and binaries actually in use: the game, the script_docs logs, the mod, the mod projects folder, the Workshop listing folder, and tiger. The badge says where each value came from, so an auto-detected folder is visible even though its setting is empty.",
-        },
-        {
-          lead: "Click a path row",
-          text: "to browse for a new value. The pick is written to the matching px setting.",
-        },
-      ],
-    },
-    {
-      title: "Workspace Mods",
-      items: [
-        {
-          lead: "Every mod",
-          text: "with a descriptor in the workspace is listed. An indexed mod is treated as yours: completion, navigation, diagnostics and the localization tools work across all of them.",
-        },
-        {
-          lead: "The switch",
-          text: "on a row indexes that mod or skips it entirely. A skipped folder that later disappears stays in the list, struck through, so you can switch it back and forget it.",
-        },
-        {
-          lead: "The dot",
-          text: "picks the mod the other sidebar views describe (Mod Overview, Localization Coverage, Overrides). It appears once more than one mod is indexed. Follow active editor hands that choice to whichever file you are editing.",
-        },
-      ],
-    },
-    {
-      title: "Toggles",
-      items: [
-        {
-          lead: "Tiger: new problems only",
-          text: "hides every problem recorded in the saved baseline, so tiger reports only what changed since. Create the snapshot with the Create Tiger Baseline row.",
-        },
-        {
-          lead: "Watch game error.log",
-          text: "tails the running game's error.log and reports new entries as Problems on your files. They outlive the watch on purpose, so you can work through them with the game closed; the Clear Game Problems row removes them.",
-        },
-        {
-          lead: "Diagnose vanilla files",
-          text: "also checks files under the game folder. Off, only your mod files are checked.",
-        },
-        {
-          lead: "Scope inlay hints",
-          text: "shows the inferred scope after a scope-changing block opener. Best-effort inference, display only.",
-        },
-      ],
-    },
-    {
-      title: "Tool rows",
-      items: [
-        {
-          lead: "Every tool",
-          text: "the toolkit has is one row here, grouped by what it is for. The editor title buttons, the status bar and the keyboard chords stay the fast path; these rows are how you find a tool without knowing where its button hides.",
-        },
-        {
-          lead: "Rows you never use",
-          text: "go away with the command Paradox: Customize Project Panel Rows. A group whose rows are all hidden disappears with them.",
-        },
-        {
-          lead: "Some rows are conditional:",
-          text: "tiger rows only appear for a game that has a tiger, and Clear Game Problems only while there is something to clear.",
-        },
-      ],
-    },
-    {
-      title: "The sections",
-      items: [
-        {
-          lead: "Click a section title",
-          text: "to fold it away. The panel remembers each fold for this workspace.",
-        },
-        {
-          lead: "The ⓘ button",
-          text: "beside a section title says what that section is for.",
-        },
-      ],
-    },
-  ],
-};
-
-/** The ⓘ beside a section title: an icon button whose tooltip is the explanation. */
-function hintButton(tip: string): string {
-  return `<button class="px-btn" data-variant="ghost" data-size="icon-xs" data-tip="${escapeAttr(
-    tip
-  )}" data-tip-wrap data-tip-side="left" aria-label="About this section">${icon("info")}</button>`;
+function escapeAttr(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
 }
 
 /**
@@ -455,20 +478,9 @@ function hintButton(tip: string): string {
  * everything stacks: no toolbar, labels truncate, tooltips open to the left
  * of right-edge controls and below rows, left-aligned.
  */
-function buildHtml(): string {
+export function buildHtml(section: DashboardSection): string {
   const nonce = makeNonce();
   const csp = [`default-src 'none'`, `style-src 'unsafe-inline'`, `script-src 'nonce-${nonce}'`].join("; ");
-
-  // The hint button sits beside the fold button, not inside it: a focusable
-  // element nested in a button swallows its own hover/focus.
-  const sectionHead = (id: SectionId, title: string, tip?: string): string =>
-    `<div class="px-panel-title">
-      <button class="section-toggle" data-section="${id}" aria-expanded="true" aria-controls="body-${id}">
-        ${icon("chevronDown", "px-icon caret")}<span class="px-truncate">${title}</span>
-      </button>
-      <span class="px-grow"></span>
-      ${tip ? hintButton(tip) : ""}
-    </div>`;
 
   // The whole row is the switch's label, so the text toggles too.
   const toggleRow = (id: string, label: string, tip: string): string =>
@@ -486,7 +498,7 @@ function buildHtml(): string {
 <meta charset="UTF-8" />
 <meta http-equiv="Content-Security-Policy" content="${csp}" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Paradox Project</title>
+<title>${DASHBOARD_SECTIONS[section]}</title>
 <style>
 ${uiCss}
   body { min-height: 100%; user-select: none; overflow-x: hidden; }
@@ -495,21 +507,6 @@ ${uiCss}
   #top { display: flex; align-items: center; gap: 2px; margin: 4px 4px 0; }
   #game { flex: 1 1 auto; min-width: 0; }
   #game .game-name { font-weight: 600; }
-  .section + .section { border-top: 1px solid var(--px-border); }
-  .section-toggle {
-    display: flex; align-items: center; gap: 2px; min-width: 0;
-    margin: 0 0 0 -6px; padding: 0 6px; height: 24px; border: 1px solid transparent;
-    border-radius: var(--px-radius-md); background: none; cursor: pointer;
-    font: inherit; font-size: inherit; font-weight: inherit; letter-spacing: inherit;
-    text-transform: inherit; color: inherit;
-    transition: background-color var(--px-ease), box-shadow var(--px-ease);
-  }
-  .section-toggle:hover { background: var(--px-muted); }
-  .section-toggle:focus-visible { border-color: var(--px-ring); box-shadow: 0 0 0 3px var(--px-ring-soft); }
-  .section-toggle .caret { width: 14px; height: 14px; transition: transform var(--px-ease); }
-  .section.collapsed .caret { transform: rotate(-90deg); }
-  .section.collapsed .section-body { display: none; }
-  .section-body { padding-top: 0; }
   .px-item[role="button"]:focus-visible, #game:focus-visible, .toggle-row:focus-within:has(input:focus-visible) {
     box-shadow: 0 0 0 3px var(--px-ring-soft);
   }
@@ -518,6 +515,10 @@ ${uiCss}
   .toggle-row:has(> .px-switch > input:disabled) { cursor: not-allowed; }
   .toggle-row:has(> .px-switch > input:disabled) > .px-switch { opacity: 0.5; }
   .toggle-row > .px-switch { flex: 0 0 auto; }
+  .setting-choice, .settings-all { width: 100%; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+  .setting-choice { height: auto; padding-top: 5px; padding-bottom: 5px; }
+  .setting-text { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 2px; }
+  .setting-value { color: var(--px-muted-fg); font-size: var(--px-text-xs); }
   /* Paths: two-line rows; the value truncates from the LEFT (the folder tail
      is the part that tells paths apart). */
   .path-row { flex-direction: column; align-items: stretch; gap: 1px; cursor: pointer; }
@@ -530,8 +531,19 @@ ${uiCss}
   .path-row .path-value.none { direction: ltr; font-family: inherit; font-style: italic; }
   .mod-row.excluded .px-item-label, .mod-row.missing .px-item-label { color: var(--px-muted-fg); }
   .mod-row.missing .px-item-label { text-decoration: line-through; }
+  #body-mods { max-height: calc(5 * var(--px-h-sm) + 8px); overflow-y: auto; }
+  #body-mods > .px-item { flex: 0 0 var(--px-h-sm); }
+  #troubleshoot-actions { display: flex; flex-direction: column; gap: 1px; }
+  #troubleshoot-actions:empty { display: none; }
   .empty { padding: 4px 8px; color: var(--px-muted-fg); font-size: var(--px-text-sm); }
   .hidden { display: none; }
+  .project-group { border-top: 1px solid var(--vscode-sideBarSectionHeader-border, var(--px-border)); }
+  .project-group > summary { display: flex; align-items: center; gap: 4px; padding: 5px 8px; cursor: pointer; list-style: none; font-weight: 600; }
+  .project-group > summary::-webkit-details-marker { display: none; }
+  .project-group > summary > svg { width: 14px; height: 14px; flex-shrink: 0; transform: rotate(-90deg); }
+  .project-group[open] > summary > svg { transform: none; }
+  .mod-actions { display: flex; margin-left: auto; gap: 2px; }
+  .project-group > summary:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
   /* shadcn RadioGroupItem: the focus pin, one per mod plus "follow". */
   .radio {
     flex: 0 0 auto; width: 14px; height: 14px; padding: 0; position: relative;
@@ -539,9 +551,8 @@ ${uiCss}
     transition: border-color var(--px-ease), box-shadow var(--px-ease);
   }
   .radio[aria-checked="true"] { border-color: var(--px-primary); }
-  .radio[aria-checked="true"]::after {
-    content: ""; position: absolute; inset: 3px; border-radius: 999px; background: var(--px-primary);
-  }
+  .radio-dot { position: absolute; inset: 3px; border-radius: 999px; background: var(--px-primary); visibility: hidden; }
+  .radio[aria-checked="true"] > .radio-dot { visibility: visible; }
   .radio:focus-visible { box-shadow: 0 0 0 3px var(--px-ring-soft); }
   /* The mod the views are on: its row is lit and its name is bold, so the pin
      reads from across the panel and not only from a 14px ring. */
@@ -550,24 +561,62 @@ ${uiCss}
 </style>
 </head>
 <body>
-<div id="top">
+${
+  section === "px.tools"
+    ? `<div id="top">
   <div class="px-item" id="game" role="button" tabindex="0" data-tip-wrap></div>
   <button id="help" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="How this panel works" data-tip-side="left" aria-label="How this panel works">${icon(
     "circleHelp"
   )}</button>
 </div>
-<div class="section" id="section-mods">
-  ${sectionHead(
-    "mods",
-    "Workspace Mods",
-    "Every mod in this workspace. The dot marks the one the sidebar views describe."
-  )}
+<div id="focus" class="empty"></div>
+`
+    : ""
+}
+${
+  section === "px.tools"
+    ? `<details class="project-group" id="section-mods" open>
+  <summary>${icon("chevronDown")}Workspace Mods<span class="mod-actions">
+    <button type="button" class="px-btn" data-variant="ghost" data-size="icon-sm" data-mod-command="px.createMod" aria-label="New Mod" data-tip="New Mod">${icon("plus")}</button>
+    <button type="button" class="px-btn" data-variant="ghost" data-size="icon-sm" data-mod-command="px.addModToWorkspace" aria-label="Add Existing Mod to Workspace" data-tip="Add Existing Mod to Workspace">${icon("folderOpen")}</button>
+  </span></summary>
   <div class="section-body px-list" id="body-mods"></div>
-</div>
-<!-- One .section per tool group, rendered by script before #section-toggles. -->
-<div class="section" id="section-toggles">
-  ${sectionHead("toggles", "Toggles")}
-  <div class="section-body px-list" id="body-toggles">
+</details>
+${PROJECT_GROUPS.map(
+  (
+    label
+  ) => `<details class="project-group" id="group-${label.toLowerCase()}"${label === "View" || label === "Create" ? " open" : ""}>
+  <summary>${icon("chevronDown")}${label}</summary>
+  <div class="px-list" data-actions="${label}"></div>
+</details>`
+).join("")}
+<details class="project-group" id="group-settings">
+  <summary>${icon("chevronDown")}Settings</summary>
+  <div class="px-list">
+    ${toggleRow("inlay", "Scope inlay hints", "Show inferred target types beside scope-changing script blocks. Labels do not change the script.")}
+    ${Object.entries(EDITOR_CHOICES)
+      .map(
+        ([
+          key,
+          setting,
+        ]) => `<button type="button" class="px-item setting-choice" data-setting="${key}" aria-labelledby="${key}-label ${key}-value" data-tip="${escapeAttr(setting.tip)}" data-tip-wrap>
+      <span class="setting-text"><span id="${key}-label">${setting.label}</span><span class="setting-value" id="${key}-value"></span></span>
+      ${icon("chevronDown")}
+    </button>`
+      )
+      .join("")}
+    <button type="button" class="px-item settings-all" id="all-settings">${icon("settings")}<span class="px-item-label">All settings</span></button>
+  </div>
+</details>
+`
+    : ""
+}
+${
+  section === "px.test"
+    ? `<div class="section" id="section-test-troubleshoot">
+
+  <div class="section-body px-list" id="body-test-troubleshoot">
+    <div id="troubleshoot-actions"></div>
     ${toggleRow(
       "baseline",
       "Tiger: new problems only",
@@ -579,28 +628,52 @@ ${uiCss}
       "Report new error.log entries of the running game as Problems."
     )}
     ${toggleRow("vanilla", "Diagnose vanilla files", "Also diagnose files under the game folder.")}
-    ${toggleRow("inlay", "Scope inlay hints", "Show the inferred scope after a scope-changing opener.")}
   </div>
 </div>
-<div class="section" id="section-paths">
-  ${sectionHead(
-    "paths",
-    "Paths",
-    "The folders and tools in use, set or auto-detected. Click a row to change one."
-  )}
+`
+    : ""
+}
+${
+  section === "px.paths"
+    ? `<div class="section" id="section-paths">
+
   <div class="section-body px-list" id="body-paths"></div>
 </div>
+`
+    : ""
+}
+<div class="px-list" id="body-actions"></div>
 ${tipScript(nonce)}
-${helpScript(nonce)}
+
 <script nonce="${nonce}">
 const vscode = acquireVsCodeApi();
 // Compile-time constants from the host, safe as markup.
 const ICONS = ${JSON.stringify(icons)};
-const HELP = ${JSON.stringify(HELP)};
+const SECTION = ${JSON.stringify(section)};
+const SECTION_LABEL = ${JSON.stringify(DASHBOARD_SECTIONS[section])};
+const EDITOR_CHOICES = ${JSON.stringify(EDITOR_CHOICES)};
 let state = null;
+const saved = vscode.getState() ?? {};
+for (const group of document.querySelectorAll(".project-group")) {
+  if (typeof saved.groups?.[group.id] === "boolean") group.open = saved.groups[group.id];
+  group.addEventListener("toggle", () => {
+    saved.groups = Object.fromEntries([...document.querySelectorAll(".project-group")].map((item) => [item.id, item.open]));
+    vscode.setState(saved);
+  });
+}
 
-// pxHelpDialog comes from helpScript(): the one dialog every webview uses.
-document.getElementById("help").addEventListener("click", () => pxHelpDialog(HELP));
+document.getElementById("help")?.addEventListener("click", () => vscode.postMessage({ type: "help" }));
+document.getElementById("all-settings")?.addEventListener("click", () => vscode.postMessage({ type: "openSettings" }));
+for (const button of document.querySelectorAll("[data-mod-command]")) {
+  button.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    vscode.postMessage({ type: "run", command: button.dataset.modCommand });
+  });
+}
+for (const row of document.querySelectorAll("[data-setting]")) {
+  row.addEventListener("click", () => vscode.postMessage({ type: "pickSetting", key: row.dataset.setting }));
+}
 
 function iconEl(name) {
   const t = document.createElement("template");
@@ -634,22 +707,6 @@ function actionRow(iconName, label, tip, run) {
   return row;
 }
 
-// ---- collapsible sections (state persisted host-side in workspaceState) ----
-function setCollapsed(id, collapsed) {
-  const section = document.getElementById("section-" + id);
-  if (!section) return;
-  section.classList.toggle("collapsed", collapsed);
-  section.querySelector(".section-toggle").setAttribute("aria-expanded", String(!collapsed));
-}
-for (const btn of document.querySelectorAll(".section-toggle")) {
-  btn.addEventListener("click", () => {
-    const id = btn.getAttribute("data-section");
-    const collapsed = !document.getElementById("section-" + id).classList.contains("collapsed");
-    setCollapsed(id, collapsed);
-    vscode.postMessage({ type: "collapse", section: id, collapsed });
-  });
-}
-
 // ---- switches ----
 const SWITCH_MSG = {
   vanilla: (on) => ({ type: "setting", key: "diagnosticsVanilla", value: on }),
@@ -660,10 +717,11 @@ const SWITCH_MSG = {
 for (const [id, make] of Object.entries(SWITCH_MSG)) {
   const input = document.getElementById(id);
   // Optimistic: the checkbox already moved; the pushed state reconciles.
-  input.addEventListener("change", () => vscode.postMessage(make(input.checked)));
+  input?.addEventListener("change", () => vscode.postMessage(make(input.checked)));
 }
 function setSwitch(id, on, disabled, disabledTip) {
   const input = document.getElementById(id);
+  if (!input) return;
   const row = input.closest(".toggle-row");
   input.checked = on;
   input.disabled = disabled;
@@ -671,54 +729,27 @@ function setSwitch(id, on, disabled, disabledTip) {
   row.setAttribute("data-tip", disabled && disabledTip ? disabledTip : row.getAttribute("data-tip-default"));
 }
 
-// ---- actions (game-aware, from state): one top-level section per group ----
-function sectionSlug(label) {
-  return label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-}
-function buildSection(id, title) {
-  const section = el("div", "section tools-section");
-  section.id = "section-" + id;
-  const head = el("div", "px-panel-title");
-  const btn = el("button", "section-toggle");
-  btn.setAttribute("data-section", id);
-  btn.setAttribute("aria-expanded", "true");
-  btn.setAttribute("aria-controls", "body-" + id);
-  const caret = iconEl("chevronDown");
-  caret.classList.add("caret");
-  btn.appendChild(caret);
-  btn.appendChild(el("span", "px-truncate", title));
-  btn.addEventListener("click", () => {
-    const collapsed = !section.classList.contains("collapsed");
-    setCollapsed(id, collapsed);
-    vscode.postMessage({ type: "collapse", section: id, collapsed });
-  });
-  head.appendChild(btn);
-  head.appendChild(el("span", "px-grow"));
-  section.appendChild(head);
-  const body = el("div", "section-body px-list");
-  body.id = "body-" + id;
-  section.appendChild(body);
-  return section;
+// Project groups share one scroll area; the detached views render one catalogue group.
+function renderActionGroup(box, label) {
+  box.textContent = "";
+  const group = state.actions.find((group) => group.label === label);
+  for (const it of group?.items ?? []) {
+    const row = actionRow(it.icon, it.label, it.tip,
+      () => vscode.postMessage({ type: "run", command: it.command }));
+    if (it.count !== undefined) row.appendChild(badge(String(it.count)));
+    box.appendChild(row);
+  }
 }
 function renderActions() {
-  for (const old of document.querySelectorAll(".tools-section")) old.remove();
-  const anchor = document.getElementById("section-toggles");
-  for (const group of state.actions) {
-    const id = sectionSlug(group.label);
-    const section = buildSection(id, group.label);
-    const body = section.querySelector(".section-body");
-    for (const it of group.items) {
-      const row = actionRow(it.icon, it.label, it.tip,
-        () => vscode.postMessage({ type: "run", command: it.command }));
-      if (it.count !== undefined) {
-        const b = el("span", "px-badge", String(it.count));
-        b.setAttribute("data-variant", "secondary");
-        row.appendChild(b);
-      }
-      body.appendChild(row);
+  if (SECTION === "px.tools") {
+    for (const box of document.querySelectorAll("[data-actions]")) {
+      renderActionGroup(box, box.dataset.actions);
+      box.parentElement.classList.toggle("hidden", !box.children.length);
     }
-    anchor.parentNode.insertBefore(section, anchor);
+    return;
   }
+  const box = document.getElementById(SECTION === "px.test" ? "troubleshoot-actions" : "body-actions");
+  renderActionGroup(box, SECTION_LABEL);
 }
 
 // ---- paths (effective values, host-computed) ----
@@ -749,10 +780,10 @@ function renderPaths() {
 
 // ---- game header ----
 const gameRow = document.getElementById("game");
-gameRow.setAttribute("data-tip", "The game this workspace mods. Click to change it.");
+gameRow?.setAttribute("data-tip", "The game this workspace mods. Click to change it.");
 const openGameSettings = () => vscode.postMessage({ type: "openSettings" });
-gameRow.addEventListener("click", openGameSettings);
-gameRow.addEventListener("keydown", (e) => {
+gameRow?.addEventListener("click", openGameSettings);
+gameRow?.addEventListener("keydown", (e) => {
   if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openGameSettings(); }
 });
 function renderGame() {
@@ -765,18 +796,22 @@ function renderGame() {
 function radio(on, tipText, onClick) {
   const b = el("button", "radio");
   b.setAttribute("role", "radio");
+  b.setAttribute("aria-label", tipText);
   b.setAttribute("aria-checked", String(on));
   b.setAttribute("data-tip", tipText);
   b.setAttribute("data-tip-wrap", "");
+  b.appendChild(el("span", "radio-dot"));
   b.addEventListener("click", (e) => { e.stopPropagation(); onClick(); });
   return b;
 }
 function renderMods() {
   const box = document.getElementById("body-mods");
+  const focusedId = box.contains(document.activeElement) ? document.activeElement.id : null;
+  const scrollTop = box.scrollTop;
   box.textContent = "";
   if (!state.mods.length) {
-    box.appendChild(el("div", "empty", "No mod descriptor found in this workspace."));
-    box.appendChild(actionRow("plus", "Create descriptor.mod",
+    box.appendChild(el("div", "empty", "No mod found. Open a mod folder or create a new mod."));
+    box.appendChild(actionRow("plus", "Create Mod Descriptor",
       "Create the file that marks this folder as a mod.",
       () => vscode.postMessage({ type: "run", command: "px.createDescriptor" })));
     return;
@@ -787,9 +822,11 @@ function renderMods() {
 
   if (showFocusUi) {
     const row = el("div", "px-item follow-row" + (following ? " focused" : ""));
-    row.appendChild(radio(following,
+    const followRadio = radio(following,
       "Let the sidebar views follow the file you are editing.",
-      () => vscode.postMessage({ type: "focus", root: null })));
+      () => vscode.postMessage({ type: "focus", root: null }));
+    followRadio.id = "mod-follow";
+    row.appendChild(followRadio);
     row.appendChild(el("span", "px-item-label", "Follow active editor"));
     row.addEventListener("click", () => vscode.postMessage({ type: "focus", root: null }));
     box.appendChild(row);
@@ -799,9 +836,11 @@ function renderMods() {
     const row = el("div", "px-item mod-row" + (mod.excluded ? " excluded" : "") + (mod.missing ? " missing" : ""));
     if (showFocusUi && !mod.excluded) {
       if (state.pinnedRoot === mod.root || (following && state.focusRoot === mod.root)) row.classList.add("focused");
-      row.appendChild(radio(state.pinnedRoot === mod.root,
+      const pinRadio = radio(state.pinnedRoot === mod.root,
         "Pin the sidebar views to this mod.",
-        () => vscode.postMessage({ type: "focus", root: mod.root })));
+        () => vscode.postMessage({ type: "focus", root: mod.root }));
+      pinRadio.id = "mod-pin-" + mod.root;
+      row.appendChild(pinRadio);
       row.addEventListener("click", () => vscode.postMessage({ type: "focus", root: mod.root }));
     } else {
       row.style.cursor = "default";
@@ -826,9 +865,10 @@ function renderMods() {
     sw.setAttribute("data-tip-side", "left");
     const input = el("input");
     input.type = "checkbox";
+    input.id = "mod-index-" + mod.root;
     input.checked = !mod.excluded;
     input.setAttribute("aria-label", "Index " + mod.name);
-    input.addEventListener("change", () =>
+    input?.addEventListener("change", () =>
       vscode.postMessage({ type: "exclude", root: mod.root, excluded: !mod.excluded }));
     sw.addEventListener("click", (e) => e.stopPropagation());
     sw.appendChild(input);
@@ -836,20 +876,31 @@ function renderMods() {
     row.appendChild(sw);
     box.appendChild(row);
   }
+  box.scrollTop = scrollTop;
+  if (focusedId) document.getElementById(focusedId)?.focus({ preventScroll: true });
 }
 
 function render() {
-  renderGame();
-  renderPaths();
-  renderMods();
+  if (SECTION === "px.tools") {
+    document.getElementById("focus").textContent = state.focusLabel;
+    renderGame();
+  }
+  if (SECTION === "px.paths") renderPaths();
+  if (SECTION === "px.tools") renderMods();
   renderActions();
-  for (const id of Object.keys(state.collapsed)) setCollapsed(id, state.collapsed[id]);
-  document.querySelector('[data-toggle="baseline"]').classList.toggle("hidden", !state.hasTiger);
-  setSwitch("baseline", state.tigerBaseline, false);
-  setSwitch("watcher", state.watcherOn, !state.watcherAvailable,
-    "Game logs folder not found (set px.logsPath).");
-  setSwitch("vanilla", state.diagnosticsVanilla, false);
-  setSwitch("inlay", state.scopeInlayHints, false);
+  if (SECTION === "px.test") {
+    document.querySelector('[data-toggle="baseline"]').classList.toggle("hidden", !state.hasTiger);
+    setSwitch("baseline", state.tigerBaseline, false);
+    setSwitch("watcher", state.watcherOn, !state.watcherAvailable, "Game logs folder not found (set px.logsPath).");
+    setSwitch("vanilla", state.diagnosticsVanilla, false);
+  }
+  if (SECTION === "px.tools") {
+    setSwitch("inlay", state.scopeInlayHints, false);
+    for (const [key, setting] of Object.entries(EDITOR_CHOICES)) {
+      const selected = setting.items.find((item) => item.value === state[key]);
+      document.getElementById(key + "-value").textContent = selected?.label ?? state[key];
+    }
+  }
 }
 
 window.addEventListener("message", (ev) => {

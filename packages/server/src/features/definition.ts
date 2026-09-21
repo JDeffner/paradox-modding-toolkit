@@ -12,6 +12,8 @@ import type { ServerData } from "../serverData";
 import { wordRangeAt } from "../wordAt";
 import { getLineText } from "../documents";
 import { datafunctionExprAt } from "./datafunction";
+import { definitionsAt } from "./symbolResolution";
+import { loadSchema, type SchemaData } from "../schema/loader";
 
 export function provideDefinition(
   data: ServerData,
@@ -20,16 +22,14 @@ export function provideDefinition(
   /** Definitions extracted from the OPEN document itself: the index-free net
    * for same-file declarations (inline scripted_triggers in a vanilla file
    * whose index is stale, missing, or still building — #5). */
-  docDefs?: (word: string) => Definition[]
+  docDefs?: (word: string) => Definition[],
+  schema: SchemaData = loadSchema(null)
 ): Location[] {
   const range = wordRangeAt(getLineText(document, position.line), position.character);
   if (!range) return [];
-  const locations = lookupLocations(data, range.word);
-  if (locations.length > 0 || !docDefs) return locations;
-  return docDefs(range.word).map((d) => ({
-    uri: document.uri,
-    range: { start: { line: d.line, character: 0 }, end: { line: d.line, character: 0 } },
-  }));
+  return definitionsAt(data, document, position, schema, true, docDefs)
+    .sort((a, b) => SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source])
+    .map((d) => toLocation(d.file, d.line));
 }
 
 /**
@@ -41,7 +41,8 @@ export function provideDefinition(
 export function provideLocDefinition(
   data: ServerData,
   document: TextDocument,
-  position: Position
+  position: Position,
+  schema: SchemaData = loadSchema(null)
 ): Location[] {
   const lineText = getLineText(document, position.line);
   // Only inside an unclosed [ before the cursor — i.e. within an expression.
@@ -53,28 +54,11 @@ export function provideLocDefinition(
   while (end < lineText.length && isWord(lineText[end])) end++;
   const word = lineText.slice(start, end);
   if (word.length === 0) return [];
-  const locations = lookupLocations(data, word);
-  // Quoted arguments ('RelationToMe') are most often custom loc names: when
-  // both meanings exist, prefer the customizable_localization definitions.
-  if (lineText[start - 1] === "'" && locations.length > 1) {
-    const custom = orderedDefs(data, word).filter((d) => d.kind === "customizable_localization");
-    if (custom.length > 0) {
-      return custom.map((d) => toLocation(d.file, d.line));
-    }
-  }
-  return locations;
+  return provideDefinition(data, document, position, undefined, schema);
 }
 
 /** Mod first, then parent, then vanilla; insertion order within a source. */
 const SOURCE_ORDER: Record<DefSource, number> = { mod: 0, parent: 1, vanilla: 2 };
-
-function orderedDefs(data: ServerData, word: string) {
-  return [...data.index.lookupAll(word)].sort((a, b) => SOURCE_ORDER[a.source] - SOURCE_ORDER[b.source]);
-}
-
-function lookupLocations(data: ServerData, word: string): Location[] {
-  return orderedDefs(data, word).map((d) => toLocation(d.file, d.line));
-}
 
 function toLocation(file: string, line: number): Location {
   return {

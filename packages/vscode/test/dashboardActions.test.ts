@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
+import { vic3Meta } from "@px-lsp/server/games/vic3/meta";
 import { eu5Meta } from "@px-lsp/server/games/eu5/meta";
 import { PATHS } from "../src/webviews/shared/icons";
 import { actionGroups, visibleActionGroups } from "../src/webviews/dashboard/actions";
@@ -21,7 +22,7 @@ describe("visibleActionGroups", () => {
 
   it("drops a group whose rows are all hidden", () => {
     const groups = visibleActionGroups(ck3Meta, 0, ["px.openWorkshopManager", "px.openWorkshopPage"]);
-    expect(groups.map((g) => g.label)).not.toContain("Share");
+    expect(groups.map((g) => g.label)).not.toContain("Publish");
     expect(groups.map((g) => g.label)).toContain("View");
   });
 
@@ -29,13 +30,21 @@ describe("visibleActionGroups", () => {
     const groups = actionGroups(ck3Meta, 0);
     const info = groups.find((g) => g.label === "Info");
     expect(info?.items.map((it) => it.command)).toEqual([
+      "px.getStarted",
       "px.openDiscord",
       "px.openWiki",
       "px.openCredits",
       "px.showExamplesWiki",
-      "px.exportSnippets",
     ]);
-    expect(groups.map((g) => g.label)).toEqual(["View", "Share", "Info", "Create", "Test & Troubleshoot"]);
+    expect(groups.map((g) => g.label)).toEqual([
+      "Workspace Mods",
+      "View",
+      "Utils",
+      "Publish",
+      "Info",
+      "Create",
+      "Test & Troubleshoot",
+    ]);
     // The wiki rows moved out of View, they are not listed twice.
     const view = groups.find((g) => g.label === "View");
     expect(view?.items.map((it) => it.command)).not.toContain("px.openWiki");
@@ -74,14 +83,13 @@ describe("visibleActionGroups", () => {
     expect(ids).not.toContain("px.newContent");
     expect(ids).not.toContain("px.tigerCreateBaseline");
     expect(groups.map((g) => g.label)).not.toContain("Create");
-    // No tiger and no problems leaves Test & Troubleshoot empty: dropped.
+    // No tiger and no problems leaves no command rows; the view still renders its switches.
     expect(groups.map((g) => g.label)).not.toContain("Test & Troubleshoot");
   });
 
-  it("lists the game's creators in the Create group, after the two scaffolds", () => {
+  it("lists the game's creators after New Content, with New Mod under Workspace Mods", () => {
     const create = actionGroups(ck3Meta, 0).find((g) => g.label === "Create");
     expect(create?.items.map((it) => it.command)).toEqual([
-      "px.createMod",
       "px.newContent",
       "px.createTrait",
       "px.createDynastyLegacy",
@@ -91,6 +99,11 @@ describe("visibleActionGroups", () => {
       "px.createCoatOfArms",
     ]);
     expect(create?.items.map((it) => it.label)).toContain("Trait Creator");
+    expect(
+      actionGroups(ck3Meta, 0)
+        .find((g) => g.label === "Workspace Mods")
+        ?.items.map((it) => it.command)
+    ).toEqual(["px.openMod", "px.createMod"]);
   });
 
   it("every creator row names an icon the client actually ships", () => {
@@ -99,14 +112,10 @@ describe("visibleActionGroups", () => {
     }
   });
 
-  it("a game with no creators keeps the Create group it had", () => {
+  it("a game with no creators keeps its scaffold and flag tools in Create", () => {
     expect(eu5Meta.creators).toBeUndefined();
     const create = actionGroups(eu5Meta, 0).find((g) => g.label === "Create");
-    expect(create?.items.map((it) => it.command)).toEqual([
-      "px.createMod",
-      "px.newContent",
-      "px.createCoatOfArms",
-    ]);
+    expect(create?.items.map((it) => it.command)).toEqual(["px.newContent", "px.createCoatOfArms"]);
   });
 
   it("shows the error.log clear row only while there are problems", () => {
@@ -114,3 +123,17 @@ describe("visibleActionGroups", () => {
     expect(commands(visibleActionGroups(ck3Meta, 3, []))).toContain("px.clearGameProblems");
   });
 });
+
+it.each([ck3Meta, vic3Meta, eu5Meta])(
+  "offers only the tools supplied by $id and omits redundant dashboard commands",
+  (meta) => {
+    const ids = commands(actionGroups(meta, 0));
+    expect(ids.includes("px.openGuiEditor")).toBe(meta.guiTextMetrics !== undefined);
+    expect(ids.includes("px.tigerCreateBaseline")).toBe(meta.tiger !== undefined);
+    expect(ids).not.toContain("px.setup");
+    expect(ids).not.toContain("px.runTiger");
+    expect(ids).not.toContain("px.exportSnippets");
+    expect(ids.includes("px.newContent")).toBe((meta.scaffolds?.length ?? 0) > 0);
+    expect(new Set(ids).size).toBe(ids.length);
+  }
+);

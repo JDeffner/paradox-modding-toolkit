@@ -36,6 +36,25 @@ function withOpenHandle(fn: (append: (text: string) => void) => void): void {
 }
 
 describe("LogTail", () => {
+  it("drains bounded reads without splitting UTF-8 or losing lines, then resets a partial read", () => {
+    fs.writeFileSync(file, "");
+    const tail = new LogTail(file);
+    tail.seekToEnd();
+    const lines = ["é😀 one", "two", "three", "four"];
+    fs.appendFileSync(file, lines.join("\r\n") + "\r\n");
+    const received: string[] = [];
+    do {
+      received.push(...tail.read(3).lines);
+    } while (tail.hasMore);
+    expect(received).toEqual(lines);
+    fs.appendFileSync(file, "unfinished");
+    expect(tail.read(2).lines).toEqual([]);
+    fs.truncateSync(file, 0);
+    fs.appendFileSync(file, "new\n");
+    expect(tail.read(20)).toEqual({ lines: ["new"], reset: true, missing: false });
+    tail.close();
+  });
+
   it("reads nothing on the first read after seekToEnd", () => {
     fs.writeFileSync(file, "old one\nold two\n");
     const tail = new LogTail(file);

@@ -76,6 +76,7 @@ import { blockTemplateFor } from "./blockSnippets";
 import { minimalTokenInsert, scriptedCallTemplate, syntaxInsert } from "./completionInsert";
 import { withCompletionPreview, withCompletionDocumentation } from "./completionPreview";
 import { skeletonsAt } from "./definitionSkeletons";
+import { eventLocalizationKey } from "./eventLocalization";
 
 /** Cap on items per response; the client re-queries per keystroke (isIncomplete). */
 export const MAX_ITEMS = 1000;
@@ -368,6 +369,13 @@ export class CompletionFeature {
       return finalize(this.defineConstantItems(defineMatch[1]), defineMatch[3], limit);
     }
 
+    // Known event text fields take priority over a partial asset-root guess ("s" → sound).
+    const valueMatch = VALUE_POSITION.exec(linePrefix);
+    if (valueMatch && entry?.kind === "event") {
+      const eventKey = eventLocalizationKey(result, offset, valueMatch[1], activeProfile().eventLocalization);
+      if (eventKey) return finalize(this.modLocItems(eventKey), valueMatch[2], limit);
+    }
+
     // Quoted/unquoted asset path (`icon = "gfx/interface/ico`) → directory drill-down.
     if (this.settings) {
       const assetPath = assetDirContext(linePrefix);
@@ -384,7 +392,6 @@ export class CompletionFeature {
     }
 
     // Value position: `key = |` → targeted completion, never the key soup.
-    const valueMatch = VALUE_POSITION.exec(linePrefix);
     if (valueMatch) {
       const items = this.valueItems(valueMatch[1], result, offset, entry);
       return finalize(items, valueMatch[2], limit);
@@ -407,16 +414,7 @@ export class CompletionFeature {
     // Structure keys of the current block (§B2), ranked above everything else.
     const structureItems = entry?.kind ? this.structureItems(result, offset, entry.kind, allowSnippet) : [];
 
-    let { context } = detectContextFromParse(result, offset);
-    // A script_value definition body IS a value block (its name is the only
-    // enclosing keyword, which classifies as unknown).
-    if (
-      context === "unknown" &&
-      entry?.kind === "script_value" &&
-      blockStackFromParse(result, offset).some((s) => s !== "<anon>")
-    ) {
-      context = "value";
-    }
+    const { context } = detectContextFromParse(result, offset, entry?.kind);
     // Script-value math blocks (ai_chance, ai_will_do, weight…): fixed math keys
     // lead; the base list keeps only iterators and scope targets.
     if (context === "value") {
@@ -769,8 +767,7 @@ export class CompletionFeature {
       if (kinds) field = { key, kinds };
     }
     if (field) {
-      const items = this.refFieldItems(field);
-      if (items.length > 0) return items;
+      return this.refFieldItems(field);
     }
 
     // Structure-key value spec: bool → yes/no, enum → its members.
@@ -826,10 +823,26 @@ export class CompletionFeature {
   }
 
   /** Mod localization keys (vanilla loc is excluded: hundreds of thousands). */
-  private modLocItems(): CompletionItem[] {
+  private modLocItems(proposedKey?: string): CompletionItem[] {
     const items: CompletionItem[] = [];
     for (const d of this.data.index.entries((def) => def.kind === "loc_key" && def.source === "mod")) {
       items.push({ ...defItem(d, this.data.originLabel(d)), sortText: TIER_VALID + "50" + SRC_MOD + d.name });
+    }
+    if (proposedKey) {
+      let proposed = items.find((item) => item.label === proposedKey);
+      if (!proposed) {
+        const existing = this.data.index.lookup(proposedKey).find((d) => d.kind === "loc_key");
+        proposed = existing
+          ? defItem(existing, this.data.originLabel(existing))
+          : {
+              label: proposedKey,
+              kind: CompletionItemKind.Value,
+              detail: "New localization key · from event ID",
+              documentation: "Insert this key, then add its text to your mod's localization file.",
+            };
+        items.push(proposed);
+      }
+      proposed.sortText = TIER_VALID + "00" + SRC_MOD + proposedKey;
     }
     return items;
   }

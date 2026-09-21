@@ -9,11 +9,14 @@ import type { ServerData } from "../serverData";
 import { getParse } from "../parseCache";
 import { nodeAtOffset, type Statement } from "../parser";
 import { getLineText } from "../documents";
+import { definitionsAt } from "./symbolResolution";
+import { loadSchema } from "../schema/loader";
 
 export function provideSignatureHelp(
   data: ServerData,
   document: TextDocument,
-  position: Position
+  position: Position,
+  schema = loadSchema(null)
 ): SignatureHelp | null {
   const { result, lineIndex } = getParse(document);
   const offset = lineIndex.offsetAt(position);
@@ -26,7 +29,7 @@ export function provideSignatureHelp(
     if (stmt.kind !== "assignment" || stmt.key.quoted) continue;
     if (stmt.value?.kind !== "block") continue;
     if (offset <= stmt.value.openBrace) continue;
-    const defs = data.index.lookup(stmt.key.text);
+    const defs = definitionsAt(data, document, document.positionAt(stmt.key.range.start), schema);
     const def = defs.find((d) => d.params && d.params.length > 0);
     if (!def || !def.params) continue;
 

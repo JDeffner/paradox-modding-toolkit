@@ -34,6 +34,21 @@ export interface SchemaData {
   structures: StructureIndex;
 }
 
+/** Folder identity when a consumer has no configured content root. */
+export function schemaEntryForPath(file: string, schema: SchemaData): SchemaEntry | null {
+  const normalized = file.replace(/\\/g, "/").toLowerCase();
+  let best: SchemaEntry | null = null;
+  for (const entry of schema.entries) {
+    if (
+      normalized.endsWith(entry.ext ?? ".txt") &&
+      normalized.includes(`/${entry.path}/`) &&
+      (!best || entry.path.length > best.path.length)
+    )
+      best = entry;
+  }
+  return best;
+}
+
 function buildStructureIndex(profile: GameProfile, entries: SchemaEntry[]): StructureIndex {
   const keysByKindBlock = new Map<string, Map<string, Map<string, KeySpec>>>();
   const ambientByKind = new Map<string, Map<string, AmbientScope>>();

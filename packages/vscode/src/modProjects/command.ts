@@ -15,6 +15,7 @@ import { gameDocsSubdir } from "../config";
 import { detectGameVersion } from "../descriptorMod";
 import { GAME_METAS } from "../gameDetect";
 import { metaFor } from "../meta";
+import { findGameFolder } from "../steamDetect";
 import { ensurePxIgnore, PXIGNORE_FILE } from "../steam/pxignore";
 import {
   PROJECT_CONTENT_DIR,
@@ -29,6 +30,8 @@ import {
   type MovePlan,
   type RetireResult,
 } from "./core";
+
+import { chooseModDestination } from "./open";
 
 const PREFIX = "Paradox Modding Toolkit";
 
@@ -67,7 +70,7 @@ async function pickGame(cfg: PxConfig): Promise<GameMeta | null> {
   type Item = vscode.QuickPickItem & { meta: GameMeta };
   const pick = await vscode.window.showQuickPick<Item>(
     Object.values(GAME_METAS).map((meta) => ({ label: meta.name, meta })),
-    { title: "Which game?", placeHolder: "The game the mod is for" }
+    { title: "Which game?", placeHolder: "The game the mod is for", ignoreFocusOut: true }
   );
   return pick?.meta ?? null;
 }
@@ -105,7 +108,7 @@ function createLauncherLink(
   if (meta.descriptor === "mod") {
     const pointer = path.join(gameModDir, `${name}.mod`);
     if (fs.existsSync(pointer)) throw new Error(`${pointer} already exists`);
-    fs.writeFileSync(pointer, pointerModText(descriptorText, contentDir), "utf8");
+    fs.writeFileSync(pointer, pointerModText(descriptorText, contentDir), { encoding: "utf8", flag: "wx" });
     return pointer;
   }
   const link = path.join(gameModDir, name);
@@ -131,29 +134,13 @@ function maybeThumbnailNote(meta: GameMeta, contentDir: string): string {
   return ` Add a square thumbnail.png to the mod root: ${meta.name} needs one for the Workshop upload.`;
 }
 
-async function offerToOpen(root: string): Promise<void> {
-  const choice = await vscode.window.showInformationMessage(
-    `${PREFIX}: mod created at ${root}.`,
-    "Open in New Window",
-    "Add to Workspace"
-  );
-  if (choice === "Open in New Window") {
-    await vscode.commands.executeCommand("vscode.openFolder", vscode.Uri.file(root), {
-      forceNewWindow: true,
-    });
-  } else if (choice === "Add to Workspace") {
-    vscode.workspace.updateWorkspaceFolders(vscode.workspace.workspaceFolders?.length ?? 0, 0, {
-      uri: vscode.Uri.file(root),
-    });
-  }
-}
-
 export async function createModCommand(cfg: PxConfig, log: (msg: string) => void): Promise<void> {
   const meta = await pickGame(cfg);
   if (!meta) return;
 
   const raw = await vscode.window.showInputBox({
-    title: `New ${meta.shortName} Mod — name`,
+    title: `New ${meta.shortName} Mod: name`,
+    ignoreFocusOut: true,
     prompt: "Display name shown in the launcher and on the Workshop.",
     validateInput: (v) => (v.trim().length >= 3 ? null : "At least 3 characters (Workshop minimum)."),
   });
@@ -171,7 +158,7 @@ export async function createModCommand(cfg: PxConfig, log: (msg: string) => void
         label: "Game mod folder (recommended)",
         description: gameModDir ?? undefined,
         detail:
-          `Everything in one folder. A ${PXIGNORE_FILE} file keeps git, editor and toolkit files ` +
+          `No folder search needed. The toolkit creates the mod here and registers it with the launcher. A ${PXIGNORE_FILE} file keeps git, editor and toolkit files ` +
           `(${meta.configDirName}/) out of Workshop uploads made through the toolkit.`,
         mode: "game",
       },
@@ -184,11 +171,24 @@ export async function createModCommand(cfg: PxConfig, log: (msg: string) => void
         mode: "project",
       },
     ],
-    { title: "New Mod — where", placeHolder: "Where should the mod live?" }
+    {
+      title: "New Mod: location",
+      placeHolder: "Use the detected game folder, or keep a separate project",
+      ignoreFocusOut: true,
+    }
   );
   if (!loc) return;
 
   try {
+    const gamePath = (meta.id === cfg.gameId ? cfg.gamePath : null) ?? findGameFolder(meta.name);
+    const saveGameChoice = (root: string) => {
+      fs.mkdirSync(path.join(root, ".vscode"), { recursive: true });
+      fs.writeFileSync(
+        path.join(root, ".vscode", "settings.json"),
+        JSON.stringify({ "px.gameId": meta.id }, null, 2) + "\n",
+        { encoding: "utf8", flag: "wx" }
+      );
+    };
     if (loc.mode === "game") {
       if (!gameModDir) {
         void vscode.window.showErrorMessage(
@@ -197,18 +197,23 @@ export async function createModCommand(cfg: PxConfig, log: (msg: string) => void
         return;
       }
       const dir = path.join(gameModDir, slug);
-      if (entryExists(dir)) {
-        void vscode.window.showErrorMessage(`${PREFIX}: ${dir} already exists.`);
+      const pointer = path.join(gameModDir, `${slug}.mod`);
+      if (entryExists(dir) || (meta.descriptor === "mod" && entryExists(pointer))) {
+        void vscode.window.showErrorMessage(
+          `${PREFIX}: a mod folder or launcher link named ${slug} already exists. Choose another mod name.`
+        );
         return;
       }
-      const scaffold = scaffoldFor(meta, modName, slug, cfg.gamePath);
+      const scaffold = scaffoldFor(meta, modName, slug, gamePath);
       const file = path.join(dir, ...scaffold.relPath);
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, scaffold.text, "utf8");
       fs.mkdirSync(path.join(dir, meta.configDirName, "workshop"), { recursive: true });
       ensurePxIgnore(dir);
+      saveGameChoice(dir);
+      if (meta.descriptor === "mod") createLauncherLink(meta, gameModDir, slug, dir, scaffold.text);
       log(`new mod created at ${dir}${maybeThumbnailNote(meta, dir)}`);
-      await offerToOpen(dir);
+      await chooseModDestination(dir, true);
       return;
     }
 
@@ -220,10 +225,11 @@ export async function createModCommand(cfg: PxConfig, log: (msg: string) => void
       return;
     }
     const contentDir = path.join(projectDir, PROJECT_CONTENT_DIR);
-    const scaffold = scaffoldFor(meta, modName, slug, cfg.gamePath);
+    const scaffold = scaffoldFor(meta, modName, slug, gamePath);
     const file = path.join(contentDir, ...scaffold.relPath);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, scaffold.text, "utf8");
+    saveGameChoice(projectDir);
 
     let linkNote: string;
     if (gameModDir) {
@@ -242,7 +248,7 @@ export async function createModCommand(cfg: PxConfig, log: (msg: string) => void
     if (note || linkNote.includes("NOT")) {
       void vscode.window.showWarningMessage(`${PREFIX}: ${linkNote}${note}`);
     }
-    await offerToOpen(projectDir);
+    await chooseModDestination(projectDir, true);
   } catch (err) {
     void vscode.window.showErrorMessage(`${PREFIX}: failed to create the mod: ${String(err)}`);
   }

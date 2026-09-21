@@ -1,4 +1,4 @@
-// Install the actual npm tarballs outside the workspace. No workspace aliases may help resolution.
+// Install the actual npm tarballs in an isolated consumer. No workspace aliases may help resolution.
 import { execSync } from "node:child_process";
 import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -50,6 +50,8 @@ await build({
   platform: "browser",
   format: "esm",
   target: "es2022",
+  // A repo-local TEMP must not inherit source aliases from the root tsconfig.
+  tsconfigRaw: {},
 });
 // Type-check using the installed tarballs' declarations, not source path aliases.
 writeFileSync(

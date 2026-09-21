@@ -65,6 +65,8 @@ export const eu5Profile: GameProfile = {
   ...eu5Meta,
   schema: [...EU5_SCHEMA, ...EU5_HAND_ENTRIES],
   refFields: EU5_REF_FIELDS,
+  // No verified vanilla event-localization naming convention yet.
+  eventLocalization: undefined,
   // No verified scalar-prefix references yet (EU5's `culture:x`-style links come
   // from the CWT scope_links table, which the importer does not read).
   prefixRefs: {},

@@ -40,9 +40,9 @@ export type AppToHost =
   | { type: "fetch"; params: EventGraphParams }
   | { type: "export"; svg: string }
   /** Inspector: full detail for the selected node. */
-  | { type: "select"; id: string }
+  | { type: "select"; id: string; file?: string }
   /** Simulation window: detail for the event being walked through. */
-  | { type: "simulate"; id: string }
+  | { type: "simulate"; id: string; file?: string }
   /** Apply the pending edits, in order, and report back. */
   | { type: "save"; edits: PendingEdit[] }
   /** Mirror of the app's session, so the host can guard an unsaved close. */
@@ -53,6 +53,7 @@ export type AppToHost =
   | { type: "uiState"; state: UiState };
 
 export type HostToApp =
+  | { type: "nodeAction"; action: "focus" | "simulate"; id: string; file?: string }
   | { type: "init"; ui?: UiState; state?: GraphState }
   | { type: "graph"; graph: EventGraph; params: EventGraphParams }
   | { type: "error"; message: string }

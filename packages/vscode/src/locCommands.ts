@@ -9,34 +9,91 @@ import * as fs from "fs";
 import * as path from "path";
 import type { PxConfig } from "./config";
 import type { LocEntryInfo } from "@px-lsp/protocol/protocol";
-import { findLocKeyRefs, type LocKeyRef } from "@px-lsp/protocol/locRefs";
+import { targetPosition, targetUri, containsPath, samePath } from "./commandTargets";
+import { findLocKeyRefs, locKeyOnLine, type LocKeyRef } from "@px-lsp/protocol/locRefs";
 import { escapeRegExp } from "@px-lsp/protocol/regex";
+import { isScriptLang } from "./langIds";
 import { isCk3 } from "./meta";
 
 const BOM = "﻿";
 
-export type LocLookup = (key: string) => Promise<LocEntryInfo[]>;
+export type LocLookup = (key: string, language?: string) => Promise<LocEntryInfo[]>;
+
+function locLanguage(file: string): string | undefined {
+  return /_l_([a-z_]+)\.yml$/i.exec(file)?.[1].toLowerCase();
+}
+
+/** Preserve the row's language and exact localization file through lookup and writing. */
+function localizationTarget(arg: unknown, fallbackLanguage?: string) {
+  const row = arg as { pxLanguage?: unknown; pxLoc?: { line?: number } } | undefined;
+  const uri = targetUri(typeof arg === "string" ? undefined : arg);
+  const fileLanguage = uri?.scheme === "file" ? locLanguage(uri.fsPath) : undefined;
+  const language =
+    typeof row?.pxLanguage === "string" && /^[a-z_]+$/.test(row.pxLanguage)
+      ? row.pxLanguage
+      : (fileLanguage ?? fallbackLanguage);
+  return {
+    language,
+    file: fileLanguage && fileLanguage === language ? uri!.fsPath : undefined,
+    line: row?.pxLoc?.line ?? 0,
+  };
+}
 
 export function locKeyRefAt(document: vscode.TextDocument, position: vscode.Position): LocKeyRef | null {
   const refs = findLocKeyRefs(document.lineAt(position.line).text);
-  return (
-    refs.find((r) => position.character >= r.start - 1 && position.character <= r.end + 1) ?? refs[0] ?? null
-  );
+  return refs.find((r) => position.character >= r.start - 1 && position.character <= r.end + 1) ?? null;
 }
 
-async function resolveKeyFromEditor(lookup: LocLookup, arg: unknown): Promise<string | null> {
+export async function resolveKeyFromEditor(lookup: LocLookup, arg?: unknown): Promise<string | null> {
   if (typeof arg === "string" && arg !== "") return arg;
-  const editor = vscode.window.activeTextEditor;
-  if (!editor) return null;
-  const ref = locKeyRefAt(editor.document, editor.selection.active);
+  if (arg && typeof arg === "object" && typeof (arg as { pxKey?: unknown }).pxKey === "string")
+    return (arg as { pxKey: string }).pxKey;
+  const target = await targetPosition(arg);
+  if (!target) return null;
+  const { document, position } = target;
+  if (document.languageId === "paradox-loc") return locKeyOnLine(document.lineAt(position.line).text);
+  const ref = locKeyRefAt(document, position);
   if (ref) return ref.key;
-  // Fall back to the word under cursor if it is a known loc key.
-  const range = editor.document.getWordRangeAtPosition(editor.selection.active);
+  const range = document.getWordRangeAtPosition(position, /[A-Za-z0-9_.-]+/);
   if (range) {
-    const word = editor.document.getText(range);
+    const word = document.getText(range);
     if ((await lookup(word)).length > 0) return word;
   }
   return null;
+}
+
+export function registerLocalizationContext(context: vscode.ExtensionContext, lookup: LocLookup): void {
+  let revision = 0;
+  const update = async () => {
+    const current = ++revision;
+    const editor = vscode.window.activeTextEditor;
+    const supported =
+      editor && (editor.document.languageId === "paradox-loc" || isScriptLang(editor.document.languageId));
+    const key = supported ? await resolveKeyFromEditor(lookup) : null;
+    if (current !== revision) return;
+    await vscode.commands.executeCommand(
+      "setContext",
+      "px.localizationReference",
+      !!key && editor?.document.languageId !== "paradox-loc"
+    );
+    await vscode.commands.executeCommand(
+      "setContext",
+      "px.localizationDefinition",
+      !!key && editor?.document.languageId === "paradox-loc"
+    );
+  };
+  const refresh = () => {
+    void update().catch(() => undefined);
+  };
+  context.subscriptions.push(
+    vscode.window.onDidChangeTextEditorSelection(refresh),
+    vscode.window.onDidChangeActiveTextEditor(refresh),
+    vscode.commands.registerCommand("px.copyLocalizationKey", async (arg?: unknown) => {
+      const key = await resolveKeyFromEditor(lookup, arg);
+      if (key) await vscode.env.clipboard.writeText(key);
+    })
+  );
+  refresh();
 }
 
 /** Read the full value by key, including changes not yet saved in the editor. */
@@ -266,13 +323,19 @@ export async function writeLocSmart(
   value: string,
   newKeyFile?: string
 ): Promise<string> {
-  const defs = await lookup(key);
-  const modDef = defs.find((d) => d.source === "mod");
+  const defs = await lookup(key, cfg.locLanguage);
+  const modDef = defs.find(
+    (d) =>
+      d.source === "mod" &&
+      cfg.modPath &&
+      containsPath(cfg.modPath, d.file) &&
+      locLanguage(d.file) === cfg.locLanguage
+  );
   if (modDef) {
     if (await replaceLocLineValue(modDef.file, modDef.line, key, value)) return modDef.file;
     return upsertIntoYml(modDef.file, cfg.locLanguage, key, value);
   }
-  if (defs.length > 0) return upsertInReplaceFile(cfg, key, value);
+  if (defs.some((d) => d.source === "vanilla")) return upsertInReplaceFile(cfg, key, value);
   if (newKeyFile) return upsertIntoYml(newKeyFile, cfg.locLanguage, key, value);
   return upsertNewModLoc(cfg, key, value);
 }
@@ -285,10 +348,16 @@ export async function writeLocSmart(
  */
 export async function locTargetFile(cfg: PxConfig, lookup: LocLookup, key: string): Promise<string | null> {
   if (!cfg.modPath) return null;
-  const defs = await lookup(key);
-  const modDef = defs.find((d) => d.source === "mod");
+  const defs = await lookup(key, cfg.locLanguage);
+  const modDef = defs.find(
+    (d) =>
+      d.source === "mod" &&
+      cfg.modPath &&
+      containsPath(cfg.modPath, d.file) &&
+      locLanguage(d.file) === cfg.locLanguage
+  );
   if (modDef) return modDef.file;
-  if (defs.length > 0) return modReplaceFile(cfg);
+  if (defs.some((d) => d.source === "vanilla")) return modReplaceFile(cfg);
   return newModLocFile(cfg, key, cfg.locLanguage);
 }
 
@@ -312,15 +381,42 @@ export async function editLocalizationCommand(
     return;
   }
 
-  const defs = await lookup(key);
-  const modDef = defs.find((d) => d.source === "mod");
+  const target = localizationTarget(arg, cfg.locLanguage);
+  cfg = { ...cfg, locLanguage: target.language! };
+  const selectedFile = target.file;
+  if (
+    selectedFile &&
+    containsPath(cfg.modPath!, selectedFile) &&
+    (await readLocValueFromFile({ file: selectedFile, line: target.line, source: "mod" }, key)) === null
+  ) {
+    void vscode.window.showWarningMessage(
+      `Localization key "${key}" is no longer in ${path.basename(selectedFile)}. Refresh the view and select it again.`
+    );
+    return;
+  }
+  const scopedLookup: LocLookup = async (name, language) => {
+    const entries = await lookup(name, language);
+    if (!selectedFile || !containsPath(cfg.modPath!, selectedFile)) return entries;
+    return [
+      { file: selectedFile, line: target.line, source: "mod" },
+      ...entries.filter((entry) => !samePath(entry.file, selectedFile)),
+    ];
+  };
+  const defs = await scopedLookup(key, cfg.locLanguage);
+  const modDef = defs.find(
+    (d) =>
+      d.source === "mod" &&
+      cfg.modPath &&
+      containsPath(cfg.modPath, d.file) &&
+      locLanguage(d.file) === cfg.locLanguage
+  );
   const currentValue = modDef ? ((await readLocValueFromFile(modDef, key)) ?? "") : (defs[0]?.value ?? "");
 
   const newValue = await vscode.window.showInputBox({
-    title: `Localization: ${key}`,
+    title: `Localization: ${key} (${cfg.locLanguage}, save to ${path.basename(cfg.modPath!)})`,
     prompt: modDef
       ? `Edit ${path.basename(modDef.file)}`
-      : defs.length > 0
+      : defs.some((d) => d.source === "vanilla")
         ? "Vanilla key: your text will be written to the mod's localization/replace override file"
         : "New key: will be added to the mod loc file where its siblings live",
     value: currentValue,
@@ -328,7 +424,7 @@ export async function editLocalizationCommand(
   if (newValue === undefined) return; // cancelled
 
   try {
-    const file = await writeLocSmart(cfg, lookup, key, newValue);
+    const file = await writeLocSmart(cfg, scopedLookup, key, newValue);
     onLocFileChanged(file);
   } catch (err) {
     void vscode.window.showErrorMessage(
@@ -337,7 +433,11 @@ export async function editLocalizationCommand(
   }
 }
 
-export async function openLocalizationSideBySide(lookup: LocLookup, arg: unknown): Promise<void> {
+export async function openLocalizationSideBySide(
+  lookup: LocLookup,
+  arg: unknown,
+  cfg?: PxConfig
+): Promise<void> {
   const key = await resolveKeyFromEditor(lookup, arg);
   if (!key) {
     void vscode.window.showWarningMessage(
@@ -345,7 +445,16 @@ export async function openLocalizationSideBySide(lookup: LocLookup, arg: unknown
     );
     return;
   }
-  const def = (await lookup(key))[0];
+  const target = localizationTarget(arg, cfg?.locLanguage);
+  const defs = await lookup(key, target.language);
+  const def = target.file
+    ? { file: target.file, line: target.line }
+    : (defs.find(
+        (entry) =>
+          cfg?.modPath &&
+          containsPath(cfg.modPath, entry.file) &&
+          (!target.language || locLanguage(entry.file) === target.language)
+      ) ?? defs[0]);
   if (!def) {
     void vscode.window.showWarningMessage(
       `Paradox Modding Toolkit: no localization entry found for "${key}".`
@@ -353,13 +462,17 @@ export async function openLocalizationSideBySide(lookup: LocLookup, arg: unknown
     return;
   }
   const doc = await vscode.workspace.openTextDocument(def.file);
+  const line =
+    locEntry(
+      doc
+        .getText()
+        .replace(/^\uFEFF/, "")
+        .split(/\r?\n/),
+      key,
+      def.line
+    )?.line ?? def.line;
   await vscode.window.showTextDocument(doc, {
     viewColumn: vscode.ViewColumn.Beside,
-    selection: new vscode.Range(
-      def.line,
-      0,
-      def.line,
-      doc.lineAt(Math.min(def.line, doc.lineCount - 1)).text.length
-    ),
+    selection: new vscode.Range(line, 0, line, doc.lineAt(Math.min(line, doc.lineCount - 1)).text.length),
   });
 }

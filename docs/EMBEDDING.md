@@ -14,6 +14,14 @@ The wire types are the contract. TypeScript hosts should import them from
 `@px-lsp/protocol/protocol`; everyone else reads `docs/PROTOCOL.md`, which
 mirrors that file method by method.
 
+## Live documents and symbol identity
+
+Send each unsaved script or localization change through `textDocument/didChange` with a new version before requesting language features. The server refreshes definitions and script references from that buffer; closing it restores the saved file. File watcher events update closed files and invalidate cached dependency searches. They do not replace an open buffer.
+
+Definition kinds have independent names and override chains. A localization key and a trait may share a name, as may a scripted GUI and a scripted trigger. Navigation uses the type required at the cursor and still returns the mod, parent and vanilla declarations of that type.
+
+Declare `workspace.workspaceEdit.documentChanges: true` in standard LSP capabilities if the host can enforce document versions when applying rename. The server supplies versions for open files and null for closed files. Without that capability, rename requires open sources to match disk and returns plain `changes`. Show rename errors to the user; do not apply a partial edit after an error. See [the rename contract](PROTOCOL.md#symbol-lookup-and-rename) for unsupported and ambiguous cases.
+
 ## The process contract
 
 ### Spawning
@@ -172,6 +180,8 @@ Declare the supported completion documentation formats in `textDocument.completi
 Set `completionMode` to `minimal` (the default), `examples`, or `names` to control ordinary script keyword insertion. Minimal adds the documented operator and blank values and the fields from valid documented examples or scripted parameters, omitting fields marked optional. Examples restores the documented example values and scripted-call parameters. Names inserts only the keyword. Explicit definition templates and the `paradox/snippets` catalogue retain their full templates in every mode. The standard `snippetSupport` capability still decides whether inserts carry tabstops or plain text. This setting applies through `paradox/configChanged` without an index rebuild. Resolving a completion adds an insertion preview and expected-value descriptions from the token documentation or the definition's `@param` tags. Example values are not treated as confirmed datatypes. These hints are documentation only; `insertText` is unchanged.
 
 The remaining settings (`parentPaths`, `scopeInlayHints`, `diagnosticsIgnore`, `diagnosticsIgnorePatterns`, `diagnosticsVanilla`) are documented in `docs/PROTOCOL.md`. Existing hosts can continue to send the whole settings object through `paradox/configChanged`; omitted fields return to defaults.
+
+Event localization value completion can propose a key before its localization entry exists. CK3 uses `<event ID>.t`, `.desc`, and successive option suffixes `.a` through `.z`; Victoria 3 uses `.t`, `.d`, `.f`, and the same option suffixes. The current unsaved document supplies the event ID and option order. Proposed keys are labelled as new, existing keys keep their definition information, and accepting a suggestion inserts only the reference. The user still supplies its localization text. No new-key convention is assumed for EU5.
 
 For standard LSP updates, send a partial settings object under `pxLsp`. This example changes hover detail without clearing roots, changing the selected game, or rebuilding the index:
 
@@ -338,11 +348,9 @@ for more than re-validation (see below).
 
 ### BOM state comes from disk
 
-The game ignores a localization file that has no UTF-8 BOM, silently, so the
-server diagnoses a missing one. It does **not** look for the BOM in your buffer
-text: editors routinely strip `U+FEFF` when they read a file, so the buffer is
-the wrong place to ask. The server opens the file on disk and reads its first
-three bytes, on `didOpen` and again on `didSave`.
+The server reports `missing-bom` as an Error for localization files and a Warning for mod script `.txt` files. The script warning applies only inside an editable workspace mod. It does **not** look for the BOM in your buffer text: editors routinely strip `U+FEFF` when they read a file. The server reads the first three bytes on disk on `didOpen` and again on `didSave`.
+
+Encoding fixes belong to the host editor. VS Code supplies a local quick fix that opens its native encoding picker for the affected document; other hosts should offer their own save-encoding control. A BOM-only save clears the diagnostic even when the document version has not changed.
 
 A host whose buffers have the BOM stripped therefore needs to do nothing
 special, which is the point. Two things follow:
@@ -377,6 +385,10 @@ The mod-scoped requests (`modOverview`, `locCoverage`, `overrides`) take
 absent for all of them.
 
 For data health, show the script-doc and data-type sources separately. `tokensFromScriptDocs && !tokensFromBundledDumps` means a generated script dump is loaded. `StatusPayload.dataTypesSource` reports `generated`, `bundled` or `none`; absent means the server does not report it. The optional `status` in `paradox/reloadDocs` is the refreshed status, also sent through `paradox/status`. Recommend generating both dumps after game patches, then reloading. The status identifies their source, not their age.
+
+When opening a specific indexed definition, pass its source as `file` (absolute path or file URI) to `paradox/eventDetail` alongside `id`, or to `paradox/definitionForm` alongside `kind` and `name`. This avoids selecting another mod's definition with the same ID. An exact source that cannot be loaded returns `null` for event detail or leaves the form's `current` absent. Omitting `file` preserves the existing lookup behavior.
+
+For a localization row in a specific language, pass `language` with `key` to `paradox/lookupLoc`. Omitting it uses the configured completion language. An explicit identifier uses lowercase letters and underscores; missing translations and invalid identifiers return an empty list. The request includes open unsaved text and does not change the completion language.
 
 ### paradox/guiSourceEdit
 
@@ -604,8 +616,7 @@ in the service would need to move.
 
 ## What is deliberately absent
 
-Three things the VS Code extension has do not exist for an embedder, and none
-of them is a gap waiting to be filled server side.
+These VS Code extension features are implemented in the client rather than the language server.
 
 - **No tiger diagnostics.** Deep validation (unknown effects, unknown traits,
   wrong argument types) is [ck3-tiger / vic3-tiger](https://github.com/amtep/tiger)'s

@@ -8,6 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { pathToFileURL } from "url";
 import { computeDefinitionForm } from "../src/creators/definitionForm";
 import { loadSchema, type SchemaData } from "../src/schema/loader";
 import { ServerData } from "../src/serverData";
@@ -134,6 +135,45 @@ afterAll(() => {
 });
 
 describe("computeDefinitionForm", () => {
+  it("loads the requested duplicate source even outside the focused mod, with no fallback", () => {
+    const other = path.join(dir, "other traits.txt");
+    fs.writeFileSync(other, TRAITS_TXT.replace("martial = 2", "martial = 3"));
+    const duplicates = new ServerData();
+    duplicates.index.addAll([
+      { name: "px_stoic", kind: "trait", file: traitsFile, line: 1, source: "mod" },
+      { name: "px_stoic", kind: "trait", file: other, line: 1, source: "vanilla" },
+    ]);
+    const form = computeDefinitionForm(
+      duplicates,
+      schema,
+      { kind: "trait", name: "px_stoic", file: other },
+      (file) => file === traitsFile
+    );
+    expect(form?.current?.file).toBe(other);
+    expect(form?.current?.text).toContain("martial = 3");
+    expect(
+      computeDefinitionForm(duplicates, schema, {
+        kind: "trait",
+        name: "px_stoic",
+        file: pathToFileURL(other).href,
+      })?.current?.file
+    ).toBe(other);
+    expect(
+      computeDefinitionForm(duplicates, schema, {
+        kind: "trait",
+        name: "px_stoic",
+        file: path.join(dir, "missing.txt"),
+      })?.current
+    ).toBeUndefined();
+    expect(
+      computeDefinitionForm(duplicates, schema, { kind: "trait", name: "px_stoic", file: "" })?.current
+    ).toBeUndefined();
+    fs.unlinkSync(other);
+    expect(
+      computeDefinitionForm(duplicates, schema, { kind: "trait", name: "px_stoic", file: other })?.current
+    ).toBeUndefined();
+  });
+
   it("answers the trait form from the schema table and the bundled harvest", () => {
     const form = computeDefinitionForm(data, schema, { kind: "trait" })!;
     expect(form.folder).toBe("common/traits");

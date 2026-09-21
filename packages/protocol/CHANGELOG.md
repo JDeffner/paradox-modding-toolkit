@@ -8,6 +8,15 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ## Unreleased
 
+## 0.2.6
+
+Ships with the toolkit's 0.5.0 release.
+
+- Add optional `EventDetailParams.file` to `paradox/eventDetail`. Accept an absolute path or file URI to select an exact event source. If that file does not contain the event, return `null` instead of falling back to a same-name event elsewhere.
+- Add optional `DefinitionFormParams.file` to `paradox/definitionForm`. Select the source for `name`; if it does not match, leave `current` absent. The selector works alongside the existing `modRoot` filter.
+- Add optional `LookupLocParams.language` to `paradox/lookupLoc`. Look up that exact language, including unsaved text, without changing the configured completion language or substituting a different translation.
+- Keep all additions optional. Clients that omit them retain name-based definition lookup and the configured localization language; no new client capability is required for these selectors. The server's versioned rename behavior uses the existing standard LSP capability, with details in the server changelog and protocol guide.
+
 ## 0.2.5
 
 Ships with the toolkit's 0.4.4 release.

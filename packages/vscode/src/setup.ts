@@ -4,12 +4,15 @@
  * user with concrete instructions. Re-runnable as a health check.
  */
 import * as vscode from "vscode";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import type { PxConfig } from "./config";
 import type { StatusPayload } from "@px-lsp/protocol/protocol";
 import { dataHealthLines } from "./dataHealth";
 import { readModName } from "@px-lsp/protocol/modName";
 import { findGameFolder } from "./steamDetect";
 import { downloadLatestTiger, findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
+import { StartupNotices } from "./notifications";
 import { metaFor, scriptDocsDir } from "./meta";
 
 export interface SetupDeps {
@@ -20,6 +23,48 @@ export interface SetupDeps {
   log: (msg: string) => void;
   /** Reveal the Paradox Modding Toolkit output channel (where the report lands). */
   showOutput: () => void;
+}
+
+export async function selectGameFolder(deps: SetupDeps): Promise<void> {
+  const cfg = deps.getConfig();
+  if (!cfg.isCk3Workspace) {
+    await vscode.commands.executeCommand("px.getStarted");
+    return;
+  }
+  const meta = metaFor(cfg.gameId);
+  const selected = await vscode.window.showOpenDialog({
+    canSelectFolders: true,
+    canSelectFiles: false,
+    canSelectMany: false,
+    title: `Choose the ${meta.name} installation or game data folder`,
+    openLabel: "Use Game Folder",
+  });
+  if (!selected?.length) return;
+  const chosen = selected[0].fsPath;
+  const isData = (folder: string) =>
+    !fs.existsSync(path.join(folder, "descriptor.mod")) &&
+    !fs.existsSync(path.join(folder, ".metadata", "metadata.json")) &&
+    ["common", ...(meta.stageRoots ?? []).map((stage) => path.join(stage, "common"))].some((relative) => {
+      try {
+        return fs.statSync(path.join(folder, relative)).isDirectory();
+      } catch {
+        return false;
+      }
+    });
+  const folder = [path.join(chosen, "game"), chosen].find(isData);
+  if (!folder) {
+    void vscode.window.showWarningMessage(
+      `No ${meta.shortName} game data found here. Choose the installed game folder, not its Documents folder. Your setting was not changed.`
+    );
+    return;
+  }
+  await vscode.workspace
+    .getConfiguration("px")
+    .update("gamePath", folder, vscode.ConfigurationTarget.Workspace);
+  await deps.refresh();
+  void vscode.window
+    .showInformationMessage(`${meta.shortName} game folder saved for this workspace.`, "Check Setup")
+    .then((action) => (action ? vscode.commands.executeCommand("px.setup") : undefined));
 }
 
 export async function downloadTigerCommand(deps: SetupDeps, askFirst: boolean): Promise<string | null> {
@@ -54,10 +99,11 @@ export async function downloadTigerCommand(deps: SetupDeps, askFirst: boolean): 
         )
     );
     deps.log(`tiger ${result.version} installed at ${result.binaryPath}`);
-    void vscode.window.showInformationMessage(
-      `Paradox Modding Toolkit: ${flavor.prefix} ${result.version} is ready — diagnostics are enabled.`
-    );
     await deps.refresh();
+    void vscode.window.setStatusBarMessage(
+      `Paradox Modding Toolkit: ${flavor.prefix} ${result.version} is ready. Diagnostics are enabled.`,
+      5000
+    );
     return result.binaryPath;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -74,6 +120,23 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
   const report: string[] = [];
   const config = vscode.workspace.getConfiguration("px");
   let cfg = deps.getConfig();
+  if (!cfg.isCk3Workspace) {
+    const action = await vscode.window.showInformationMessage(
+      "Start by opening or creating a mod. The toolkit can find its folder for you.",
+      "Find Existing Mod",
+      "Create a Mod",
+      "Tutorial"
+    );
+    if (action)
+      await vscode.commands.executeCommand(
+        action === "Find Existing Mod"
+          ? "px.openMod"
+          : action === "Create a Mod"
+            ? "px.createMod"
+            : "px.getStarted"
+      );
+    return;
+  }
   const meta = metaFor(cfg.gameId);
   const docsDir = scriptDocsDir(meta);
 
@@ -83,12 +146,10 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
   } else {
     const detected = findGameFolder(meta.name);
     if (detected) {
-      await config.update("gamePath", detected, vscode.ConfigurationTarget.Global);
+      await config.update("gamePath", detected, vscode.ConfigurationTarget.Workspace);
       report.push(`✓ game: found via Steam and saved to settings — ${detected}`);
     } else {
-      report.push(
-        `✗ game: not found in any Steam library. Set px.gamePath to .../steamapps/common/${meta.name}/game`
-      );
+      report.push(`✗ game: not found in Steam libraries. Use Choose Game Folder for a custom installation.`);
     }
   }
 
@@ -113,10 +174,8 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
   // A "✓" here would inflate the ready count, so the set case stays silent.
   if ((config.get<string>("modProjectsDir") ?? "").trim() === "") {
     report.push(
-      `• mod projects folder: not set. Recommended: keep each mod in its own project folder ` +
-        `(px.modProjectsDir) with the content in <project>/mod — git and Steam Workshop listing files ` +
-        `stay outside the upload, and the launcher loads the mod via a link. ` +
-        `"Paradox: New Mod" sets this up.`
+      `• Optional project layout: set px.modProjectsDir to keep content in <project>/mod ` +
+        `with Git and Workshop listing files beside it. New Mod offers this layout as an alternative to the game's mod folder.`
     );
   }
 
@@ -139,30 +198,34 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
       : `• Dump folder not found. Set px.logsPath to Documents/Paradox Interactive/${meta.docsFolderName}/${docsDir} after generating the dumps.`
   );
 
-  // 4. Tiger — only for games one exists for (EU5 has none; skip silently).
+  // Validation is optional; a health check does not start a download flow.
   const flavor = tigerFlavorFor(cfg.gameId);
+  let missingTiger = false;
   if (flavor) {
     const effectiveTiger = cfg.tigerPath ?? findDownloadedTiger(deps.storageDir, flavor);
     if (effectiveTiger) {
       report.push(`✓ ${flavor.prefix}: ${effectiveTiger}`);
     } else {
-      const bin = await downloadTigerCommand(deps, true);
+      missingTiger = true;
       report.push(
-        bin
-          ? `✓ ${flavor.prefix}: downloaded — ${bin}`
-          : `• ${flavor.prefix}: skipped (external diagnostics disabled). Run 'Paradox Tiger: Download or Update Binary' anytime.`
+        `• Optional ${flavor.prefix}: not installed. Structural checks remain available. Use Download Validator when ready.`
       );
     }
   }
 
   deps.log("setup report:\n  " + report.join("\n  "));
-  const checks = flavor ? 4 : 3;
-  const ok = Math.min(report.filter((l) => l.startsWith("✓")).length, checks);
   const hasBlocker = report.some((l) => l.startsWith("✗") || l.startsWith("➜"));
-  const summary = `${meta.shortName} setup: ${ok}/${checks} ready. ${hasBlocker || report.some((l) => l.startsWith("•")) ? "Details in the Paradox Modding Toolkit output." : "All set!"}`;
-  const buttons = hasBlocker ? ["Show details", "Open Settings"] : ["Show details"];
+  const summary = `${meta.shortName}: ${hasBlocker ? "setup needs attention" : "ready to edit"}.${missingTiger ? " The optional validator is not installed." : ""} Details are in the Paradox Modding Toolkit output.`;
+  const buttons = [
+    "Show details",
+    ...(!cfg.gamePath ? ["Choose Game Folder"] : []),
+    ...(missingTiger ? ["Download Validator"] : []),
+    ...(hasBlocker ? ["Open Settings"] : []),
+  ];
   const action = await vscode.window.showInformationMessage(summary, ...buttons);
   if (action === "Show details") deps.showOutput();
+  else if (action === "Choose Game Folder") await selectGameFolder(deps);
+  else if (action === "Download Validator") await downloadTigerCommand(deps, false);
   else if (action === "Open Settings")
     await vscode.commands.executeCommand("workbench.action.openSettings", "px.");
 }
@@ -170,19 +233,19 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
 /** One-time nudge on first activation without a configured game path. Only in
  * actual mod workspaces — fresh installs must not be nagged in unrelated
  * projects. */
-export function maybeNudgeSetup(context: vscode.ExtensionContext, cfg: PxConfig): void {
-  if (!cfg.isCk3Workspace) return;
-  if (cfg.gamePath) return;
-  if (context.globalState.get<boolean>("px.setupNudged")) return;
-  void context.globalState.update("px.setupNudged", true);
+export function maybeNudgeSetup(
+  context: vscode.ExtensionContext,
+  cfg: PxConfig,
+  notices?: StartupNotices
+): void {
+  if (!cfg.isCk3Workspace || cfg.gamePath) return;
+  const queue = notices ?? new StartupNotices(context, () => undefined);
   const meta = metaFor(cfg.gameId);
-  void vscode.window
-    .showInformationMessage(
-      `The Paradox Modding Toolkit can configure itself (find ${meta.name}${meta.tiger ? ", set up tiger" : ""}).`,
-      "Run Setup & Health Check",
-      "Later"
-    )
-    .then((choice) => {
-      if (choice === "Run Setup & Health Check") void vscode.commands.executeCommand("px.setup");
-    });
+  queue.add({
+    message: `Paradox Modding Toolkit can find ${meta.name}${meta.tiger ? " and set up its validator" : ""}. Run Setup & Health Check to check this workspace.`,
+    key: "px.setupNudged",
+    label: "Setup & Health Check",
+    command: "px.setup",
+  });
+  if (!notices) void queue.show();
 }

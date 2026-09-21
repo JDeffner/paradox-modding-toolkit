@@ -130,6 +130,9 @@ export class TraitCreatorPanel {
   static show(context: vscode.ExtensionContext, options: TraitCreatorOptions): void {
     const existing = TraitCreatorPanel.instance;
     if (existing) {
+      if (existing.options.cfg.modPath !== options.cfg.modPath || existing.options.name !== options.name) {
+        existing.chosen = null;
+      }
       existing.options = options;
       existing.panel.reveal();
       void existing.postInit();
@@ -179,6 +182,7 @@ export class TraitCreatorPanel {
       });
       return;
     }
+    if (this.form?.current?.file !== form.current?.file) this.chosen = null;
     this.form = form;
     this.post({
       type: "init",
@@ -239,10 +243,11 @@ export class TraitCreatorPanel {
           modRoot: this.options.cfg.modPath,
         });
         if (form) {
+          if (this.options.name !== message.name || this.form?.current?.file !== form.current?.file) {
+            this.chosen = null;
+          }
+          this.options = { ...this.options, name: message.name };
           this.form = form;
-          // The definition that was opened decides where a save goes, so a
-          // target the modder picked for the previous one does not carry over.
-          this.chosen = null;
           this.post({ type: "form", form });
           this.postTarget();
         }

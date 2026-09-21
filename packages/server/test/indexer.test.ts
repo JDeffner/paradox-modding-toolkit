@@ -230,17 +230,16 @@ describe("incremental scripted-list tracking (§B2)", () => {
     }
   });
 
-  it("a higher-ranked non-list definition shadows a vanilla scripted list", () => {
+  it("a higher-ranked different kind preserves a vanilla scripted list", () => {
     const index = new DefinitionIndex();
     index.addAll([{ name: "shared", kind: "scripted_list", file: "v.txt", line: 0, source: "vanilla" }]);
     expect(sortedKeys(index.scriptedLists())).toEqual(fullWalk(index));
     expect([...index.scriptedLists()]).toHaveLength(1);
-    // The mod defines the same name as something else: mod rank wins, so the
-    // vanilla list disappears from BOTH the walk and the tracked iteration.
+    // Source priority only overrides definitions of the same kind.
     index.addAll([{ name: "shared", kind: "loc_key", file: "m.yml", line: 3, source: "mod" }]);
-    expect([...index.scriptedLists()]).toHaveLength(0);
+    expect([...index.scriptedLists()]).toHaveLength(1);
     expect(sortedKeys(index.scriptedLists())).toEqual(fullWalk(index));
-    // ...and comes back when the shadowing file goes away.
+    // Removing the other kind leaves the list unchanged.
     index.removeFile("m.yml");
     expect([...index.scriptedLists()]).toHaveLength(1);
     expect(sortedKeys(index.scriptedLists())).toEqual(fullWalk(index));

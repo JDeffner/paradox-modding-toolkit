@@ -189,9 +189,9 @@ async function openFolderReference(cfg: PxConfig, file: string): Promise<void> {
   await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preview: true });
 }
 
-export async function openInfoDocsCommand(cfg: PxConfig): Promise<void> {
-  const editor = vscode.window.activeTextEditor;
-  if (!editor) {
+export async function openInfoDocsCommand(cfg: PxConfig, uri?: vscode.Uri): Promise<void> {
+  const source = uri ?? vscode.window.activeTextEditor?.document.uri;
+  if (!source) {
     void vscode.window.showWarningMessage("Paradox Modding Toolkit: open a mod script file first.");
     return;
   }
@@ -202,10 +202,10 @@ export async function openInfoDocsCommand(cfg: PxConfig): Promise<void> {
     return;
   }
   if (!hasFormatDocs(cfg.gameId)) {
-    await openFolderReference(cfg, editor.document.uri.fsPath);
+    await openFolderReference(cfg, source.fsPath);
     return;
   }
-  const candidates = infoDocsForFile(cfg, editor.document.uri.fsPath);
+  const candidates = infoDocsForFile(cfg, source.fsPath);
   if (candidates.length === 0) {
     void vscode.window.showInformationMessage(
       "Paradox Modding Toolkit: no .info format docs found for this folder in the game files."
@@ -233,10 +233,10 @@ export async function openInfoDocsCommand(cfg: PxConfig): Promise<void> {
  * in its own tab group: the doc and its example are the same reading, and a
  * third column would push the mod file off screen.
  */
-export async function openVanillaExamplesCommand(): Promise<void> {
-  const editor = vscode.window.activeTextEditor;
-  if (!editor) return;
-  const info = editor.document.uri.fsPath;
+export async function openVanillaExamplesCommand(uri?: vscode.Uri): Promise<void> {
+  const source = uri ?? vscode.window.activeTextEditor?.document.uri;
+  if (!source) return;
+  const info = source.fsPath;
   if (!/^_.*\.info$/i.test(path.basename(info))) return;
 
   const dir = path.dirname(info);

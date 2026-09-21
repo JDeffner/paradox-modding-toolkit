@@ -12,6 +12,8 @@ import { allClientCommandIds, type ParadoxInitOptions } from "@px-lsp/protocol/p
 import { MarkupKind } from "vscode-languageserver/node";
 
 export interface ClientCapabilities {
+  /** Standard WorkspaceEdit documentChanges support, for version-checked rename. */
+  documentChanges: boolean;
   /** Client renders the sanitized `<span style="color:var(--*)">` hover markup. */
   hoverHtml: boolean;
   /** Command ids the client registers; anything else must not be emitted. */
@@ -30,6 +32,7 @@ export interface ClientCapabilities {
 
 /** Standard LSP completion capabilities, structurally. */
 interface LspClientCapabilities {
+  workspace?: { workspaceEdit?: { documentChanges?: boolean } };
   textDocument?: {
     completion?: { completionItem?: { snippetSupport?: boolean; documentationFormat?: MarkupKind[] } };
   };
@@ -49,6 +52,7 @@ export function resolveClientCapabilities(
   init: Partial<ParadoxInitOptions>,
   lspCaps?: LspClientCapabilities
 ): ClientCapabilities {
+  const documentChanges = lspCaps?.workspace?.workspaceEdit?.documentChanges === true;
   const snippetSupport = lspCaps?.textDocument?.completion?.completionItem?.snippetSupport === true;
   const completionDocumentationFormat =
     lspCaps?.textDocument?.completion?.completionItem?.documentationFormat?.find(
@@ -56,6 +60,7 @@ export function resolveClientCapabilities(
     ) ?? MarkupKind.PlainText;
   if (init.client) {
     return {
+      documentChanges,
       hoverHtml: init.client.hoverHtml === true,
       commands: new Set(init.client.commands ?? []),
       ownFileWatcher: init.client.ownFileWatcher === true,
@@ -67,6 +72,7 @@ export function resolveClientCapabilities(
   }
   if (init.clientCommands === true) {
     return {
+      documentChanges,
       hoverHtml: true,
       commands: new Set(allClientCommandIds),
       ownFileWatcher: true,
@@ -77,6 +83,7 @@ export function resolveClientCapabilities(
     };
   }
   return {
+    documentChanges,
     hoverHtml: false,
     commands: new Set(),
     ownFileWatcher: false,

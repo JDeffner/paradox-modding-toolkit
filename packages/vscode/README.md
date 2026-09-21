@@ -17,15 +17,17 @@ For Crusader Kings III, Victoria 3 and Europa Universalis V.
 
 ## Start editing
 
-1. Install **Paradox Modding Toolkit** (`JDeffner.px-toolkit`), then open your mod folder or run **Paradox: New Mod**.
+1. Install **Paradox Modding Toolkit** (`JDeffner.px-toolkit`), then open **Start Here** in the PX Toolkit sidebar. Create a mod or find an existing one by name. Add it to the current workspace to see its files in Explorer, or open it in a new window.
 2. Run **Paradox: Run Setup & Health Check**. Check the detected game, mod and data paths. CK3 and Victoria 3 include vocabulary snapshots; EU5 needs your own `script_docs` dump.
-3. Open a script file. Completion offers engine words and indexed definitions; hover explains the word under the cursor. The Project panel opens the visual tools, validation and publishing commands.
+3. Open a script file. Completion offers engine words and indexed definitions; hover explains the word under the cursor. The Project panel opens the visual tools and publishing commands. Use **Paradox: Validate Mod** from the Command Palette to check your mod.
 
 New to modding? Follow [Your first CK3 mod](https://github.com/JDeffner/paradox-modding-toolkit/wiki/First-Mod). For an existing project, use [Getting Started](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Getting-Started). If setup does not work, start with [Troubleshooting](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Troubleshooting).
 
 This is a beta. Check generated content in the game before publishing it. After game patches, regenerate your dumps to match the installed version.
 
 ## At the cursor
+
+- **Live editing:** suggestions, navigation and rename follow unsaved edits. Problems update when referenced events or required translations change in another file.
 
 - **Completion templates:** choose Minimal, Examples or Names with `px.completion.mode`. Preview inserted code and expected values, or run **Paradox: Export Generated Snippets (HTML / Print)** to browse, copy and print the full catalogue.
 
@@ -35,6 +37,8 @@ This is a beta. Check generated content in the game before publishing it. After 
 - **Section folding:** `### Title` or longer hash headings fold through the next heading or the end of the file, across closing braces.
 - **Validation:** instant structural checks for malformed files, encodings and folder mistakes. CK3 and Victoria 3 also integrate tiger for deeper validation.
 - **Localization:** coverage, inlay hints, quick fixes and workflows for adding languages or making a translation mod.
+- **Context actions:** right-click files, definitions, overrides and localization references to open, compare or edit the selected source. Project shows the current mod, with **All Tools** and **Customize** in its title bar.
+- **BBCode preview:** choose **BBCode Preview** from VS Code's editor selector or open it beside the source. Preview includes unsaved edits and preserves the BBCode language mode.
 
 ## Build and inspect content
 
@@ -50,7 +54,7 @@ The **GUI Editor** lets you select, move and resize widgets, inspect inherited p
 
 The **Dynasty Tree** supports copying DNA for mod files or the game, including lookup in dependency mods and pasting portrait-editor DNA.
 
-The Project panel also opens DDS conversion, game launch options, custom calendars, multi-mod indexing and the **Steam Workshop Panel**. Workshop uploads use your running Steam client and show the parts being uploaded before confirmation.
+Convert batches of DDS, PNG, JPEG and WebP images from Utils or file context menus, with progress, cancellation and a choice to skip or overwrite existing outputs. The Project panel also opens game launch options, custom calendars, multi-mod indexing and the **Steam Workshop Panel**. Workshop uploads use your running Steam client and show the parts being uploaded before confirmation.
 
 ## Choose your workflow
 

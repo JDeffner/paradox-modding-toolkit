@@ -11,6 +11,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { wholeNamePattern } from "@px-lsp/protocol/regex";
+import { targetPosition, containsPath } from "./commandTargets";
 import type { PxConfig } from "./config";
 import { listFiles } from "@px-lsp/protocol/fsWalk";
 import { findLocKeyRefs, locKeyOnLine } from "@px-lsp/protocol/locRefs";
@@ -104,26 +105,32 @@ export class LocFileDefinitionProvider implements vscode.DefinitionProvider {
   }
 }
 
-export async function jumpToScriptReference(tracker: LocReferenceTracker, cfg: PxConfig): Promise<void> {
-  const editor = vscode.window.activeTextEditor;
-  if (!editor || editor.document.languageId !== "paradox-loc") {
+export async function jumpToScriptReference(
+  tracker: LocReferenceTracker,
+  cfg: PxConfig,
+  arg?: unknown
+): Promise<void> {
+  const target = await targetPosition(arg);
+  if (!target || target.document.languageId !== "paradox-loc") {
     void vscode.window.showWarningMessage(
       "Paradox Modding Toolkit: open a localization yml and place the cursor on a key first."
     );
     return;
   }
-  const key = locKeyOnLine(editor.document.lineAt(editor.selection.active.line).text);
+  const key = locKeyOnLine(target.document.lineAt(target.position.line).text);
   if (!key) {
     void vscode.window.showWarningMessage("Paradox Modding Toolkit: no localization key on this line.");
     return;
   }
 
-  const recent = tracker.get(key);
+  const remembered = tracker.get(key);
+  const recent =
+    remembered && (!cfg.modPath || containsPath(cfg.modPath, remembered.file)) ? remembered : undefined;
   let location: vscode.Location | undefined;
   if (recent) {
     location = new vscode.Location(vscode.Uri.file(recent.file), new vscode.Position(recent.line, 0));
   } else {
-    const roots = [cfg.modPath, ...cfg.workspaceMods].filter((r): r is string => r !== null);
+    const roots = cfg.modPath ? [cfg.modPath] : cfg.workspaceMods;
     if (roots.length > 0) location = findScriptReferences(roots, key, 1)[0];
   }
 

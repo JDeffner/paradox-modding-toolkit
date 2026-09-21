@@ -1,11 +1,15 @@
-# tiger: your mod validator
+# Check more than syntax
 
-[tiger](https://github.com/amtep/tiger) checks your whole mod against the game files (unknown effects, broken scopes, missing localization) and this extension shows its findings as squiggles in the editor.
+The toolkit catches structural problems while you edit. The optional **tiger validator** checks game rules across your mod, such as unknown effects, broken scopes and missing localization.
 
-Each game has its own binary: `ck3-tiger` for Crusader Kings III, `vic3-tiger` for Victoria 3. EU5 has no tiger build yet, so on an EU5 workspace the tiger commands stay hidden.
+1. Select **Download Validator**. The toolkit downloads the binary for your active game into its own storage.
+2. Select **Validate Mod**, or use the validator in the status bar.
+3. Open **View > Problems** and select a finding to reach its source. Fix it, save and validate again.
 
-**Download or Update Binary** fetches the latest release for the active game into the extension's own storage; no manual install, no settings. Re-run the same command after a game patch to update.
+CK3 uses ck3-tiger; Victoria 3 uses vic3-tiger. A game whose profile has no validator does not show this step. Validation needs the game installation as well as your mod. It does not replace testing in game.
 
-- Runs when you ask: **Paradox Tiger: Run Validation** (Ctrl+Alt+V) or the tiger item in the status bar. Set `px.tigerRunOn` to `save` to validate on every save (debounced), which is good for small and medium mods
-- Already have tiger? Point `px.tigerPath` at your binary; the setting always wins over the downloaded copy
-- macOS has no prebuilt binary. Build from source and set `px.tigerPath`
+Already installed tiger? Set `px.tigerPath` to your binary; that takes priority. For a large mod, set `px.tigerRunOn` to `manual`. Choose `save` if you want validation after edits. Re-run Download or Update Binary when you need a newer validator.
+
+macOS has no prebuilt binary in the toolkit's download flow. Build tiger from its source and configure the path, or continue with structural checks.
+
+A failed or cancelled download leaves this step incomplete. You can keep editing and return later.

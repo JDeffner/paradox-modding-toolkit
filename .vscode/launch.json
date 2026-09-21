@@ -8,7 +8,11 @@
       "name": "Run Extension + Live Webview",
       "type": "extensionHost",
       "request": "launch",
-      "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/vscode"],
+      "args": [
+        "--profile",
+        "PXTK Development",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode"
+      ],
       "outFiles": ["${workspaceFolder}/packages/vscode/dist/**/*.js"],
       "preLaunchTask": "live webviews"
     },
@@ -16,7 +20,11 @@
       "name": "Run Extension",
       "type": "extensionHost",
       "request": "launch",
-      "args": ["--extensionDevelopmentPath=${workspaceFolder}/packages/vscode"],
+      "args": [
+        "--profile",
+        "PXTK Development",
+        "--extensionDevelopmentPath=${workspaceFolder}/packages/vscode"
+      ],
       "outFiles": ["${workspaceFolder}/packages/vscode/dist/**/*.js"],
       "preLaunchTask": "compile"
     }

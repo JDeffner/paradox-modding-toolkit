@@ -20,15 +20,18 @@ import { LogTail } from "./logTail";
 import { metaFor } from "./meta";
 
 const POLL_MS = 1000;
+const POLL_BYTES = 256 * 1024;
 
 export class ErrorLogWatcher implements vscode.Disposable {
   private readonly diagnostics: vscode.DiagnosticCollection;
   private timer: ReturnType<typeof setInterval> | null = null;
+  private catchup: ReturnType<typeof setTimeout> | null = null;
   private tail: LogTail | null = null;
   private readonly parser = new ErrorLogParser();
   private seen = false;
   private entries = 0;
   private byUri = new Map<string, vscode.Diagnostic[]>();
+  private keysByUri = new Map<string, Set<string>>();
   private readonly statusItem: vscode.StatusBarItem;
   private readonly stateEmitter = new vscode.EventEmitter<boolean>();
   /**
@@ -93,6 +96,7 @@ export class ErrorLogWatcher implements vscode.Disposable {
       return;
     }
     this.byUri.clear();
+    this.keysByUri.clear();
     this.diagnostics.clear();
     this.entries = 0;
     // Start from the current end: only NEW entries of this play session matter.
@@ -100,6 +104,9 @@ export class ErrorLogWatcher implements vscode.Disposable {
     this.tail?.close();
     this.tail = new LogTail(file);
     this.seen = this.tail.seekToEnd();
+    if (this.timer) clearInterval(this.timer);
+    if (this.catchup) clearTimeout(this.catchup);
+    this.catchup = null;
     this.timer = setInterval(() => this.poll(), POLL_MS);
     this.showStatus();
     this.stateEmitter.fire(true);
@@ -118,6 +125,7 @@ export class ErrorLogWatcher implements vscode.Disposable {
   clear(): void {
     const had = this.entries;
     this.byUri.clear();
+    this.keysByUri.clear();
     this.diagnostics.clear();
     this.entries = 0;
     if (this.watching) this.showStatus();
@@ -129,6 +137,8 @@ export class ErrorLogWatcher implements vscode.Disposable {
     const wasWatching = this.watching;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
+    if (this.catchup) clearTimeout(this.catchup);
+    this.catchup = null;
     // On POSIX the tail holds the log's inode open between polls so a relaunch's
     // new error.log cannot pass for an append (see logTail.ts). Dropping the
     // reference without closing would leak the descriptor and keep a deleted
@@ -162,9 +172,14 @@ export class ErrorLogWatcher implements vscode.Disposable {
   }
 
   private poll(): void {
+    if (this.catchup) clearTimeout(this.catchup);
+    this.catchup = null;
     const tail = this.tail;
     if (!tail) return;
-    const { lines, reset, missing } = tail.read();
+    const { lines, reset, missing } = tail.read(POLL_BYTES);
+    // Drain bursts in bounded turns; even a continuously growing log must
+    // leave the extension host available to other extensions and editor events.
+    if (tail.hasMore) this.catchup = setTimeout(() => this.poll(), 10);
     if (missing) {
       // Log deleted or momentarily locked; the tail keeps its offset and picks
       // up again on the next round.
@@ -179,19 +194,28 @@ export class ErrorLogWatcher implements vscode.Disposable {
       // relaunch replaces it. Either way every diagnostic published so far
       // describes an entry the user can no longer see, so it has to go.
       this.byUri.clear();
+      this.keysByUri.clear();
       this.diagnostics.clear();
       this.entries = 0;
       this.parser.reset();
       this.log("error.log was cleared or replaced; game diagnostics reset");
     }
     let published = 0;
+    const changed = new Set<string>();
+    const resolvedPaths = new Map<string, string | null>();
     for (const rawLine of lines) {
       const parsed = this.parser.push(rawLine);
       if (!parsed) continue;
-      const resolved = this.resolve(parsed.relFile);
+      if (!resolvedPaths.has(parsed.relFile)) resolvedPaths.set(parsed.relFile, this.resolve(parsed.relFile));
+      const resolved = resolvedPaths.get(parsed.relFile);
       if (!resolved) continue;
       const uri = vscode.Uri.file(resolved).toString();
       const line = parsed.line ?? 0;
+      let keys = this.keysByUri.get(uri);
+      if (!keys) this.keysByUri.set(uri, (keys = new Set()));
+      const key = `${line}:${parsed.message}`;
+      if (keys.has(key)) continue;
+      keys.add(key);
       const diag = new vscode.Diagnostic(
         new vscode.Range(line, 0, line, 200),
         parsed.message,
@@ -201,14 +225,13 @@ export class ErrorLogWatcher implements vscode.Disposable {
       let list = this.byUri.get(uri);
       if (!list) this.byUri.set(uri, (list = []));
       // The game repeats entries on reload; keep one per message+line.
-      if (!list.some((d) => d.message === diag.message && d.range.start.line === line)) {
-        list.push(diag);
-        published++;
-      }
+      list.push(diag);
+      changed.add(uri);
+      published++;
     }
     if (published > 0) {
-      for (const [uriStr, diags] of this.byUri) {
-        this.diagnostics.set(vscode.Uri.parse(uriStr), diags);
+      for (const uriStr of changed) {
+        this.diagnostics.set(vscode.Uri.parse(uriStr), this.byUri.get(uriStr)!);
       }
       this.log(`error.log: ${published} new entr${published === 1 ? "y" : "ies"}`);
     }

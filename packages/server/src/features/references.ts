@@ -13,6 +13,8 @@ import { pushAll } from "@px-lsp/protocol/arrays";
 import type { ServerData } from "../serverData";
 import { wordRangeAt } from "../wordAt";
 import { getLineText } from "../documents";
+import { definitionsAt, expectedKindsAt } from "./symbolResolution";
+import { loadSchema, type SchemaData } from "../schema/loader";
 
 /** file+line key with the DefinitionIndex's path normalization (win32 is
  * case-insensitive), so lazy-scan paths compare equal to indexed ones. */
@@ -26,13 +28,23 @@ export async function provideReferences(
   document: TextDocument,
   position: Position,
   includeDeclaration: boolean,
-  lazyRefs?: (name: string) => Promise<Reference[]>
+  lazyRefs?: (name: string) => Promise<Reference[]>,
+  schema: SchemaData = loadSchema(null)
 ): Promise<Location[]> {
   const range = wordRangeAt(getLineText(document, position.line), position.character);
   if (!range) return [];
   const name = stripPrefix(range.word);
+  const defs = definitionsAt(data, document, position, schema, true);
+  const kinds = defs.length ? defs.map((d) => d.kind) : expectedKindsAt(document, position, schema);
+  // A textual hit with no grammar type is useful only when the name itself
+  // has one meaning. Never mix such hits into a colliding symbol's results.
+  const unambiguous = new Set(data.index.lookupAll(name).map((d) => d.kind)).size <= 1;
+  const accepts = (r: Reference) =>
+    kinds === null ||
+    r.kinds.some((k) => kinds.includes(k)) ||
+    (r.kinds.length === 0 && unambiguous && kinds.length > 0);
 
-  const refs: Reference[] = data.refIndex.lookup(name).slice();
+  const refs: Reference[] = data.refIndex.lookup(name).filter(accepts);
   if (lazyRefs) {
     // The textual scan cannot tell a non-top-level definition site (inline
     // scripted_trigger, nested title) from a use: drop hits the definition
@@ -40,7 +52,7 @@ export async function provideReferences(
     const defSites = new Set(data.index.lookupAll(name).map((d) => siteKey(d.file, d.line)));
     pushAll(
       refs,
-      (await lazyRefs(name)).filter((r) => !defSites.has(siteKey(r.file, r.line)))
+      (await lazyRefs(name)).filter((r) => !defSites.has(siteKey(r.file, r.line)) && accepts(r))
     );
   }
 
@@ -53,7 +65,7 @@ export async function provideReferences(
   }));
 
   if (includeDeclaration) {
-    for (const d of data.index.lookupAll(name)) {
+    for (const d of defs) {
       locations.push({
         uri: URI.file(d.file).toString(),
         range: { start: { line: d.line, character: 0 }, end: { line: d.line, character: 0 } },

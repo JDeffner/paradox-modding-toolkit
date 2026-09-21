@@ -10,10 +10,13 @@ import {
   configChangedNotification,
   configurationSection,
   indexStatsRequest,
+  locCoverageRequest,
+  lookupLocRequest,
   modFileChangedNotification,
   progressNotification,
   type ParadoxSettings,
   type ProgressPayload,
+  type LocCoverage,
 } from "@px-lsp/protocol/protocol";
 import { allProfiles } from "../src/games/registry";
 import { indexConfigWatchPatterns } from "@px-lsp/protocol/configDir";
@@ -162,6 +165,226 @@ async function client(
 }
 
 describe.skipIf(!fs.existsSync(SERVER))("configuration over stdio", () => {
+  it.each(["event", "localization"] as const)(
+    "refreshes untouched script diagnostics after cross-file %s changes",
+    async (kind) => {
+      const f = fixture();
+      const trait = allProfiles()
+        .find((profile) => profile.id === "ck3")!
+        .schema.find((entry) => entry.kind === "trait")!;
+      const traitName = "px_cfg_trait";
+      const locKey = trait.requiredLoc![0].replace("$", traitName);
+      const callerText =
+        kind === "event"
+          ? "namespace = px_diag\npx_diag.1 = { immediate = { trigger_event = px_diag.2 } }\n"
+          : `${traitName} = { category = personality martial = 2 }\n`;
+      const callerFile = f.write(
+        kind === "event" ? "mod/events/caller.txt" : `mod/${trait.path}/trait.txt`,
+        "\uFEFF" + callerText
+      );
+      const sourcePath =
+        kind === "event" ? "mod/events/target.txt" : "mod/localization/english/target_l_english.yml";
+      const emptyText = kind === "event" ? "" : "l_english:\n";
+      const definedText =
+        kind === "event" ? "px_diag.2 = {}\n" : `l_english:\n ${locKey}:0 "Fixture trait"\n`;
+      const sourceFile = f.write(sourcePath, "\uFEFF" + emptyText);
+      const callerUri = URI.file(callerFile).toString();
+      const sourceUri = URI.file(sourceFile).toString();
+      const code = kind === "event" ? "unknown-event" : "missing-required-loc";
+      const c = await client(f, { settings: { modPath: f.mod, locLanguage: "english" } });
+      await c.built(1);
+      const published: Array<Array<{ code?: string | number }>> = [];
+      c.conn.onNotification(
+        "textDocument/publishDiagnostics",
+        (params: { uri: string; diagnostics: Array<{ code?: string | number }> }) => {
+          if (params.uri === callerUri) published.push(params.diagnostics);
+        }
+      );
+      const missing = () => published.at(-1)?.some((diagnostic) => diagnostic.code === code);
+      const expectMissing = (value: boolean) => expect.poll(missing, { timeout: 5000 }).toBe(value);
+      await c.conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri: callerUri, version: 1, languageId: "paradox", text: callerText },
+      });
+      await expectMissing(true);
+      await c.conn.sendNotification("textDocument/didOpen", {
+        textDocument: {
+          uri: sourceUri,
+          version: 1,
+          languageId: kind === "event" ? "paradox" : "paradox-loc",
+          text: emptyText,
+        },
+      });
+      // Do not let the caller's initial typing debounce validate a later source edit.
+      await c.barrier();
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      const change = (version: number, text: string) =>
+        c.conn.sendNotification("textDocument/didChange", {
+          textDocument: { uri: sourceUri, version },
+          contentChanges: [{ text }],
+        });
+      await change(2, definedText);
+      await expectMissing(false);
+      await change(3, emptyText);
+      await expectMissing(true);
+      await change(4, definedText);
+      await expectMissing(false);
+      // Discard the unsaved definition by closing; the disk source is still empty.
+      await c.conn.sendNotification("textDocument/didClose", { textDocument: { uri: sourceUri } });
+      await expectMissing(true);
+      fs.unlinkSync(sourceFile);
+      await c.conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: sourceUri, type: 3 }],
+      });
+      await c.barrier();
+      f.write(sourcePath, "\uFEFF" + definedText);
+      await c.conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: sourceUri, type: 1 }],
+      });
+      await expectMissing(false);
+      fs.unlinkSync(sourceFile);
+      await c.conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: sourceUri, type: 3 }],
+      });
+      await expectMissing(true);
+      expect(c.starts).toBe(1);
+    },
+    30_000
+  );
+
+  it("refreshes untouched event diagnostics after a namespace-only edit", async () => {
+    const f = fixture();
+    const text = "px_diag_caller = { trigger_event = px_diag.2 }\n";
+    const caller = f.write("mod/common/scripted_effects/caller.txt", "\uFEFF" + text);
+    const namespaceText = "namespace = px_diag\n";
+    const namespace = f.write("mod/events/namespace.txt", "\uFEFF" + namespaceText);
+    const callerUri = URI.file(caller).toString();
+    const namespaceUri = URI.file(namespace).toString();
+    const c = await client(f, { settings: { modPath: f.mod } });
+    await c.built(1);
+    let unknown: boolean | undefined;
+    c.conn.onNotification(
+      "textDocument/publishDiagnostics",
+      (params: { uri: string; diagnostics: Array<{ code?: string | number }> }) => {
+        if (params.uri === callerUri)
+          unknown = params.diagnostics.some((diagnostic) => diagnostic.code === "unknown-event");
+      }
+    );
+    await c.conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri: callerUri, version: 1, languageId: "paradox", text },
+    });
+    await expect.poll(() => unknown, { timeout: 5000 }).toBe(true);
+    await c.conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri: namespaceUri, version: 1, languageId: "paradox", text: namespaceText },
+    });
+    // Settle both opens before the edit, so they cannot cause its diagnostic refresh.
+    await c.barrier();
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    await c.conn.sendNotification("textDocument/didChange", {
+      textDocument: { uri: namespaceUri, version: 2 },
+      contentChanges: [{ text: "namespace = px_other\n" }],
+    });
+    await expect.poll(() => unknown, { timeout: 5000 }).toBe(false);
+    await c.conn.sendNotification("textDocument/didChange", {
+      textDocument: { uri: namespaceUri, version: 3 },
+      contentChanges: [{ text: namespaceText }],
+    });
+    await expect.poll(() => unknown, { timeout: 5000 }).toBe(true);
+    expect(c.starts).toBe(1);
+  }, 20_000);
+
+  it("keeps distinct case-sensitive localization buffers in their own indexed files", async (context) => {
+    const f = fixture();
+    const upper = f.write("mod/localization/A_l_english.yml", 'l_english:\n upper_disk:0 "Upper disk"\n');
+    const lower = path.join(path.dirname(upper), "a_l_english.yml");
+    try {
+      fs.writeFileSync(lower, 'l_english:\n lower_disk:0 "Lower disk"\n', { flag: "wx" });
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+      context.skip();
+      return;
+    }
+    const c = await client(f, { settings: { modPath: f.mod, locLanguage: "english" } });
+    await c.built(1);
+    await c.conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri: URI.file(upper).toString(),
+        languageId: "paradox-loc",
+        version: 1,
+        text: 'l_english:\n upper_buffer:0 "Upper buffer"\n',
+      },
+    });
+    expect(await c.conn.sendRequest(lookupLocRequest, { key: "upper_buffer" })).toEqual([
+      { file: upper, line: 1, source: "mod", value: "Upper buffer" },
+    ]);
+    await c.conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri: URI.file(lower).toString(),
+        languageId: "paradox-loc",
+        version: 1,
+        text: 'l_english:\n lower_buffer:0 "Lower buffer"\n',
+      },
+    });
+    expect(await c.conn.sendRequest(lookupLocRequest, { key: "lower_buffer" })).toEqual([
+      { file: lower, line: 1, source: "mod", value: "Lower buffer" },
+    ]);
+    expect(await c.conn.sendRequest(lookupLocRequest, { key: "upper_buffer" })).toEqual([
+      { file: upper, line: 1, source: "mod", value: "Upper buffer" },
+    ]);
+    const coverage = await c.conn.sendRequest<LocCoverage[]>(locCoverageRequest, { modRoot: f.mod });
+    expect(coverage[0].orphaned.map((issue) => issue.key).sort()).toEqual(["lower_buffer", "upper_buffer"]);
+  });
+
+  it.each(allProfiles())(
+    "keeps $id coverage fresh for translations, open buffers and rebuilds",
+    async (profile) => {
+      const f = fixture();
+      const locPath = profile.schema.find((entry) => entry.kind === "loc_key")!.path;
+      const source = `mod/${locPath}/source_l_english.yml`;
+      const translated = `mod/${locPath}/translation_l_french.yml`;
+      f.write(source, '\uFEFFl_english:\n key:0 "Source"\n');
+      const file = f.write(translated, '\uFEFFl_french:\n key:0 "Source"\n');
+      const c = await client(f, { settings: { gameId: profile.id, modPath: f.mod, locLanguage: "english" } });
+      await c.built(1);
+      const coverage = () => c.conn.sendRequest<LocCoverage[]>(locCoverageRequest, { modRoot: f.mod });
+      const french = async () => (await coverage()).find((language) => language.language === "french")!;
+      expect((await french()).untranslated).toHaveLength(1);
+      // A language excluded from the definition index still updates coverage.
+      f.write(translated, '\uFEFFl_french:\n key:0 "Traduit"\n');
+      await c.conn.sendNotification("workspace/didChangeWatchedFiles", {
+        changes: [{ uri: URI.file(file).toString(), type: 2 }],
+      });
+      expect((await french()).untranslated).toEqual([]);
+      // Windows editor URIs may use different casing than the directory walk.
+      const uri = URI.file(process.platform === "win32" ? file.toUpperCase() : file).toString();
+      await c.conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri, languageId: "paradox-loc", version: 1, text: 'l_french:\n key:0 "Source"\n' },
+      });
+      expect((await french()).untranslated).toHaveLength(1);
+      // Rapid edits coalesce; the next request observes the last buffer version.
+      for (let version = 2; version <= 8; version++) {
+        await c.conn.sendNotification("textDocument/didChange", {
+          textDocument: { uri, version },
+          contentChanges: [{ text: `l_french:\n key:0 "Traduction ${version}"\n` }],
+        });
+      }
+      expect((await french()).untranslated).toEqual([]);
+      // Closing must discard the buffer even if disk changed without a watcher event.
+      f.write(translated, '\uFEFFl_french:\n key:0 "Source"\n');
+      await c.conn.sendNotification("textDocument/didClose", { textDocument: { uri } });
+      expect((await french()).untranslated).toHaveLength(1);
+      const added = f.write(`mod/${locPath}/added_l_french.yml`, '\uFEFFl_french:\n added:0 "Ajout"\n');
+      await c.conn.sendNotification(modFileChangedNotification, { fsPath: added });
+      expect((await french()).defined).toBe(2);
+      fs.unlinkSync(added);
+      await c.conn.sendNotification(modFileChangedNotification, { fsPath: added });
+      expect((await french()).defined).toBe(1);
+      await c.patch({ locLanguage: "french" });
+      await c.built(2);
+      expect((await french()).untranslated).toEqual([]);
+      expect(c.starts).toBe(2);
+    }
+  );
+
   it("retains inferred unopened roots, replaces explicit roots and applies patch versus replacement semantics", async () => {
     const f = fixture();
     const c = await client(f);

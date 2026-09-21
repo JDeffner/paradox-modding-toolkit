@@ -5,15 +5,14 @@
  * holds hundreds of thousands of usage sites); find-references still has to
  * SHOW them (#3), so this scanner greps the roots for one name at a time.
  *
- * The scan is textual (exact-token match per line, comments stripped), not
- * schema-driven: script values, trigger/effect arguments and loc-key values
+ * Exact-token hits are classified by the same grammar and schema as navigation: script values, trigger/effect arguments and loc-key values
  * are all real usage sites even where the schema has no ref-field for the
  * enclosing key. Column-0 keys are skipped — those are the definition sites,
  * which the provider appends separately under includeDeclaration.
  *
  * Costs are bounded three ways: the per-root file list is enumerated once,
  * lines are tokenized only when a cheap substring test hits, and results are
- * memoized per name until the roots change. First lookup of a name pays one
+ * memoized per name until a root or file changes. First lookup of a name pays one
  * pass of disk reads; repeats are O(1).
  *
  * No `vscode` imports here: unit-tested in plain Node.
@@ -24,6 +23,11 @@ import type { DefSource, Reference } from "@px-lsp/protocol/types";
 import { listFiles } from "@px-lsp/protocol/fsWalk";
 import { isStructuralKeyword } from "../contextKeywords";
 import { activeProfile } from "../games/active";
+import { loadSchema, type SchemaData } from "../schema/loader";
+import { expectedKindsAt } from "../features/symbolResolution";
+import { TextDocument } from "vscode-languageserver-textdocument";
+import { URI } from "vscode-uri";
+import { evictParse } from "../parseCache";
 
 export interface LazyRefRoot {
   root: string;
@@ -50,14 +54,34 @@ export class LazyReferenceScanner {
   private isEngineToken?: (name: string) => boolean;
   private fileLists = new Map<string, string[]>();
   private cache = new Map<string, Promise<Reference[]>>();
+  private schema = loadSchema(null);
+  private generation = 0;
 
   /** Reconfigure (on reindex/settings change): drops all memoized results. */
-  setRoots(roots: LazyRefRoot[], isEngineToken?: (name: string) => boolean, indexAssets = true): void {
+  setRoots(
+    roots: LazyRefRoot[],
+    isEngineToken?: (name: string) => boolean,
+    indexAssets = true,
+    schema: SchemaData = loadSchema(null)
+  ): void {
     this.roots = roots;
     this.indexAssets = indexAssets;
+    this.schema = schema;
+    this.generation++;
     this.isEngineToken = isEngineToken;
     this.fileLists.clear();
     this.cache.clear();
+  }
+
+  invalidateFile(file: string): void {
+    for (const { root } of this.roots) {
+      const relative = path.relative(root, file);
+      if (relative.startsWith("..") || path.isAbsolute(relative)) continue;
+      this.fileLists.delete(root);
+      this.cache.clear();
+      this.generation++;
+      break;
+    }
   }
 
   /** All usage sites of `name` across the configured roots. Engine tokens and
@@ -104,6 +128,7 @@ export class LazyReferenceScanner {
   }
 
   private async scan(name: string): Promise<Reference[]> {
+    const generation = this.generation;
     const out: Reference[] = [];
     for (const { root } of this.roots) {
       const files = this.filesOf(root);
@@ -116,10 +141,30 @@ export class LazyReferenceScanner {
             continue;
           }
           if (!content.includes(name)) continue;
-          scanContent(content, name, file, out);
+          const hits: Reference[] = [];
+          scanContent(content, name, file, hits);
+          // Disk scans must not reuse or evict an open editor's versioned parse.
+          const document = TextDocument.create(
+            URI.file(file).with({ query: "px-lazy-refs" }).toString(),
+            "paradox",
+            generation,
+            content
+          );
+          for (const hit of hits) {
+            const kinds = expectedKindsAt(
+              document,
+              { line: hit.line, character: hit.startChar },
+              this.schema
+            );
+            if (kinds?.length === 0) continue;
+            hit.kinds = kinds ?? [];
+            out.push(hit);
+          }
+          evictParse(document.uri);
           if (out.length >= MAX_REFS) return out.slice(0, MAX_REFS);
         }
         await yieldNow();
+        if (generation !== this.generation) return this.lookup(name);
       }
     }
     return out;
