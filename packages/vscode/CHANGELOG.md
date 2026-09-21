@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fix an intermittent release check failure caused by asset tests running before indexing finished.
+
 ## 0.5.0 (beta) - editor improvements
 
 - Keep the new-mod wizard open when focus changes, show the created folder with opening actions if the final step is canceled, and show Explorer when adding the new mod to the workspace.

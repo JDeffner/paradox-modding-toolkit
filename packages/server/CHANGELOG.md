@@ -8,6 +8,8 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- Make release smoke tests wait for the current index rebuild before checking asset references and symbols.
+
 ## 0.3.6
 
 Ships with the toolkit's 0.5.0 release.

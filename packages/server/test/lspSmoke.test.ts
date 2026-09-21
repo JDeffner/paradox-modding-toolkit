@@ -37,6 +37,7 @@ import {
   guiLayoutRequest,
   guiSourceEditRequest,
   guiTreeRequest,
+  indexStatsRequest,
   definitionFormRequest,
   definitionEditRequest,
   locTextRequest,
@@ -312,6 +313,18 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
   let guiPanelFile: string;
   let initResult: { serverInfo?: { name: string; version: string } };
   const statuses: StatusPayload[] = [];
+
+  async function waitForIndexBuild(start: number): Promise<void> {
+    // The notification write does not wait for applySettings. A request on the
+    // same connection drains its preceding statuses before we inspect them.
+    await conn.sendRequest(indexStatsRequest);
+    // An older completion must not satisfy the wait while a newer build runs.
+    await expect
+      .poll(() => statuses.slice(start).some((s) => s.indexing) && statuses.at(-1)?.indexing === false, {
+        timeout: 20_000,
+      })
+      .toBe(true);
+  }
 
   beforeAll(async () => {
     modDir = fs.mkdtempSync(path.join(os.tmpdir(), "ck3-smoke-"));
@@ -646,16 +659,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       const start = statuses.length;
       await conn.sendNotification("paradox/configChanged", settings);
       await reload();
-      await expect
-        .poll(
-          () => {
-            const updates = statuses.slice(start);
-            const began = updates.findIndex((s) => s.indexing);
-            return began >= 0 && updates.slice(began + 1).some((s) => !s.indexing);
-          },
-          { timeout: 20_000 }
-        )
-        .toBe(true);
+      await waitForIndexBuild(start);
       fs.rmSync(logs, { recursive: true, force: true });
     }
   });
@@ -738,16 +742,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
         diagnosticsVanilla: false,
         ...(indexAssets === undefined ? {} : { indexAssets }),
       });
-      await expect
-        .poll(
-          () => {
-            const updates = statuses.slice(start);
-            const began = updates.findIndex((s) => s.indexing);
-            return began >= 0 && updates.slice(began + 1).some((s) => !s.indexing);
-          },
-          { timeout: 20_000 }
-        )
-        .toBe(true);
+      await waitForIndexBuild(start);
     };
     const symbols = (query: string) => conn.sendRequest("workspace/symbol", { query });
     const references = () =>
