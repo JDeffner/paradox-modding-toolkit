@@ -32,12 +32,12 @@ Search for **Paradox Modding Toolkit** in the VS Code Extensions view, or:
 ext install JDeffner.px-toolkit
 ```
 
-Then open your mod folder and run **Paradox: Run Setup & Health Check**. It
-finds the game, checks the dump folder, and offers to download tiger. The
-default amount of configuration is none. Full walkthrough:
+Open **Start Here** in the PX Toolkit sidebar to create a mod or find an existing one by name. Choose **Add to Current Workspace** to see its files in Explorer, or open it in a new window. Then run **Paradox: Run Setup & Health Check** to connect the game. Extra validation is optional. Full walkthrough:
 [Getting Started](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Getting-Started).
 
 ## What you get
+
+Create your first mod with the guided tutorial, convert batches of images, and get suggestions and navigation that follow unsaved edits. Problems update when referenced events or required translations change in another file.
 
 Right-click files, definitions, overrides or localization references to act on that source. The Project panel shows the current mod, with **All Tools** and **Customize** in its title bar. BBCode files offer **BBCode Preview** in VS Code's editor selector and can preview unsaved edits beside the source.
 

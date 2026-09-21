@@ -2,6 +2,10 @@
 
 Features and experiments that are not ready to expose. Each entry identifies the current implementation boundary and the work needed before release.
 
+## Compatch (planned for 0.6.0)
+
+Compatch is not included in 0.5.0. Its implementation remains on a separate development branch and needs its own real-mod verification before release.
+
 ## GUI editor: Interact mode (hidden 2026-08-24)
 
 What it is: a tool mode where clicks run the variable-system half of a

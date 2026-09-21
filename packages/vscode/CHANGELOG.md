@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.5.0 (beta) - editor improvements
+
 - Keep the new-mod wizard open when focus changes, show the created folder with opening actions if the final step is canceled, and show Explorer when adding the new mod to the workspace.
 
 - Keep Problems in open scripts current when an event or required localization changes in another file, including unsaved edits and discarded changes.

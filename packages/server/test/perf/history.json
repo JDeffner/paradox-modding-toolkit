@@ -1515,6 +1515,34 @@
         "peakRssMb": 3610,
         "rssSamples": 126
       }
+    },
+    {
+      "version": "0.5.0",
+      "recordedAt": "2026-09-21",
+      "workspace": "agot.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen AI 7 350 w/ Radeon 860M              ",
+        "totalMemGb": 15,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 50495,
+        "definitions": 961758,
+        "completionCold": 1289,
+        "completionWarm": 22,
+        "semanticTokens": 3,
+        "hover": 10,
+        "documentSymbol": 1,
+        "completionAfterSave": 744,
+        "tokensAfterSave": 1,
+        "heapMb": 1074,
+        "rssAtBuildMb": 1807,
+        "internedIdentifiers": 1018888,
+        "peakRssMb": 3332,
+        "rssSamples": 127
+      }
     }
   ]
 }

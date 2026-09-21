@@ -8,6 +8,10 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+## 0.3.6
+
+Ships with the toolkit's 0.5.0 release.
+
 - Refresh missing-event and required-localization diagnostics in other open mod scripts after unsaved edits, discarded edits, file creation or deletion, and namespace changes.
 
 ### Symbol resolution and live documents
