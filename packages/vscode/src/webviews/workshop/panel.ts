@@ -9,6 +9,7 @@
  * (steam/workshop.ts).
  */
 import { makeNonce } from "../nonce";
+import { preparePreviewImages } from "../../steam/previewImages";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
@@ -79,6 +80,7 @@ import type {
   ProgressJob,
   PullParts,
   WorkshopModInfo,
+  EncodedPreview,
 } from "./messages";
 
 export interface WorkshopPanelOptions {
@@ -117,6 +119,10 @@ export class WorkshopPanel {
   private disposables: vscode.Disposable[] = [];
   private disposed = false;
   private uploading = false;
+  private previewWaiters = new Map<
+    string,
+    { resolve: (image: EncodedPreview) => void; reject: (error: Error) => void }
+  >();
   /** Folders the webview may load files from; grows when one turns up outside them. */
   private resourceRoots: vscode.Uri[];
   /** Titles of required items looked up on Steam, so a re-render never re-asks. */
@@ -250,6 +256,8 @@ export class WorkshopPanel {
   private dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    for (const waiter of this.previewWaiters.values()) waiter.reject(new Error("Workshop panel closed."));
+    this.previewWaiters.clear();
     WorkshopPanel.instance = undefined;
     clearTimeout(this.listingReload);
     for (const w of this.listingWatchers.splice(0)) w.dispose();
@@ -259,6 +267,28 @@ export class WorkshopPanel {
 
   private post(message: HostToApp): void {
     if (!this.disposed) void this.panel.webview.postMessage(message);
+  }
+
+  private encodePreview(dataUri: string): Promise<EncodedPreview> {
+    if (this.disposed) return Promise.reject(new Error("Workshop panel closed."));
+    const id = makeNonce();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.previewWaiters.delete(id);
+        reject(new Error("Image preparation timed out. Reopen the Workshop panel and try again."));
+      }, 30_000);
+      this.previewWaiters.set(id, {
+        resolve: (image) => {
+          clearTimeout(timer);
+          resolve(image);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      });
+      this.post({ type: "preparePreview", id, dataUri, maxBytes: PREVIEW_MAX_BYTES });
+    });
   }
 
   /**
@@ -532,6 +562,14 @@ export class WorkshopPanel {
       case "upload":
         await this.upload(message);
         return;
+      case "previewPrepared": {
+        const waiter = this.previewWaiters.get(message.id);
+        if (!waiter) return;
+        this.previewWaiters.delete(message.id);
+        if (message.image) waiter.resolve(message.image);
+        else waiter.reject(new Error(message.error));
+        return;
+      }
       case "openPage": {
         const id = root ? readPublishInfo(root, meta)?.publishedId : null;
         if (!id) return;
@@ -1172,7 +1210,43 @@ export class WorkshopPanel {
     this.post({ type: "uploadState", busy: true });
     step(steps[0] ?? "Upload", "starting…");
     let staging: string | null = null;
+    let previewStaging: string | null = null;
     try {
+      const wsDir = workshopDirFor(root, meta);
+      const previews = message.previews ? readPreviews(wsDir) : null;
+      let previewImages: string[] | undefined;
+      if (previews) {
+        const large = previews.images.filter((file) => fs.statSync(file).size >= PREVIEW_MAX_BYTES);
+        const gifs = large.filter((file) => path.extname(file).toLowerCase() === ".gif");
+        if (gifs.length)
+          throw new Error(
+            `GIF previews must be under 1 MB to preserve animation: ${gifs.map((file) => path.basename(file)).join(", ")}. Resize them before uploading.`
+          );
+        let copiesDirectory: string | null = null;
+        if (large.length) {
+          const copiesRoot = path.join(root, meta.configDirName, "workshop-upload-previews");
+          const choice = await vscode.window.showWarningMessage(
+            `${large.length} preview image(s) exceed Steam's 1 MB limit: ${large.map((file) => path.basename(file)).join(", ")}. ` +
+              `Create smaller copies and continue uploading? Originals stay unchanged. Copies are saved inside the mod at ${path.relative(root, copiesRoot).replace(/\\/g, "/")}/.`,
+            "Create Smaller Copies",
+            "Cancel Upload"
+          );
+          if (choice !== "Create Smaller Copies" || this.disposed) return;
+          fs.mkdirSync(copiesRoot, { recursive: true });
+          copiesDirectory = fs.mkdtempSync(path.join(copiesRoot, "upload-"));
+          log(`workshop: smaller preview copies will be kept in ${copiesDirectory}`);
+        }
+        step("Previews", "preparing gallery images…");
+        previewStaging = makeStagingDir();
+        previewImages = await preparePreviewImages(
+          previews.images,
+          previewStaging,
+          copiesDirectory,
+          (dataUri) => this.encodePreview(dataUri),
+          (message) => log(`workshop: ${message}`)
+        );
+      }
+      if (this.disposed) return;
       let needsAgreement = false;
       const createdNow = !itemId;
       if (!itemId) {
@@ -1189,24 +1263,20 @@ export class WorkshopPanel {
 
       // One query serves the preview replacement and the requirement diff;
       // a just-created item has nothing on Steam yet.
-      const wsDir = workshopDirFor(root, meta);
-      const previews = message.previews ? readPreviews(wsDir) : null;
       const deps = message.requirements ? readDependencies(wsDir) : null;
       if (deps) steps.push("Requirements");
       const liveItem = !createdNow && (previews || deps) ? await this.queryItem(itemId) : null;
+      if (previews && !createdNow && !liveItem)
+        throw new Error(
+          "Steam did not return the current gallery. Upload stopped; try again when Steam is available."
+        );
 
       const submits: SubmitSpec[] = [];
       if (message.content || message.details || message.description || message.previews) {
         const main: SubmitSpec = {};
         if (message.previews && previews) {
           step("Previews", "listing the gallery…");
-          const small = previews.images.filter((p) => fs.statSync(p).size < PREVIEW_MAX_BYTES);
-          if (small.length < previews.images.length)
-            this.notify(
-              `${previews.images.length - small.length} preview image(s) of 1 MB or more were skipped; Steam rejects them.`,
-              "warn"
-            );
-          main.previewImages = small;
+          main.previewImages = previewImages;
           main.previewVideos = previews.videos;
           const count = liveItem?.additionalPreviews.length ?? 0;
           main.removePreviewIndexes = Array.from({ length: count }, (_, i) => i);
@@ -1272,7 +1342,17 @@ export class WorkshopPanel {
           // Submit 1 carries files and details; the rest are one language each.
           const onFiles = submit === 1 && message.content && /content/i.test(status);
           const name =
-            submit > 1 ? "Translations" : onFiles ? "Mod files" : message.details ? "Details" : "Mod files";
+            submit > 1
+              ? "Translations"
+              : onFiles
+                ? "Mod files"
+                : message.previews && /preview/i.test(status)
+                  ? "Previews"
+                  : message.details || message.description
+                    ? "Details"
+                    : message.previews
+                      ? "Previews"
+                      : "Mod files";
           const pct = total > 0 ? Math.round((uploaded / total) * 100) : null;
           const which = count > 1 && submit > 1 ? ` (${submit - 1}/${count - 1})` : "";
           step(name, `${status.toLowerCase()}${which}${pct === null ? "" : ` ${pct}%`}`);
@@ -1332,6 +1412,7 @@ export class WorkshopPanel {
       this.notifyError(`Workshop upload failed - ${friendlyError(e, meta)}`, e);
     } finally {
       if (staging) fs.rmSync(staging, { recursive: true, force: true });
+      if (previewStaging) fs.rmSync(previewStaging, { recursive: true, force: true });
       this.uploading = false;
       this.endProgress("upload");
     }

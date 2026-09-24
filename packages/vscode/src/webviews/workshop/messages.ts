@@ -145,7 +145,13 @@ export interface LiveTranslation {
   description: string;
 }
 
+export interface EncodedPreview {
+  mime: "image/png" | "image/jpeg";
+  data: string;
+}
+
 export type HostToApp =
+  | { type: "preparePreview"; id: string; dataUri: string; maxBytes: number }
   | { type: "init"; mods: ModChoice[]; active: string | null; info: WorkshopModInfo | null }
   | { type: "info"; active: string; info: WorkshopModInfo | null }
   | { type: "liveBegin" }
@@ -175,6 +181,8 @@ export type ProgressJob = "upload" | "download";
 export type DlcSource = "game" | "steam" | "none";
 
 export type AppToHost =
+  | { type: "previewPrepared"; id: string; image: EncodedPreview; error?: never }
+  | { type: "previewPrepared"; id: string; image?: never; error: string }
   | { type: "ready" }
   | { type: "selectMod"; path: string }
   /** Pick any mod folder on disk, in or out of the workspace; the host adds it to the choices. */

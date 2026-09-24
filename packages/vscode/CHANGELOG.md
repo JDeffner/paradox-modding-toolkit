@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Ask before creating smaller copies of Workshop gallery images that exceed Steam's size limit. Keep originals and save the copies inside the mod, upload the full gallery in order, and stop if conversion fails or the user cancels.
+
 ## 0.5.0 (beta) - editor improvements
 
 - Keep the new-mod wizard open when focus changes, show the created folder with opening actions if the final step is canceled, and show Explorer when adding the new mod to the workspace.

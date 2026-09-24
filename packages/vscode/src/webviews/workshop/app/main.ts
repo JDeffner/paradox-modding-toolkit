@@ -25,6 +25,7 @@ import type {
 } from "../messages";
 import { installTips } from "../../shared/tips";
 import { helpDialog } from "../../shared/help";
+import { preparePreviewImage } from "./previewImage";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -717,9 +718,10 @@ function renderPreviews(): void {
   const n = info.previews.images.length + info.previews.videos.length;
   hint.textContent =
     n === 0
-      ? "The previews folder is empty: the next details upload removes every extra preview on Steam."
+      ? "The previews folder is empty: uploading previews removes every extra preview on Steam."
       : `${info.previews.images.length} image(s) and ${info.previews.videos.length} video(s). ` +
-        `The next details upload replaces the item's gallery${liveCount ? ` (${liveCount} on Steam now)` : ""}.`;
+        `Uploading previews replaces the item's gallery${liveCount ? ` (${liveCount} on Steam now)` : ""}. ` +
+        "Large images prompt you to create smaller copies. Originals and copies are kept.";
   // Videos lead, the way Steam orders the gallery on the item page.
   for (const id of info.previews.videos) gallery.append(liveTile(1, id, ""));
   for (const img of info.previews.images) {
@@ -1218,6 +1220,17 @@ function applyInfo(next: WorkshopModInfo | null): void {
 window.addEventListener("message", (e: MessageEvent<HostToApp>) => {
   const m = e.data;
   switch (m.type) {
+    case "preparePreview":
+      void preparePreviewImage(m.dataUri, m.maxBytes).then(
+        (image) => send({ type: "previewPrepared", id: m.id, image }),
+        (error: unknown) =>
+          send({
+            type: "previewPrepared",
+            id: m.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+      );
+      return;
     case "init":
       mods = m.mods;
       active = m.active;
@@ -2055,7 +2068,7 @@ const HELP: Parameters<typeof helpDialog>[0] = {
         },
         {
           lead: "Accepted images",
-          text: "are .png, .jpg, .jpeg and .gif files. Each must be under 1 MB (1,048,576 bytes): Steam rejects larger ones, so the upload skips them and says how many it skipped.",
+          text: "are .png, .jpg, .jpeg and .gif files. For PNG and JPEG images over Steam's size limit, upload asks whether to make smaller copies. Originals stay unchanged, and copies remain inside the mod in .px-toolkit/workshop-upload-previews/, in a separate folder per upload. Copies keep their dimensions where possible; transparency stays intact. GIFs must already be under 1 MB to preserve animation. Cancelling the prompt or a preparation failure stops the upload.",
         },
         {
           lead: "Order",

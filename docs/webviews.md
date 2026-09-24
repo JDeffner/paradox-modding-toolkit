@@ -148,6 +148,10 @@ build does not produce. You do not extend it; it finds your panel too.
   `id` must answer every id exactly once, or a gesture stays armed forever.
   The GUI editor README explains why this rule is load-bearing.
 
+## Workshop gallery copies
+
+The Workshop uploader asks before reducing gallery images that exceed Steam's 1 MB limit. Accepted PNG and JPEG conversions run in the existing webview with Chromium's codecs, using request IDs and a 30-second timeout. Transparent images stay PNG; opaque images can become JPEG. Smaller copies remain in a new folder under the mod's `.px-toolkit/workshop-upload-previews/`, while originals remain unchanged. This archive sits outside the gallery's `previews/` folder and is excluded from mod-content uploads. Cancelling, closing the panel, conversion failure, or failure to read the existing Steam gallery stops the upload before submission. The primary thumbnail has its own size checks.
+
 ## The dev loops
 
 Three loops, from fastest to most complete. Pick by what you are iterating

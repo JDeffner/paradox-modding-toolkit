@@ -357,7 +357,7 @@ ${BBPREV_CSS}
         <div id="previewsHint" class="px-muted px-xs" style="margin-bottom:6px"></div>
         <div id="gallery" class="gallery"></div>
         <div class="hintline" style="margin-top:6px">
-          <button id="addPreviews" class="px-btn" data-variant="outline" data-size="sm" data-tip="Copy images into the previews folder of the listing. Under 1 MB each; Steam shows them in file-name order." data-tip-wrap>${icon("plus")} Add images</button>
+          <button id="addPreviews" class="px-btn" data-variant="outline" data-size="sm" data-tip="Copy images into the previews folder. Upload asks before making smaller copies of large PNG or JPEG images. Originals and copies are kept. GIFs must be under 1 MB." data-tip-wrap>${icon("plus")} Add images</button>
           <button id="openPreviews" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the previews folder. Reorder by renaming, remove by deleting." data-tip-wrap>${icon("folderOpen")} Folder</button>
         </div>
         <div class="field" style="margin-top:8px">
