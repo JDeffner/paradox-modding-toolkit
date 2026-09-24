@@ -128,6 +128,7 @@ it.each([ck3Meta, vic3Meta, eu5Meta])(
   "offers only the tools supplied by $id and omits redundant dashboard commands",
   (meta) => {
     const ids = commands(actionGroups(meta, 0));
+    expect(ids).toContain("px.openCompatch");
     expect(ids.includes("px.openGuiEditor")).toBe(meta.guiTextMetrics !== undefined);
     expect(ids.includes("px.tigerCreateBaseline")).toBe(meta.tiger !== undefined);
     expect(ids).not.toContain("px.setup");

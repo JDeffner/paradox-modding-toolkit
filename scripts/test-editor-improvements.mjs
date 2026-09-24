@@ -28,6 +28,21 @@ await writeFile(join(mod, ".px-ux-fixture"), "isolated UX smoke\n");
 await writeFile(join(mod, ".px-encoding-fixture"), "isolated encoding smoke\n");
 await writeFile(join(mod, "description.bbcode"), "[h1]Saved listing[/h1]\n");
 await writeFile(join(mod, "unrelated.txt"), "Unrelated editor target\n");
+const compatchFile = "common/script_values/px_compatch_fixture.txt";
+const compatchBase = join(scratch, "Old Game");
+for (const [folder, value] of [
+  [compatchBase, 1],
+  [mod, 2],
+  [game, 3],
+]) {
+  await mkdir(join(folder, "common/script_values"), { recursive: true });
+  await writeFile(join(folder, compatchFile), `\uFEFFpx_compatch_fixture_value = ${value}\n`);
+}
+await mkdir(join(mod, ".px-toolkit"), { recursive: true });
+await writeFile(
+  join(mod, ".px-toolkit/compatch.json"),
+  JSON.stringify({ version: 1, vanilla: compatchBase, newGame: game })
+);
 const settings = JSON.stringify({
   "security.workspace.trust.enabled": false,
   "extensions.autoUpdate": false,

@@ -96,6 +96,12 @@ it.each(Object.keys(DASHBOARD_SECTIONS) as DashboardSection[])(
       document.getElementById("all-settings")!.click();
       expect(messages).toContainEqual({ type: "openSettings" });
       expect(document.querySelector('[data-actions="View"]')?.textContent).toContain("Event Graph");
+      const compatch = [...document.querySelectorAll('[data-actions="View"] .px-item')].find((item) =>
+        item.textContent?.includes("Compatch Workspace")
+      );
+      expect(compatch).toBeTruthy();
+      compatch!.dispatchEvent(new dom.window.MouseEvent("click", { bubbles: true }));
+      expect(messages).toContainEqual({ type: "run", command: "px.openCompatch" });
       expect(document.querySelector('[data-actions="Create"]')?.textContent).toContain("New Content");
       expect(document.querySelector('[data-actions="Publish"]')?.textContent).toContain("Steam Workshop");
     }
@@ -112,7 +118,7 @@ it.each(Object.keys(DASHBOARD_SECTIONS) as DashboardSection[])(
   }
 );
 
-it("exposes direct, labelled file actions and excludes compatch", () => {
+it("exposes direct, labelled file actions alongside compatch", () => {
   const commands = new Map(manifest.contributes.commands.map((command) => [command.command, command.title]));
   for (const key of ["editor/context", "explorer/context"] as const) {
     for (const item of manifest.contributes.menus[key]) {
@@ -120,7 +126,9 @@ it("exposes direct, labelled file actions and excludes compatch", () => {
       expect(commands.get(item.command)).toMatch(/^PX: /);
     }
   }
-  expect([...commands.keys()].some((key) => /compatch|updateModForGame/i.test(key))).toBe(false);
+  expect(commands.has("px.openCompatch")).toBe(true);
+  expect(commands.has("px.updateModForGame")).toBe(true);
+  expect(manifest.contributes.views["px-review"].map((view) => view.id)).toContain("px.compatch");
   expect(Object.keys(DASHBOARD_SECTIONS)).toEqual(["px.tools", "px.utils", "px.test", "px.paths"]);
   expect(manifest.contributes.views.px.some((view) => view.id === "px.settings")).toBe(false);
 });

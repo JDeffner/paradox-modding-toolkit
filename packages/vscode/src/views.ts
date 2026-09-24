@@ -11,6 +11,7 @@ import {
   targetPosition,
   targetUri,
   writableRoot,
+  containsPath,
   samePath,
   CREATOR_COMMANDS,
   type DefinitionTarget,
@@ -595,7 +596,14 @@ export function registerPxViews(
       if (CREATOR_COMMANDS[node.pxKind])
         await vscode.commands.executeCommand(CREATOR_COMMANDS[node.pxKind], { ...node, name: node.pxKey });
     }),
-    ...(["px.compareOverrideSource", "px.compareOverrideVanilla", "px.openOverrideBoth"] as const).map((id) =>
+    ...(
+      [
+        "px.compareOverrideSource",
+        "px.compareOverrideVanilla",
+        "px.openOverrideBoth",
+        "px.compatchOverride",
+      ] as const
+    ).map((id) =>
       vscode.commands.registerCommand(id, async (node?: Node) => {
         const override = node?.pxOverride;
         const source =
@@ -603,6 +611,19 @@ export function registerPxViews(
             ? override?.shadowed.find((s) => s.source === "vanilla")
             : node?.pxSource;
         if (!override || !source) return;
+        if (id === "px.compatchOverride") {
+          const cfg = getCfg();
+          const roots = [cfg.modPath, ...cfg.workspaceMods, ...cfg.parentPaths, cfg.gamePath].filter(
+            (r): r is string => !!r
+          );
+          const owner = (file: string) =>
+            roots.filter((r) => containsPath(r, file)).sort((a, b) => b.length - a.length)[0];
+          const sourceA = owner(override.mod.file),
+            sourceB = owner(source.file);
+          if (sourceA && sourceB && !samePath(sourceA, sourceB))
+            await vscode.commands.executeCommand("px.newCompatch", { sourceA, sourceB });
+          return;
+        }
         if (id === "px.openOverrideBoth") {
           await vscode.commands.executeCommand("px.openFromView", { pxLoc: override.mod });
           await vscode.commands.executeCommand("px.openToSideFromView", { pxLoc: source });

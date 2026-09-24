@@ -64,6 +64,8 @@ import { createTranslationCommand } from "./translation";
 import { createTranslationModCommand } from "./translationMod";
 import { openInfoDocsCommand, openVanillaExamplesCommand, updateInfoDocContext } from "./infoDocs";
 import { FocusMod, registerPxViews } from "./views";
+import { registerCompatch } from "./compatch/view";
+import { registerCompatchValidation } from "./compatch/validation";
 import { addDependencyModCommand } from "./dependencyMods";
 import { registerDashboardView, hiddenRows, PROJECT_GROUPS } from "./webviews/dashboard/view";
 import { actionGroups } from "./webviews/dashboard/actions";
@@ -366,6 +368,11 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       metaFor(cfg.gameId).eventNamespaces
     );
     void vscode.commands.executeCommand("setContext", "px.hasTiger", metaFor(cfg.gameId).tiger !== undefined);
+    void vscode.commands.executeCommand(
+      "setContext",
+      "px.compatchSemanticSupported",
+      metaFor(cfg.gameId).compatch !== null
+    );
     void vscode.commands.executeCommand(
       "setContext",
       "px.guiEditorSupported",
@@ -862,7 +869,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   registerDefinitionContext(context);
   const focus = new FocusMod(context.workspaceState, () => cfg);
   const views = registerPxViews(context, lc, () => cfg, focus);
+  registerCompatch(context, () => cfg);
+  registerCompatchValidation(context, () => cfg);
   context.subscriptions.push(
+    vscode.commands.registerCommand("px.updateThisMod", (arg?: unknown) => {
+      const modRoot = configForTarget(cfg, arg).modPath;
+      if (modRoot) return vscode.commands.executeCommand("px.updateModForGame", { modRoot });
+    }),
     ...(
       ["px.focusThisMod", "px.includeThisMod", "px.excludeThisMod", "px.addThisModAsDependency"] as const
     ).map((id) =>

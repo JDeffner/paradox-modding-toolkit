@@ -708,3 +708,9 @@ archives with the full texts.
 ### Exporting generated snippets
 
 Call `paradox/snippetCatalogue` with `{}` for the full active-game catalogue, without requiring an open document or applying the cursor picker's cap. The response includes engine templates, definition and child-block skeletons, and effective indexed scripted calls. Every available variant includes snippet syntax, plain insertion text and completion-preview Markdown. An `indexing: true` response has no entries; request again after indexing finishes. VS Code uses this request for `px.exportSnippets`, which saves a self-contained, searchable HTML file with copy and print controls. See the Protocol Reference for the response fields.
+
+### Compatch
+
+Compatch is a VS Code client feature. It adds no LSP requests or required client commands, so bare LSP clients and other embedders retain their existing behavior. The shared `GameMeta.compatch` field selects verified event and localization identity matching for CK3; `null` selects file comparison for Victoria 3 and EU5.
+
+The client compares folders or updates a mod against base and target game data. Game comparisons are read-only snapshots; editing the mod is a separate action. Merge previews use temporary files and recheck source content before applying. File and folder replacement rules block content merges while keeping whole-mod target validation available. Review status, validator results and recorded runtime checks are separate evidence.

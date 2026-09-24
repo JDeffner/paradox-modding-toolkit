@@ -72,6 +72,12 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
       label: "View",
       items: [
         {
+          label: "Compatch Workspace",
+          command: "px.openCompatch",
+          icon: "layers",
+          tip: "Compare mod sources or update a mod against another game version.",
+        },
+        {
           label: "Event Graph",
           command: "px.showEventGraph",
           icon: "waypoints",

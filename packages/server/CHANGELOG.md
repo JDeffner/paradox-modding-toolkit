@@ -8,6 +8,8 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- Supply profile metadata for the VS Code Compatch browser. CK3 supports event and localization identity matching; Victoria 3 and EU5 use file comparison. The LSP wire contract is unchanged.
+
 ## 0.3.6
 
 Ships with the toolkit's 0.5.0 release.

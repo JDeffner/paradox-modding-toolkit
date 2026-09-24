@@ -2,6 +2,8 @@
   "games": {
     "ck3": {
       "gamePath": "C:/Program Files (x86)/Steam/steamapps/common/Crusader Kings III/game",
+      "compatchBasePath": "C:/Program Files (x86)/Steam/steamapps/common/Crusader Kings III/game",
+      "compatchTargetPath": "C:/GameVersions/CK3/v1.18/game",
       "logsPath": "C:/Users/you/Documents/Paradox Interactive/Crusader Kings III/logs",
       "modPath": "C:/Users/you/Documents/Paradox Interactive/Crusader Kings III/mod/your_mod",
       "modCorpus": "C:/Users/you/Documents/Paradox Interactive/Crusader Kings III/mod/big_corpus_mod",

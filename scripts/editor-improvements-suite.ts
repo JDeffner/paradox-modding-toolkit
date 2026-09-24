@@ -63,7 +63,7 @@ async function checks(): Promise<void> {
   assert.ok(extension);
   await extension.activate();
   const commands = await vscode.commands.getCommands(true);
-  assert.ok(!commands.includes("px.openCompatch"), "compatch is absent from the packaged extension");
+  assert.ok(commands.includes("px.openCompatch"), "compatch ships alongside the editor improvements");
   const cdp = await renderer();
   try {
     await vscode.commands.executeCommand("px.tools.focus");
@@ -211,6 +211,54 @@ async function checks(): Promise<void> {
     assert.equal(await cancel, undefined);
     await checkBBCode();
     await checkEncoding();
+    const compatchFile = "common/script_values/px_compatch_fixture.txt";
+    const modFile = path.join(scratch, "Mod", compatchFile);
+    const baseFile = path.join(scratch, "Old Game", compatchFile);
+    const targetFile = path.join(scratch, "Vanilla", compatchFile);
+    const inputs = await Promise.all([modFile, baseFile, targetFile].map((file) => fs.readFile(file)));
+    await vscode.commands.executeCommand("workbench.action.quickOpen", ">Paradox: Open Compatch Workspace");
+    await pause(300);
+    await vscode.commands.executeCommand("workbench.action.acceptSelectedQuickOpenItem");
+    let reviewText = "";
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const state = await cdp.send("Runtime.evaluate", {
+        expression: "document.body.innerText",
+        returnByValue: true,
+      });
+      reviewText = state.result.value;
+      if (reviewText.includes("need manual review")) break;
+      await pause(250);
+    }
+    assert.ok(reviewText.includes("need manual review"), "palette command opens the Compatch review queue");
+    await vscode.commands.executeCommand("px.compatchNext");
+    const comparison = vscode.window.tabGroups.activeTabGroup.activeTab;
+    assert.ok(comparison?.input instanceof vscode.TabInputTextDiff, "Compatch opens a real comparison");
+    assert.equal(comparison.input.original.scheme, "px-compatch", "base is a read-only snapshot");
+    assert.equal(comparison.input.modified.scheme, "px-compatch", "target is a read-only snapshot");
+    const base = await vscode.workspace.openTextDocument(comparison.input.original);
+    const target = await vscode.workspace.openTextDocument(comparison.input.modified);
+    assert.ok(base.getText().includes("px_compatch_fixture_value = 1"));
+    assert.ok(target.getText().includes("px_compatch_fixture_value = 3"));
+    const compatchShot = await cdp.send("Page.captureScreenshot", { format: "png" });
+    await fs.writeFile(path.join(scratch, "compatch-review.png"), Buffer.from(compatchShot.data, "base64"));
+    const openMod = vscode.commands.executeCommand("px.compatchEditorActions");
+    await pick(3);
+    await openMod;
+    const modTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+    assert.ok(modTab?.input instanceof vscode.TabInputText, "the explicit action opens the mod for editing");
+    assert.equal(modTab.input.uri.fsPath.toLowerCase(), modFile.toLowerCase());
+    await vscode.commands.executeCommand("px.compatchOpen", { entryId: "missing", sessionId: "stale" });
+    await pause(250);
+    const stale = await cdp.send("Runtime.evaluate", {
+      expression: "document.body.innerText",
+      returnByValue: true,
+    });
+    assert.ok(stale.result.value.includes("This comparison changed"), "stale actions report a failure");
+    assert.deepEqual(
+      await Promise.all([modFile, baseFile, targetFile].map((file) => fs.readFile(file))),
+      inputs,
+      "review and stale actions preserve the mod and both game inputs"
+    );
     await fs.writeFile(
       path.join(scratch, "results.json"),
       JSON.stringify(
@@ -228,6 +276,9 @@ async function checks(): Promise<void> {
             "corrupt-file failure and picker cancellation",
             "BBCode native editor workflow",
             "encoding diagnostics and native quick fix",
+            "Compatch command palette entry with the current editor layout",
+            "read-only game comparisons and explicit mod editing",
+            "stale Compatch action reports a failure and preserves all inputs",
           ],
         },
         null,

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add Compatch to Project > View, All Tools and the command palette. Compare folders or update a mod against base and target game data with saved sessions, review queues and read-only Git recovery checks. CK3 also matches events and localization keys across files; Victoria 3 and EU5 compare files.
+- Open game-version changes as read-only comparisons. Preview merges and resolve conflicts in temporary results, reject stale inputs, preserve unrelated edits and keep game sources read-only. Intentional replacement rules block content merges without skipping target validation.
+- Reveal Compatch before scanning and open unchanged review items without rescanning the full mod. Keep review status, target validation and runtime evidence separate.
+
 ## 0.5.0 (beta) - editor improvements
 
 - Keep the new-mod wizard open when focus changes, show the created folder with opening actions if the final step is canceled, and show Explorer when adding the new mod to the workspace.
