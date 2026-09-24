@@ -38,7 +38,7 @@ import {
 import { helpDialog } from "../../shared/help";
 import { iconEl } from "../../shared/icons";
 import { modifierLine, renderModifierLine } from "../../shared/modifierLines";
-import { menu, toast, confirmDialog, type MenuItem } from "../../shared/overlay";
+import { menu, toast, confirmAction, type MenuItem } from "../../shared/overlay";
 import { scriptSection } from "../../shared/scriptSection";
 import { saveTargetLine } from "../../shared/saveTarget";
 import { scrubbable } from "../../shared/scrub";
@@ -1349,7 +1349,7 @@ function savePayload(): TraitSave | null {
 
 /** The override warning, asked once wherever a write is about to happen. */
 function confirmOverride(name: string): Promise<boolean> {
-  return confirmDialog({
+  return confirmAction({
     title: `Override the game's ${name}?`,
     description:
       "A mod definition with the same key replaces the game's whole trait, so it stops receiving " +

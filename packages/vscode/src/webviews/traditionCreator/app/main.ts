@@ -40,7 +40,7 @@ import {
 import { helpDialog } from "../../shared/help";
 import { iconEl } from "../../shared/icons";
 import { modifierLine, renderModifierLine, renderParts } from "../../shared/modifierLines";
-import { confirmDialog, menu, toast, type MenuItem } from "../../shared/overlay";
+import { confirmAction, menu, toast, type MenuItem } from "../../shared/overlay";
 import { saveTargetLine } from "../../shared/saveTarget";
 import { baseName, writeBlock } from "../../shared/scriptBlock";
 import { scriptSection } from "../../shared/scriptSection";
@@ -1423,7 +1423,7 @@ function savePayload(): TraditionSave | null {
 
 /** The override warning, asked once wherever a write is about to happen. */
 function confirmOverride(name: string): Promise<boolean> {
-  return confirmDialog({
+  return confirmAction({
     title: `Override the game's ${name}?`,
     description:
       "A mod definition with the same key replaces the game's whole tradition, so it stops receiving " +

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { JSDOM } from "jsdom";
-import { closePopover, confirmDialog, menu } from "../src/webviews/shared/overlay";
+import { closePopover, confirmAction, menu } from "../src/webviews/shared/overlay";
 
 let dom: JSDOM;
 afterEach(() => {
@@ -51,7 +51,7 @@ function open() {
   vi.stubGlobal("HTMLElement", dom.window.HTMLElement);
   const launch = document.getElementById("launch")!;
   launch.focus();
-  const result = confirmDialog({ title: "Upload mod?", confirmLabel: "Upload", destructive: true });
+  const result = confirmAction({ title: "Upload mod?", confirmLabel: "Upload", destructive: true });
   const region = document.querySelector<HTMLElement>(".px-confirmation")!;
   const [cancel, confirm] = region.querySelectorAll("button");
   return { result, region, cancel, confirm, launch };
@@ -96,7 +96,7 @@ describe("action confirmation", () => {
 
   it("a new confirmation cancels the previous request", async () => {
     const { result } = open();
-    const next = confirmDialog({ title: "Delete?" });
+    const next = confirmAction({ title: "Delete?" });
     expect(await result).toBe(false);
     expect(document.querySelectorAll(".px-confirmation")).toHaveLength(1);
     document.querySelector<HTMLButtonElement>(".px-confirmation button")!.click();

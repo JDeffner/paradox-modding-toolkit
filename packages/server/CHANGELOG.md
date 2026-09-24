@@ -8,6 +8,15 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- Index CK3 faiths inside religions and laws inside law groups through profile schema rules. Include them in completion, hover, navigation and typed references, preserve their parent in the disk cache, and refresh them from unsaved documents. Reject rename for nested kinds whose indirect reference forms are not fully indexed.
+
+- Expose DDS mip-level dimensions, offsets and byte lengths, decode selected stored levels, and support explicit partial mip counts when encoding.
+
+- Add optional full mip chains to the DDS encoder with independent RGBA channel filtering. Reject invalid dimensions and block-compressed base sizes that Direct3D cannot load. Preserve distinct colors with equal luminance during BC1/BC3 compression.
+
+- Invalidate inferred saved scopes, variable types and call-site scopes when their model, index or root-scope context changes. Keep syntax parses reusable and refresh hover, completion and scope annotations for unchanged documents.
+- Scan directory aliases once while preserving schema-bearing paths, such as an events folder linked to sources elsewhere in a mod. Apply the same path choice to definition and reference scans.
+
 - Make release smoke tests wait for the current index rebuild before checking asset references and symbols.
 
 ## 0.3.6

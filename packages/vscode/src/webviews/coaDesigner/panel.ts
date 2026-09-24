@@ -381,18 +381,22 @@ export class CoaDesignerPanel {
           this.post({ type: "toast", message: "No mod folder to save into." });
           return;
         }
-        const file = await writeFlagFile({
-          name: message.name,
-          script: message.script,
-          modPath: choice.modPath,
-          stageRoot: this.options.meta.stageRoots?.[0],
-          file: choice.file,
-        });
-        this.post(
-          file
-            ? { type: "toast", message: `Saved ${message.name} to ${file}.` }
-            : { type: "toast", message: `Could not write ${choice.file}. Pick another file.` }
-        );
+        try {
+          const file = await writeFlagFile({
+            name: message.name,
+            script: message.script,
+            modPath: choice.modPath,
+            stageRoot: this.options.meta.stageRoots?.[0],
+            file: choice.file,
+          });
+          this.post(
+            file
+              ? { type: "toast", message: `Saved ${message.name} to ${file}.` }
+              : { type: "toast", message: `Could not write ${choice.file}. Pick another file.` }
+          );
+        } catch (error) {
+          this.post({ type: "toast", message: `Could not save ${message.name}: ${String(error)}` });
+        }
         return;
       }
       case "paste": {

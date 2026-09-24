@@ -170,7 +170,7 @@ import { activeProfile, setActiveProfile } from "./games/active";
 import { indexConfigWatchPatterns, isIndexConfigFile, resolveConfigDir } from "@px-lsp/protocol/configDir";
 import { defaultSettings, isSettingsObject, readSettings, resolveSettings } from "./settings";
 import { allProfiles, resolveProfile } from "./games/registry";
-import type { SchemaEntry } from "./schema/types";
+import { definitionKinds, type SchemaEntry } from "./schema/types";
 import { URI } from "vscode-uri";
 import { ServerData } from "./serverData";
 import { CompletionFeature } from "./features/completion";
@@ -583,6 +583,7 @@ function clearPathCaches(): void {
   playsetCache.clear();
   contentRootsCache = null;
   fileRootScopesCache.clear();
+  data.invalidateInference();
 }
 
 /** Engine-layer roots shipped next to `<game>`, lowest content priority
@@ -1193,7 +1194,7 @@ async function buildIndex(): Promise<void> {
       ? { ...schema, entries: schema.entries.filter((e) => e.ext?.toLowerCase() !== ".asset") }
       : schema;
   data.completableKinds = new Set([
-    ...schema.entries.filter((e) => e.completable !== false).map((e) => e.kind),
+    ...schema.entries.filter((e) => e.completable !== false).flatMap(definitionKinds),
     "saved_scope",
     ...VARIABLE_KINDS,
   ]);

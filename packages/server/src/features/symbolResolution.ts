@@ -15,7 +15,7 @@ import { dynamicRefKinds, VAR_PREFIX_KINDS } from "../games/jomini/variables";
 import { wordRangeAt } from "../wordAt";
 import { getLineText } from "../documents";
 import { datafunctionExprAt, openCallAt } from "./datafunction";
-import { EVENT_ID } from "../index/extract";
+import { EVENT_ID, nestedDefinitionKind } from "../index/extract";
 import { implicitKindsForField } from "../index/references";
 
 /** null means unresolved; [] means a known non-reference position. */
@@ -60,6 +60,8 @@ export function expectedKindsAt(
   if (last.kind === "assignment" && offset >= last.key.range.start && offset <= last.key.range.end) {
     const declarationKind = inlineKind(result.root, last);
     if (declarationKind) return [declarationKind];
+    const nestedKind = entry && nestedDefinitionKind(entry, path);
+    if (nestedKind) return [nestedKind];
     if (
       entry &&
       ((path.length === 1 && (entry.extraction !== "event-id" || EVENT_ID.test(last.key.text))) ||

@@ -6,17 +6,7 @@
  */
 import { describe, expect, it } from "vitest";
 import { allProfiles, defaultProfile, resolveProfile } from "../src/games/registry";
-
-/**
- * Ref-table kinds a profile references although no extraction produces them
- * yet — deliberate forward references (annotate, never hide), each documented:
- * - ck3/faith: faiths nest under religion_types' `faiths = { }` blocks, which
- *   no extraction mode handles (see games/ck3/schema.ts "Not covered"); a
- *   schema overlay or a future nested mode can start producing them.
- */
-const KNOWN_UNINDEXED: Record<string, string[]> = {
-  ck3: ["faith"],
-};
+import { definitionKinds } from "../src/schema/types";
 
 describe("game profile registry", () => {
   it("resolves ids and falls back to the default", () => {
@@ -74,7 +64,7 @@ describe.each(allProfiles().map((p) => [p.id, p] as const))("profile %s", (_id, 
   });
 
   it("keeps ref tables consistent with the schema kinds", () => {
-    const kinds = new Set(profile.schema.map((e) => e.kind));
+    const kinds = new Set(profile.schema.flatMap(definitionKinds));
     // Kinds produced by reference extraction / implicit definitions, not by
     // folder scans (see index/references.ts, index/extract.ts and
     // games/jomini/variables.ts). trait_group: virtual defs from `group = X`
@@ -95,9 +85,7 @@ describe.each(allProfiles().map((p) => [p.id, p] as const))("profile %s", (_id, 
     ]) {
       kinds.add(k);
     }
-    for (const k of KNOWN_UNINDEXED[profile.id] ?? []) kinds.add(k);
-    // Every kind a ref table points at must be producible (or a documented
-    // forward reference), else the reference can never resolve.
+    // Every kind a ref table points at must be producible, else the reference can never resolve.
     const refKeys = new Set<string>();
     for (const f of profile.refFields) {
       expect(refKeys.has(f.key), `duplicate refField ${f.key}`).toBe(false);

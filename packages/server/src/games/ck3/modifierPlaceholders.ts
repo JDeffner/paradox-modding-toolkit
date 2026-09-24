@@ -37,8 +37,6 @@ const MAA_BASE_TYPES = [
 
 export const CK3_MODIFIER_PLACEHOLDERS: Record<string, PlaceholderSpec> = {
   CULTURE: { kind: "culture", label: "culture" }, // akan_opinion
-  // Faiths are nested under `faiths = { … }` and not indexed yet (see
-  // schema.ts); the mapping is inert until they are, which is correct.
   FAITH: { kind: "faith", label: "faith" }, // mutazila_opinion
   GOVERNMENT_TYPE: { kind: "government", label: "government" }, // feudal_government_opinion
   HOLDING_TYPE: { kind: "holding_type", label: "holding type" }, // castle_holding_build_speed

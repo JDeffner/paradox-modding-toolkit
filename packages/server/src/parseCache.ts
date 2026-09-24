@@ -18,6 +18,7 @@ export interface CachedParse {
   lineIndex: LineIndex;
   /** Lazily computed save_scope_as → scope types for this document version. */
   savedScopes?: Map<string, Set<Scope> | null>;
+  savedScopeInputs?: unknown[];
 }
 
 export interface CachedLocParse {
@@ -113,9 +114,9 @@ export function evictParse(uri: string): void {
  *  `ambient` (engine-provided scopes from the file's schema entry, §B3) seeds
  *  the collection so saves INSIDE `scope:ambient = { … }` blocks type correctly,
  *  and `ctx` carries the per-definition root/structure/variable context.
- *  The FIRST caller per document version bakes `ambient`/`ctx` into the cache,
- *  so every caller must pass the file's `entry?.ambientScopes` and
- *  `inferenceContextFor(data, entry)` (scopes/varTypes.ts) — never a subset. */
+ *  Shared inference inputs and the file's schema/root context must still match.
+ *  Ad-hoc contexts without a cache version are recomputed, preserving correctness
+ *  for callers that mutate their maps. The syntax parse remains reusable. */
 export function getSavedScopes(
   document: TextDocument,
   model: ScopeModel,
@@ -124,8 +125,21 @@ export function getSavedScopes(
   ctx?: InferenceContext
 ): Map<string, Set<Scope> | null> {
   const entry = getParse(document);
-  if (!entry.savedScopes) {
+  const inputs = [
+    model,
+    model.revision,
+    ctx?.cacheVersion,
+    ctx?.entry,
+    ambient,
+    rootScopes && [...rootScopes].sort().join("\0"),
+  ];
+  if (
+    !entry.savedScopes ||
+    !ctx?.cacheVersion ||
+    inputs.some((input, i) => input !== entry.savedScopeInputs?.[i])
+  ) {
     entry.savedScopes = collectSavedScopeTypes(entry.result, model, rootScopes, ambient, ctx);
+    entry.savedScopeInputs = inputs;
   }
   return entry.savedScopes;
 }

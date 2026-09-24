@@ -125,6 +125,7 @@ The extension stands on work by others. The key sources and inspirations:
 
 - [tiger](https://github.com/amtep/tiger) by amtep, the validator behind the
   ck3-tiger and vic3-tiger diagnostics integration.
+- [pngjs](https://github.com/pngjs/pngjs) (MIT), bundled for PNG decoding that preserves packed mask channels, including RGB under zero alpha.
 - [cwtools](https://github.com/cwtools/cwtools) and cwtools-vscode, for the
   landscape and design inspiration.
 - [kaiser-chris/cwtools-eu5-config](https://github.com/kaiser-chris/cwtools-eu5-config),

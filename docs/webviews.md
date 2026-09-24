@@ -18,6 +18,8 @@ Before mod detection, PX shows the native `px.welcome` tree with Start Here cont
 
 `px.addModToWorkspace` first asks for Documents, configured projects, Steam Workshop or the base game. It uses the active game profile, scans known containers and follows launcher links. Workshop copies are included only for the explicit Workshop source. It adds one folder through `updateWorkspaceFolders`, rejects duplicate content roots (including project and junction aliases), and reports failed additions. The welcome finder (`px.openMod`) retains its separate-window behavior.
 
+The illustrated VS Code setup guide lives in the GitHub wiki. It is not bundled with the extension and has no dedicated command or webview.
+
 After `pnpm run package:test`, run `node scripts/test-editor-improvements.mjs "<Code executable>"` to check the packaged sidebar, view movement, direct DDS context actions, image conversion, BBCode preview and encoding fixes. The runner uses disposable user data and extensions under `.local/testing/`, with the PXTK Development profile. It saves screenshots and a result file beside the test workspace.
 
 The sidebar uses four webview views in `dashboard/view.ts`. Project (`px.tools`) holds the game and focus summary, Workspace Mods, View, Create, Publish, Info and Settings in one scrolling body. Its internal groups collapse to their content height, and `getState`/`setState` preserve their expansion state. Utils, Test & Troubleshoot and Paths each retain a separate view ID and contextual title so users can move them. VS Code owns the outer views' position, visibility and size. The shared action catalogue applies the active game profile and `px.sidebar.hidden`; the bodies retain the existing SVG icons. Workspace Mods has New Mod (+) and Add Existing Mod (folder) buttons in its heading. Focus selection uses a child dot separate from the tooltip pseudo-element. All Tools uses a package icon in the title; Customize the Project panel rows is in the overflow menu and only lists View, Create, Publish and Info actions.
@@ -31,6 +33,10 @@ Project's Settings group contains scope inlay hints (`px.scopeInlayHints`), sugg
 Utils exposes `px.convertImages`, `px.convertToDds`, `px.convertDdsToImage` and the existing BBCode converters. Explorer conversion commands accept the clicked resource and multi-selection. Folder conversion can include subfolders; an output folder retains their relative paths. Commands without a resource open a multi-file picker directly. Each batch selects one format; it asks for a collision policy in a non-modal notification only when an existing output is encountered. The chosen skip or overwrite policy applies to the rest of that batch. Dismissing the notification stops the batch and keeps any outputs already completed. JPEG uses an explicit white or black background. PNG and WebP preserve transparency. Existing outputs are never overwritten without an explicit choice. Inputs and duplicate output targets are protected even with overwrite enabled. Progress is cancellable between files and while waiting for Chromium. Errors name the failed files.
 
 `imageCodec.ts` uses the existing DDS decoder and DDS/PNG encoders. Chromium supplies other image codecs through a temporary webview with a ready handshake. DDS export converts the surface shown by the DDS preview, not every mipmap or cubemap face. Animated source formats produce a single image. `imageBatch.ts` handles enumeration and publication separately, so collisions, failures and cancellation can be tested with real files outside the editor.
+
+The DDS viewer selects stored mip levels through the shared `px-dropdown` and `menu()` control. It shows the level and dimensions, filters long chains, supports keyboard selection, and disables the picker for base-only files. A failed decode restores the displayed level in the picker; PNG export stays disabled while a new level loads.
+
+`ddsConvert.ts` shares DDS format and mip choices between image conversion and creator picture imports. Manual conversion offers base-only, full-chain, or a custom total level count including the base image. The encoder checks that the count fits each image before output is published. Reference matching copies the reference count without a separate mip prompt.
 
 A panel is a folder `packages/vscode/src/webviews/<name>/` with four parts:
 
@@ -115,7 +121,7 @@ build does not produce. You do not extend it; it finds your panel too.
 6. **Use the design system.** `src/webviews/shared/README.md` is the rulebook:
    inline `ui.css` (`import uiCss from "../shared/ui.css"`), px-ui classes,
    Lucide icons from `shared/icons.ts`, `menu()` instead of `<select>`,
-   `confirmDialog()` for anything destructive. Check the page in a dark theme
+   `confirmAction()` for anything destructive. Check the page in a dark theme
    and a light theme before calling it done.
 7. **Test the logic, not the pixels.** Keep decisions in pure modules the app
    imports, and test those directly with vitest. For app-level behavior,
@@ -132,7 +138,7 @@ build does not produce. You do not extend it; it finds your panel too.
   are `data:` URIs or `webview.cspSource` files, icons come from
   `shared/icons.ts`.
 - **`window.confirm` and `window.alert` do not exist** in VS Code webviews.
-  They fail silently. Use the shared `confirmDialog()` and `toast()`.
+  They fail silently. Use the shared `confirmAction()` and `toast()`.
 - **A hidden tab suspends `requestAnimationFrame`.** Anything that animates
   or polls on rAF stops when the user switches tabs and must cope with the
   gap when it wakes.

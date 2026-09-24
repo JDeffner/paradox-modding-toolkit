@@ -11,6 +11,7 @@ export interface ImageInput {
 export interface BatchOptions extends ImageEncoding {
   destination?: string;
   overwrite: boolean;
+  referenceFile?: string;
 }
 export interface BatchResult {
   written: string[];
@@ -88,6 +89,13 @@ export async function convertImageBatch(
       ? path.join(options.destination, relative)
       : input.file.slice(0, -path.extname(input.file).length) + ext;
     const key = pathKey(target);
+    if (options.referenceFile && key === pathKey(options.referenceFile)) {
+      result.failed.push({
+        file: input.file,
+        message: "The reference DDS is read-only. Choose another output folder.",
+      });
+      continue;
+    }
     if (sources.has(key) || outputs.has(key)) {
       result.skipped.push(target);
       continue;

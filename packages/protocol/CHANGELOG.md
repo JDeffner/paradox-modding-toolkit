@@ -8,6 +8,8 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ## Unreleased
 
+- Deduplicate directory aliases during file enumeration while retaining configured linked roots and cycle guards. Add `iterFilesInRoots` so consumers can prioritize semantic folders over a containing fallback root. Report unavailable symlink test cases as skipped, with a reason, instead of passing them without assertions.
+
 ## 0.2.6
 
 Ships with the toolkit's 0.5.0 release.

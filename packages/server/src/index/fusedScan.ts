@@ -8,7 +8,7 @@
  * Measured on game + 5 Workshop mods (29,641 script files): AGOT alone spent
  * 8,743 ms on 3,482 definition files and 30,023 ms on 4,497 reference files.
  *
- * This walks the root once for `.txt`, reads each file once, parses it once and
+ * This visits each physical directory once for `.txt`, reads each file once, parses it once and
  * feeds that one CST to both extractors. `classifyFile` supplies the schema
  * entry the definition pass would have found it under, which is also what the
  * incremental rescan uses, so scan and rescan now classify identically. The
@@ -16,15 +16,15 @@
  * schema-folder listing.
  *
  * The returned `defs` are ordered by schema entry and, within an entry, by walk
- * order — byte for byte what the schema-folder pass produced, because a DFS of
- * the root visits a schema subtree in the same order as a DFS of that subtree.
+ * order. Schema folders take priority over the whole-root reference fallback,
+ * so an alias that supplies a definition's folder keeps its logical path.
  *
  * No `vscode` imports: unit-tested in plain Node (see fusedScan.test.ts, which
  * runs this and the two-pass logic it replaces over the same fixture root).
  */
 import * as path from "path";
 import type { Definition, DefSource, Reference } from "@px-lsp/protocol/types";
-import { iterFiles } from "@px-lsp/protocol/fsWalk";
+import { iterFiles, iterFilesInRoots } from "@px-lsp/protocol/fsWalk";
 import { pushAll } from "@px-lsp/protocol/arrays";
 import { LineIndex, parseScript } from "../parser";
 import type { SchemaData } from "../schema/loader";
@@ -61,7 +61,7 @@ export interface FusedScanDeps {
 export interface FusedScanResult {
   /** Schema definitions, schema-entry order (identical to the old defs pass). */
   defs: Definition[];
-  /** save_scope_as / set_variable / flag sites, walk order (as the old ref pass). */
+  /** save_scope_as / set_variable / flag sites, schema-first traversal order. */
   implicitDefs: Definition[];
   /** Files read (script plus the non-`.txt` schema entries). */
   files: number;
@@ -81,10 +81,16 @@ export async function scanModRootFused(root: string, deps: FusedScanDeps): Promi
   const entryIndex = new Map<SchemaEntry, number>();
   entries.forEach((e, i) => entryIndex.set(e, i));
 
-  // A mod root is walked whole, gfx/ and all, so the listing yields on the same
+  // A mod root is covered whole, gfx/ and all, so the listing yields on the same
   // rhythm as the read loop rather than blocking through it.
   const scriptFiles: string[] = [];
-  for (const file of iterFiles(root, ".txt")) {
+  // Schema paths carry meaning: events/ may be an alias to source/events/,
+  // whose ordinary path is not an event folder. Claim schema paths first,
+  // then scan reference-only content with the same physical-directory guard.
+  const scriptRoots = entries
+    .filter((entry) => (entry.ext ?? ".txt") === ".txt")
+    .map((entry) => path.join(root, entry.path));
+  for (const file of iterFilesInRoots([...scriptRoots, root], ".txt")) {
     if (file === null) {
       if (deps.superseded()) return null;
       await deps.yieldNow();

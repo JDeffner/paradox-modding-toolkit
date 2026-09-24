@@ -13,6 +13,7 @@ import { TextFormattingIndex } from "./data/textFormatting";
 import { DefinitionIndex } from "./index/indexer";
 import { ReferenceIndex } from "./index/references";
 import { ScopeModel } from "./scopes/model";
+import { activeProfile } from "./games/active";
 
 export class ServerData {
   tokens: TokenData[] = [];
@@ -51,6 +52,34 @@ export class ServerData {
   modRootOf: (file: string) => string | null = () => null;
 
   private listeners: Array<() => void> = [];
+  private inferenceEpoch = 0;
+  private inferenceState?: { inputs: unknown[]; version: object };
+
+  /** Stable identity while every shared inference input remains unchanged.
+   * Index identities matter because replacement indexes restart their revisions. */
+  get inferenceVersion(): object {
+    const inputs = [
+      this.scopeModel,
+      this.scopeModel.revision,
+      this.index,
+      this.index.revision,
+      this.refIndex,
+      this.refIndex.revision,
+      this.rootScopesForFile,
+      this.onActionScopes,
+      activeProfile(),
+      this.inferenceEpoch,
+    ];
+    if (!this.inferenceState || inputs.some((input, i) => input !== this.inferenceState!.inputs[i])) {
+      this.inferenceState = { inputs, version: {} };
+    }
+    return this.inferenceState.version;
+  }
+
+  /** Call after changing schema/roots behind a resolver, or mutating context maps in place. */
+  invalidateInference(): void {
+    this.inferenceEpoch++;
+  }
 
   onDidChange(listener: () => void): void {
     this.listeners.push(listener);

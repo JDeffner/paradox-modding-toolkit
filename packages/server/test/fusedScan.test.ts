@@ -18,6 +18,8 @@ import type { Definition, Reference } from "@px-lsp/protocol/types";
 import { pushAll } from "@px-lsp/protocol/arrays";
 import { loadSchema } from "../src/schema/loader";
 import { scanModRootFused } from "../src/index/fusedScan";
+import { LazyReferenceScanner } from "../src/index/lazyRefs";
+import { scanRoot } from "../src/index/indexer";
 
 const LOC_LANGUAGE = "english";
 /** Stands in for the server's script_docs token map. */
@@ -185,6 +187,82 @@ describe("fused definition + reference scan", () => {
 
     // The wrong-language loc file stays out of the index.
     expect(now.defs.every((d) => !d.file.includes("french"))).toBe(true);
+  });
+
+  for (const alias of ["a-alias", "z-alias"]) {
+    it(`indexes physical script sites once with ${alias}`, async (ctx) => {
+      const fixture = makeFixtureRoot();
+      const before = await fused(fixture, schema);
+      try {
+        fs.symlinkSync(
+          path.join(fixture, "events"),
+          path.join(fixture, alias),
+          process.platform === "win32" ? "junction" : "dir"
+        );
+      } catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        if (code === "EPERM" || code === "EACCES") ctx.skip(`Symlink creation is not permitted (${code})`);
+        throw error;
+      }
+      const after = await fused(fixture, schema);
+      expect(after).toEqual(before);
+      expect(after.defs.filter((d) => d.name === "my_mod.0001")).toHaveLength(1);
+      expect(after.implicitDefs.filter((d) => d.name === "event_target")).toHaveLength(1);
+    });
+  }
+
+  it("retains a configured linked mod root on every indexed site", async (ctx) => {
+    const fixture = makeFixtureRoot();
+    const container = fs.mkdtempSync(path.join(os.tmpdir(), "px-fused-link-"));
+    tempRoots.push(container);
+    const linked = path.join(container, "mod");
+    try {
+      fs.symlinkSync(fixture, linked, process.platform === "win32" ? "junction" : "dir");
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "EPERM" || code === "EACCES") ctx.skip(`Symlink creation is not permitted (${code})`);
+      throw error;
+    }
+    const result = await fused(linked, schema);
+    const sites = [...result.defs, ...result.implicitDefs, ...result.references];
+    expect(sites.length).toBeGreaterThan(0);
+    expect(sites.every((site) => site.file.startsWith(linked + path.sep))).toBe(true);
+  });
+
+  it("retains a schema-bearing alias when its source also lives under the mod", async (ctx) => {
+    const fixture = fs.mkdtempSync(path.join(os.tmpdir(), "px-fused-schema-link-"));
+    tempRoots.push(fixture);
+    const source = path.join(fixture, "source", "events");
+    fs.mkdirSync(source, { recursive: true });
+    fs.writeFileSync(
+      path.join(source, "audit.txt"),
+      "namespace = audit\naudit.1 = {\n title = audit_title\n immediate = { helper_effect = yes save_scope_as = target }\n}\n"
+    );
+    fs.writeFileSync(path.join(fixture, "loose.txt"), "loose = { helper_effect = yes }\n");
+    const events = path.join(fixture, "events");
+    try {
+      fs.symlinkSync(source, events, process.platform === "win32" ? "junction" : "dir");
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code === "EPERM" || code === "EACCES") ctx.skip(`Symlink creation is not permitted (${code})`);
+      throw error;
+    }
+    const file = path.join(events, "audit.txt");
+    const result = await fused(fixture, schema);
+    expect(result.defs.filter((d) => d.name === "audit.1")).toMatchObject([{ file, kind: "event" }]);
+    expect(result.implicitDefs.filter((d) => d.name === "target")).toMatchObject([{ file }]);
+    expect(result.references.filter((r) => r.name === "audit_title")).toMatchObject([{ file }]);
+    expect(result.references.filter((r) => r.name === "helper_effect")).toHaveLength(2);
+    expect(result.namespaces).toEqual([[file.toLowerCase(), ["audit"]]]);
+    expect(
+      scanRoot(fixture, "mod", { entries: schema.entries, locLanguage: "english" }).filter(
+        (d) => d.name === "audit.1"
+      )
+    ).toMatchObject([{ file, kind: "event" }]);
+    const lazy = new LazyReferenceScanner();
+    lazy.setRoots([{ root: fixture, source: "parent" }], undefined, true, schema);
+    expect(await lazy.lookup("audit_title")).toMatchObject([{ file, kinds: ["loc_key"] }]);
+    expect(await lazy.lookup("helper_effect")).toHaveLength(2);
   });
 
   it("returns null and stops when a newer scan supersedes it", async () => {

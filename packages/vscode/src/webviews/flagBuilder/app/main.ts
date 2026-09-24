@@ -31,7 +31,7 @@ import type {
 import { targetAction } from "../target";
 import { iconEl, type IconName } from "../../shared/icons";
 import { sidePanel } from "../../shared/sidePanel";
-import { confirmDialog, menu, toast, type MenuItem } from "../../shared/overlay";
+import { confirmAction, menu, toast, type MenuItem } from "../../shared/overlay";
 import { helpDialog } from "../../shared/help";
 import { scrubbable } from "../../shared/scrub";
 import { colorPicker, hsvToRgb, type ColorValueFormat } from "../../shared/colorPicker";
@@ -1117,7 +1117,7 @@ const dirty = (): boolean => past.length > 0;
 
 async function confirmDiscard(what: string): Promise<boolean> {
   if (!dirty()) return true;
-  return confirmDialog({
+  return confirmAction({
     title: `Discard changes to ${flag.name}?`,
     description: `${what} replaces the flag you are editing. Copy its script first if you want to keep it.`,
     confirmLabel: "Discard and continue",

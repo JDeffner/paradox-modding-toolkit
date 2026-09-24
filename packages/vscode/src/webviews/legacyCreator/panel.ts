@@ -505,7 +505,9 @@ export class LegacyCreatorPanel {
       text,
       ops,
     });
-    if (!(await applyDefinitionEdits(abs, text, result.edits))) return ["the file changed while it was open"];
+    const outcome = await applyDefinitionEdits(abs, text, result.edits);
+    if (outcome === "stale") return ["the file changed while it was open"];
+    if (outcome === "failed") return ["the definition could not be saved"];
     return result.ops.map((verdict) => verdict.refused).filter((r): r is string => r !== undefined);
   }
 
@@ -541,11 +543,12 @@ export class LegacyCreatorPanel {
         ))
       );
     }
-    refused.push(
-      ...(await this.write(trackTarget.abs, trackTarget.text, [
-        LegacyCreatorPanel.opFor(message.track, trackTarget.file),
-      ]))
-    );
+    if (refused.length === 0)
+      refused.push(
+        ...(await this.write(trackTarget.abs, trackTarget.text, [
+          LegacyCreatorPanel.opFor(message.track, trackTarget.file),
+        ]))
+      );
 
     // A refusal means those bytes were NOT written, so it is reported before
     // anything claims a save happened.
@@ -555,7 +558,7 @@ export class LegacyCreatorPanel {
     if (refused.length > 0) {
       this.post({
         type: "toast",
-        message: `${refused.length} of the blocks ${refused.length === 1 ? "was" : "were"} refused and nothing else was written. See the warning.`,
+        message: "Saving stopped. Check the warning and any files already saved before trying again.",
         variant: "destructive",
       });
       return;

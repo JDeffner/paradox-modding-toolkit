@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+Local preview build: **0.5.2**.
+
+- Choose a custom DDS mip level count in image conversion and creator picture imports. The count includes the base image, so 2 writes the base and one smaller mip. Reference matching still copies the original count.
+
+- Give creator picture imports the shared DDS format, reference and mipmap choices, with lossless full-chain defaults. Confirm replacements, reject changed destinations, and keep remembered folders inside their own mod.
+- Reject cubemap, texture-array and volume DDS conversion instead of silently exporting one surface. The viewer's Save preview PNG action explicitly exports only the displayed surface and mip level.
+- Index CK3 faiths and individual laws for completion, hover, navigation and typed references, including unsaved edits. Keep rename unavailable while indirect references are incomplete.
+
+- Match a reference DDS texture's format and mip count during image conversion, with dimension checks and a read-only reference. Inspect stored mip levels through the viewer's themed dropdown and export the selected level to PNG.
+
+- Fix DDS conversion for portrait masks: offer a full mip chain and preserve PNG RGB channels under zero alpha. Explain that texture array replacements must match the original dimensions, compression and mip levels. Auto uses uncompressed output for dimensions that BC1/BC3 cannot load, and compression preserves distinct colors with equal luminance.
+
+- Preserve unsaved editor text when saving flags, appending New Content or merging translations. Reject stale sources and failed edits or saves. Creator saves and dynasty undo/redo report failed saves without advancing subsequent work.
+- Stop Translate Missing Keys completely on cancellation or a write failure, retaining the progress summary.
+- Refresh scope annotations after game data, definitions or schema context changes without requiring another edit to the open document.
+- Settle texture decode requests when worker startup or dispatch fails so previews can use their existing fallback.
+- Cancel GUI layer drags without reordering source. Ignore late gesture checks, retain selection across relayout and separate selection identity from scene positions.
+- Align the development Node requirement with the test dependencies and correct the contributor profile, event namespace, GUI references and deferred compatch instructions.
+
 - Fix an intermittent release check failure caused by asset tests running before indexing finished.
 
 ## 0.5.0 (beta) - editor improvements

@@ -877,7 +877,7 @@ export class DynastyTreePanel {
         this.post({ type: "toast", message: refused, variant: "destructive" });
         return;
       }
-      if (!(await applyDefinitionEdits(target, text, result.edits, { reveal: false }))) return;
+      if ((await applyDefinitionEdits(target, text, result.edits, { reveal: false })) !== "saved") return;
       await this.remember(target, text);
     } catch (err) {
       this.post({ type: "toast", message: message(err), variant: "destructive" });
@@ -1000,7 +1000,7 @@ export class DynastyTreePanel {
     // `reveal: false`: a panel that saves on every field change must not throw
     // an editor over the tree each time. The inspector says what was written
     // and offers the link instead.
-    if (!(await applyDefinitionEdits(abs, text, result.edits, { reveal: false }))) return false;
+    if ((await applyDefinitionEdits(abs, text, result.edits, { reveal: false })) !== "saved") return false;
     await this.remember(abs, text);
 
     this.post({ type: "saved", name, file: abs, line: await this.blockLine(abs, name) });
@@ -1048,8 +1048,8 @@ export class DynastyTreePanel {
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
       const edit = new vscode.WorkspaceEdit();
       edit.replace(doc.uri, new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), text);
-      if (!(await vscode.workspace.applyEdit(edit))) return false;
-      await doc.save();
+      if (!(await vscode.workspace.applyEdit(edit))) throw new Error("The history edit was rejected");
+      if (!(await doc.save())) throw new Error(`${path.basename(file)} could not be saved`);
       return true;
     } catch (err) {
       this.post({ type: "toast", message: message(err), variant: "destructive" });

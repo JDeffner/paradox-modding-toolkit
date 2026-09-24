@@ -109,6 +109,14 @@ export interface SchemaEntry {
   ext?: string;
   /** Name extraction mode, default "top-level-key". */
   extraction?: NameExtraction;
+  /** Additional named blocks inside each top-level definition, at an exact wrapper path. */
+  nestedDefinitions?: {
+    kind: string;
+    /** Empty for direct child blocks; otherwise the named wrappers below the top-level definition. */
+    path: string[];
+    /** Group properties whose block values are not definitions. */
+    excludedKeys?: string[];
+  };
   /** Named-block fields that refer to another named block, rather than script calls. */
   referenceKeys?: string[];
   /** File-valued fields and allowed extensions, verified in the game's asset files. */
@@ -155,6 +163,10 @@ export interface SchemaEntry {
   structure?: StructureSpec;
   /** Engine-provided saved scopes for this kind (v1.1 §B3). Not yet overlayable (F5). */
   ambientScopes?: AmbientScope[];
+}
+
+export function definitionKinds(entry: SchemaEntry): string[] {
+  return entry.nestedDefinitions ? [entry.kind, entry.nestedDefinitions.kind] : [entry.kind];
 }
 
 export interface AssetField {

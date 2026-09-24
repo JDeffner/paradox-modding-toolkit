@@ -2,6 +2,8 @@
 
 Agent-facing guide for this repo. `CLAUDE.md` is `@AGENTS.md`.
 
+Keep these public instructions, skills, and supporting references independent of any person's identity. Use "the user" or "the maintainer" instead of the user's personal name. Do not copy personal details from local agent configuration into tracked files. Preserve required repository URLs and package identifiers.
+
 ## What this project is
 
 The **Paradox Modding Toolkit** (`JDeffner.px-toolkit`): a VS Code extension
@@ -71,6 +73,16 @@ localization (`*_l_<lang>.yml`, UTF-8 with BOM).
   **uri + version**. In tests and scripts, use a fresh URI per document
   text or you get a stale parse.
 
+## Surface missing requirements
+
+The user is not expected to know every modding requirement. Agents must identify and explain relevant shortcomings so the user can make informed product decisions.
+
+- **Report limitations directly when found.** When code, documentation, game data or tests reveal a missing capability or prerequisite relevant to the requested feature or its advertised workflow, tell the user in a progress update. Include any unresolved limitation in the final handoff. A documentation note, TODO or deferred-feature entry alone is not enough.
+- **Explain the practical effect.** State the affected use case, the evidence, what users will experience, and the recommended fix or workaround. Distinguish a quality reduction from output the game cannot use, and confirmed requirements from assumptions that still need verification.
+- **Documentation does not establish acceptance.** Do not treat an existing limitation as an approved scope decision merely because it is documented or inherited from older code. When extending or reusing a feature, compare its known limitations with the intended workflow and the game's requirements.
+- **Resolve gaps within the authorized scope.** Implement requirements needed to complete that workflow. If resolving a gap needs a material scope change or product decision, explain the tradeoff and recommendation to the user while continuing independent work. Do not silently narrow the feature's scope or promise to fit the implementation.
+- **Verify the intended use.** A successful write or preview does not establish that the game can use the output. Check the relevant consumer requirements and report any verification gap. For example, if a texture workflow requires matching mip levels and the converter cannot produce them, surface that incompatibility directly instead of only documenting missing mipmap support.
+
 ## Hit-every-surface checklist
 
 Before calling work done, check which existing surfaces the change affects and verify those paths. Add entry points or capabilities only when the requested behavior needs them. Report the affected surfaces and any verification gaps.
@@ -126,9 +138,7 @@ Env overrides: `PX_<GAMEID>_GAME_PATH`, `_LOGS_PATH`, `_MOD_PATH`,
 `_MOD_CORPUS`, `_TIGER_PATH`. Loader: `scripts/devPaths.ts`. Corpus-gated
 tests skip when a path is unset. The shipped extension reads none of this.
 
-For real-data compatch tests, set `games.<gameId>.compatchBasePath` and `games.<gameId>.compatchTargetPath`. Both point to game-data folders containing `common/`, `events/`, etc., not the installation root. Environment overrides are `PX_<GAMEID>_COMPATCH_BASE_PATH` and `PX_<GAMEID>_COMPATCH_TARGET_PATH`; read them through `devPath` / `requireDevPath` in `scripts/devPaths.ts`. Each developer chooses their own installations. Keep personal paths in the ignored file.
-
-The default CK3 exercise uses the current installed vanilla data as the base and a saved 1.18 version as the target. This deliberately tests a downgrade. "Base" means the vanilla version the test mod was built against; "target" means the version it must work with. Do not swap them based on version order. Use a scratch mod based on the configured base, keep both game sources read-only, and record their actual versions with the test results because Steam updates change the current installation. This exercise does not replace forward-update coverage or target-version validation. If either path is unset, skip corpus-gated tests with a reason; an explicitly requested real-data run must report the missing setting.
+Compatch tooling is deferred and has no current test runner or supported `devPath` keys. Do not configure `compatchBasePath` or `compatchTargetPath` as working setup options. Add configuration and a documented real-data exercise together when a consumer exists.
 
 The base game files are THE source of truth for script syntax. Grep the game
 folder or the `_*.info` docs; never guess names.

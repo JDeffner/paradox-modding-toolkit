@@ -8,8 +8,7 @@ import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
 import { upsertFlagInFile } from "@px-lsp/server/coa/coaParse";
-
-const BOM = "﻿";
+import { readDocument, writeDocument } from "../../documentWrite";
 
 export interface SaveFlagOptions {
   name: string;
@@ -79,17 +78,10 @@ export async function writeFlagFile(o: SaveFlagOptions & { file: string }): Prom
   if (!/^[\w.-]+\.txt$/.test(o.file)) return null;
   const dir = path.join(o.modPath, o.stageRoot ?? "", "common", "coat_of_arms", "coat_of_arms");
   const abs = path.join(dir, o.file);
-  let text = "";
-  try {
-    text = fs.readFileSync(abs, "utf8");
-  } catch {
-    /* new file */
-  }
-  const hadBom = text.startsWith(BOM);
-  const body = upsertFlagInFile(hadBom ? text.slice(1) : text, o.name, o.script);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(abs, BOM + body, "utf8");
-  const doc = await vscode.workspace.openTextDocument(abs);
+  const snapshot = await readDocument(abs, true);
+  const body = upsertFlagInFile(snapshot.text.replace(/^\uFEFF/, ""), o.name, o.script);
+  await writeDocument(snapshot, body, true);
+  const doc = snapshot.document;
   await vscode.window.showTextDocument(doc, { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true });
   return o.file;
 }

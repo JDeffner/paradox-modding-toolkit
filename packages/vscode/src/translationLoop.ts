@@ -69,6 +69,7 @@ export async function translateNextCommand(
 
   let done = 0;
   let written = 0;
+  let stopped = false;
   const total = lang.untranslated.length + lang.missing.length;
   const langName = displayLanguage(lang.language);
 
@@ -79,17 +80,22 @@ export async function translateNextCommand(
       prompt: `${item.key}${item.value ? ` — source: ${item.value}` : ""} · leave empty to skip`,
       value: "",
     });
-    if (value === undefined) break; // Esc: stop the loop
+    if (value === undefined) {
+      stopped = true;
+      break;
+    }
     if (item.file !== undefined && item.line !== undefined && value !== "" && value !== item.value) {
       try {
-        if (await replaceLocLineValue(item.file, item.line, item.key, value)) {
-          onLocFileChanged(item.file);
-          written++;
+        if (!(await replaceLocLineValue(item.file, item.line, item.key, value))) {
+          throw new Error("The localization key changed or was removed. Run Translate Missing Keys again.");
         }
+        onLocFileChanged(item.file);
+        written++;
       } catch (err) {
         void vscode.window.showErrorMessage(
           `Paradox Modding Toolkit: failed to write ${item.key}: ${String(err)}`
         );
+        stopped = true;
         break;
       }
     }
@@ -97,7 +103,7 @@ export async function translateNextCommand(
   }
 
   for (const item of lang.missing) {
-    if (done >= total) break;
+    if (stopped || done >= total) break;
     const value = await vscode.window.showInputBox({
       title: `Create in ${langName} (${done + 1}/${total}) — Esc stops`,
       prompt: `${item.key} (missing everywhere) · leave empty to skip`,

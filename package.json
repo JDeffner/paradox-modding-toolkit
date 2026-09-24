@@ -1,10 +1,10 @@
 {
   "name": "px-lsp",
-  "version": "0.5.0",
+  "version": "0.5.2",
   "private": true,
   "license": "GPL-3.0-or-later",
   "engines": {
-    "node": ">=22.22.2"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "author": {
     "name": "Joël Deffner"

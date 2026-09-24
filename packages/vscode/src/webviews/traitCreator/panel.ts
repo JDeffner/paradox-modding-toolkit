@@ -479,7 +479,7 @@ export class TraitCreatorPanel {
    * block in the editor. It saves first every time rather than only when the
    * block is missing, because the point is to hand the modder the file with
    * what the form says in it; a save that changes nothing writes nothing
-   * (`applyDefinitionEdits` with no edits only opens the document).
+   * (`applyDefinitionEdits` also checks that the document saves with no edits).
    */
   private async openInFile(name: string, save: TraitSave): Promise<void> {
     const abs = await this.save(save);
@@ -539,7 +539,7 @@ export class TraitCreatorPanel {
       this.post({ type: "saved", ok: false, name: save.name });
       return null;
     }
-    if (!(await applyDefinitionEdits(abs, text, result.edits))) {
+    if ((await applyDefinitionEdits(abs, text, result.edits)) !== "saved") {
       this.post({ type: "saved", ok: false, name: save.name });
       return null;
     }

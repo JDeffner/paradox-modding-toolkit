@@ -973,11 +973,56 @@ function decodeRgb8(buf: Uint8Array, off: number, width: number, height: number)
 // Public API
 // ---------------------------------------------------------------------------
 
-/** Decode the top mip / first array slice of a DDS to RGBA8. Throws on unsupported formats. */
-export function decodeDds(buf: Uint8Array): DecodedImage {
+export interface DdsMipLevel {
+  level: number;
+  width: number;
+  height: number;
+  offset: number;
+  byteLength: number;
+}
+
+/** Stored mip levels of the first array slice / cube face, without decoding pixels. */
+export function ddsMipLevels(buf: Uint8Array): DdsMipLevel[] {
   const parsed = parseHeader(buf);
   if (!parsed) throw new Error("not a valid DDS file");
-  const { width, height, kind, dataOffset } = parsed;
+  if (readU32(buf, 24) > 1 || (readU32(buf, 112) & 0x200000) !== 0)
+    throw new Error("Mipmap preview does not support volume textures");
+  const count = Math.max(1, readU32(buf, 28));
+  if (count > Math.floor(Math.log2(Math.max(parsed.width, parsed.height))) + 1)
+    throw new Error("Invalid DDS mipmap count");
+  const compressed = ["dxt1", "dxt3", "dxt5", "bc7"].includes(parsed.kind.k);
+  const bytes = compressed ? (parsed.kind.k === "dxt1" ? 8 : 16) : parsed.kind.k === "rgb8" ? 3 : 4;
+  if (!compressed && readU32(buf, 8) & 0x8 && readU32(buf, 20) > parsed.width * bytes)
+    throw new Error("Mipmap preview does not support padded DDS rows");
+  const levels: DdsMipLevel[] = [];
+  let { width, height } = parsed;
+  let offset = parsed.dataOffset;
+  for (let level = 0; level < count; level++) {
+    // Microsoft DDS layout: even a 1x1 BC mip occupies a complete compression block.
+    const byteLength = compressed
+      ? Math.ceil(width / 4) * Math.ceil(height / 4) * bytes
+      : width * height * bytes;
+    if (offset + byteLength > buf.length) throw new Error(`truncated DDS mip level ${level}`);
+    levels.push({ level, width, height, offset, byteLength });
+    offset += byteLength;
+    width = Math.max(1, Math.floor(width / 2));
+    height = Math.max(1, Math.floor(height / 2));
+  }
+  return levels;
+}
+
+/** Decode a stored mip of the first array slice / cube face. Level 0 retains the original API. */
+export function decodeDds(buf: Uint8Array, mipLevel = 0): DecodedImage {
+  const parsed = parseHeader(buf);
+  if (!parsed) throw new Error("not a valid DDS file");
+  if (!Number.isInteger(mipLevel) || mipLevel < 0) throw new Error("Invalid DDS mip level");
+  const { kind } = parsed;
+  let { width, height, dataOffset } = parsed;
+  if (mipLevel > 0) {
+    const mip = ddsMipLevels(buf)[mipLevel];
+    if (!mip) throw new Error(`DDS mip level ${mipLevel} does not exist`);
+    ({ width, height, offset: dataOffset } = mip);
+  }
 
   let pixels: Uint8Array;
   switch (kind.k) {

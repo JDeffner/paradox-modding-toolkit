@@ -1,8 +1,8 @@
 /**
- * The GUI editor app: the thin DOM shell around the pure modules (scene,
- * hit-test, selection, tree, layers, snap, inspector) and the canvas painter.
- * It owns the camera, the panels and the DOM, and nothing else, layout, text
- * and the inspector's rows all come from the host (../messages.ts).
+ * The GUI editor app coordinates the camera, panels, rendering and host requests.
+ * Selection identities and scene indices live in selectionController; canvas
+ * and layer drag ownership live in gestureLifecycle. Pure modules supply the
+ * geometry. Layout, source text and inspector rows come from the host.
  *
  * G3.1 rendered; G3.2 selects and inspects: click picks the smallest rect,
  * Alt+click cycles the stack, Esc clears, Ctrl/Cmd+Shift+click reveals the
@@ -79,7 +79,7 @@ import { sidePanel } from "../../shared/sidePanel";
 import { setSourceContext, sourceContextKeys } from "../../shared/sourceContext";
 import {
   closePopover,
-  confirmDialog,
+  confirmAction,
   menu,
   popover,
   toast as pxToast,
@@ -121,7 +121,9 @@ import {
   WORLD_W,
 } from "./render";
 import { hitRect, hitStack, marqueeHits, nextInStack } from "./hitTest";
-import { indexOfSelection, outermost, selectionAt, toggleSelected, type Selection } from "./selection";
+import { toggleSelected } from "./selection";
+import { SelectionController } from "./selectionController";
+import { GestureLifecycle } from "./gestureLifecycle";
 import { ancestorKeys, rowKey, treeRows } from "./tree";
 import {
   abbreviate,
@@ -233,17 +235,7 @@ let fitPending = true;
 let panning = false;
 let panFrom = { x: 0, y: 0, panX: 0, panY: 0 };
 
-/** The selection's identity across re-parses; `selected` is its index in THIS scene. */
-let selection: Selection | null = null;
-let selected: number | null = null;
-/**
- * The OTHER members of a multi-selection, primary excluded (that is `selected`).
- * Kept as draw indices for this scene plus identities for the next one, exactly
- * like the primary: an edit re-lays the document out and a draw index means
- * nothing afterwards.
- */
-let others: number[] = [];
-let otherIds: Selection[] = [];
+const selectionState = new SelectionController();
 /** Collapsed tree rows, by positional path, so collapse survives a re-layout too. */
 const collapsed = new Set<string>();
 const rowEls = new Map<number, HTMLElement>();
@@ -294,7 +286,9 @@ let lastTimings = { parseMs: 0, defsMs: 0, layoutMs: 0, totalMs: 0 };
 let previousScene: Scene | null = null;
 
 function selectedItem(): SceneItem | null {
-  return selected === null ? null : (scene.items[selected] ?? null);
+  return selectionState.primarySceneIndex === null
+    ? null
+    : (scene.items[selectionState.primarySceneIndex] ?? null);
 }
 
 /** A widget with a declaration in THIS document is the only kind a write can reach. */
@@ -404,7 +398,9 @@ function paintScene(): void {
   // A multi-selection's grips sit on the bounds of the whole set, and the
   // bounds follow the preview: they are the rect the grips were dragged from.
   const bounds =
-    others.length > 0 && rect ? selectionRect([rect, ...others.map((i) => otherRect(i, shift))]) : undefined;
+    selectionState.secondarySceneIndices.length > 0 && rect
+      ? selectionRect([rect, ...selectionState.secondarySceneIndices.map((i) => otherRect(i, shift))])
+      : undefined;
   drawScene(
     ctx,
     scene,
@@ -422,7 +418,7 @@ function paintScene(): void {
       // has them (a resize is single-member and never gets here with others).
       others: marquee
         ? marquee.hits.map((i) => hitRect(scene.items[i]))
-        : others.map((i) => otherRect(i, shift)),
+        : selectionState.secondarySceneIndices.map((i) => otherRect(i, shift)),
       handles: canEdit(item) || (bounds !== undefined && allSelected().some((i) => canEdit(scene.items[i]))),
       handleRect: bounds,
       accent: accentColor(),
@@ -437,12 +433,12 @@ function paintScene(): void {
         : undefined,
       masks,
       grid: gridToggle.checked ? GRID_STEP : 0,
-      guides: gesture?.snap?.guides,
-      bars: gesture?.snap?.bars,
+      guides: canvasGesture.current?.snap?.guides,
+      bars: canvasGesture.current?.snap?.bars,
       flash: flashIndex === null ? undefined : hitRect(scene.items[flashIndex]),
       // The same affordance for both kinds of drop: a reorder's new slot, and
       // the slot a palette entry would be inserted into.
-      dropLine: paletteDrag?.line ?? gesture?.drop?.line,
+      dropLine: paletteDrag?.line ?? canvasGesture.current?.drop?.line,
       readout: live && rect ? { x: rect.x, y: rect.y, text: geometry(rect) } : undefined,
       heatmap: heat?.values ?? null,
       constraints: constraintsToggle.checked ? (constraints ?? undefined) : undefined,
@@ -468,7 +464,7 @@ function shifted(rect: SceneRect, by: { dx: number; dy: number } | undefined): S
  * its rect moved by the primary's offset, else where the file has it.
  */
 function otherRect(index: number, shift: { dx: number; dy: number } | undefined): SceneRect {
-  const g = gesture;
+  const g = canvasGesture.current;
   if (g?.writes) {
     const at = g.members.findIndex((m) => m.index === index);
     if (at >= 0 && g.members[at].refused === null) return g.writes[at].rect;
@@ -649,7 +645,7 @@ function renderTree(): void {
   for (const row of treeRows(scene, collapsed, focusIndex)) {
     const node = el("div", "px-item row");
     node.style.paddingLeft = `${4 + row.depth * 12}px`;
-    node.tabIndex = row.index === (selected ?? 0) ? 0 : -1;
+    node.tabIndex = row.index === (selectionState.primarySceneIndex ?? 0) ? 0 : -1;
     node.setAttribute("role", "treeitem");
     node.setAttribute("aria-level", String(row.depth + 1));
     if (row.hasChildren) node.setAttribute("aria-expanded", String(!row.collapsed));
@@ -745,11 +741,16 @@ function setSelected(node: HTMLElement, on: boolean): void {
 }
 
 function highlightTree(scrollTo: boolean): void {
-  const members = new Set(others);
+  const members = new Set(selectionState.secondarySceneIndices);
   for (const [index, node] of rowEls) {
     node.tabIndex =
-      index === (selected !== null && rowEls.has(selected) ? selected : rowEls.keys().next().value) ? 0 : -1;
-    const isPrimary = index === selected;
+      index ===
+      (selectionState.primarySceneIndex !== null && rowEls.has(selectionState.primarySceneIndex)
+        ? selectionState.primarySceneIndex
+        : rowEls.keys().next().value)
+        ? 0
+        : -1;
+    const isPrimary = index === selectionState.primarySceneIndex;
     setSelected(node, isPrimary || members.has(index));
     if (isPrimary && scrollTo) node.scrollIntoView({ block: "nearest" });
   }
@@ -786,11 +787,11 @@ function renderFocusBar(): void {
     const focus = button(
       "Focus subtree",
       () => {
-        if (selected !== null) setFocus(selected);
+        if (selectionState.primarySceneIndex !== null) setFocus(selectionState.primarySceneIndex);
       },
       { icon: "focus", size: "sm", tip: "Show only the selected widget and what is inside it (f)" }
     );
-    focus.disabled = selected === null;
+    focus.disabled = selectionState.primarySceneIndex === null;
     focusBarEl.appendChild(focus);
     return;
   }
@@ -828,7 +829,8 @@ let layersBuilt = false;
 const layerEls = new Map<number, HTMLElement>();
 
 function syncLayers(): void {
-  const container = selected === null ? null : parentIndex(scene, selected);
+  const container =
+    selectionState.primarySceneIndex === null ? null : parentIndex(scene, selectionState.primarySceneIndex);
   if (layersBuilt && container === layersContainer) {
     highlightLayers();
     return;
@@ -886,7 +888,7 @@ function visibleWindow(rows: readonly LayerRow[]): { start: number; end: number 
   if (rows.length <= LAYERS_MAX_ROWS) return { start: 0, end: rows.length };
   const at = Math.max(
     0,
-    rows.findIndex((r) => r.index === selected)
+    rows.findIndex((r) => r.index === selectionState.primarySceneIndex)
   );
   const start = Math.min(Math.max(0, at - LAYERS_MAX_ROWS / 2), rows.length - LAYERS_MAX_ROWS);
   return { start, end: start + LAYERS_MAX_ROWS };
@@ -969,9 +971,9 @@ function afterToggle(): void {
 }
 
 function highlightLayers(): void {
-  const members = new Set(others);
+  const members = new Set(selectionState.secondarySceneIndices);
   for (const [index, node] of layerEls) {
-    setSelected(node, index === selected || members.has(index));
+    setSelected(node, index === selectionState.primarySceneIndex || members.has(index));
   }
 }
 
@@ -1533,7 +1535,7 @@ function renderInspector(): void {
   if (info && infoLine === item.line && info.typeChain.length > 0) {
     head.appendChild(el("div", "chain", `type chain: ${info.typeChain.join(" -> ")}`));
   }
-  if (others.length > 0) {
+  if (selectionState.secondarySceneIndices.length > 0) {
     // Said plainly rather than shown as a merged property list: the rows below
     // are ONE widget's, and an inspector that implied otherwise would let a
     // user write a value onto widgets they cannot see.
@@ -1541,7 +1543,7 @@ function renderInspector(): void {
       el(
         "div",
         "chain",
-        `${others.length + 1} selected. The rows below are the primary's alone; the buttons act on all of them.`
+        `${selectionState.secondarySceneIndices.length + 1} selected. The rows below are the primary's alone; the buttons act on all of them.`
       )
     );
   }
@@ -2316,9 +2318,7 @@ function rowInput(row: InspectorRow, line: number): HTMLInputElement {
       // A rename is the one write that moves the selection's identity. The
       // READER cannot tell a rename from a delete and clears (selection.ts);
       // the writer knows exactly what it wrote, so it re-points instead.
-      if (row.key.toLowerCase() === "name" && selection) {
-        selection = { ...selection, name: unquote(value) };
-      }
+      if (row.key.toLowerCase() === "name") selectionState.renamePrimary(unquote(value));
     });
   };
 
@@ -2554,31 +2554,23 @@ function describeOps(ops: GuiSourceOp[]): string {
 
 /** Every selected widget, primary LAST: the order `toggleSelected` maintains. */
 function allSelected(): number[] {
-  return selected === null ? [...others] : [...others, selected];
+  return selectionState.sceneIndices();
 }
 
 /**
  * Replace the whole selection from a member list whose LAST entry is the
- * primary. Everything else in the app reads `selected` plus `others`, so this
- * is the one place the two are set together.
+ * primary. The controller updates identities and scene indices together.
  */
 function selectMany(members: readonly number[], options: { reveal: boolean; rebuildTree?: boolean }): void {
-  const list = outermost(scene, members);
-  others = list.slice(0, -1);
-  otherIds = others.map((i) => selectionAt(scene, i)).filter((s): s is Selection => s !== null);
-  select(list.length === 0 ? null : list[list.length - 1], { ...options, keepOthers: true });
+  selectionState.selectMany(scene, members);
+  select(selectionState.primarySceneIndex, { ...options, keepSecondary: true });
 }
 
 function select(
   index: number | null,
-  options: { reveal: boolean; rebuildTree?: boolean; keepOthers?: boolean }
+  options: { reveal: boolean; rebuildTree?: boolean; keepSecondary?: boolean }
 ): void {
-  if (!options.keepOthers) {
-    others = [];
-    otherIds = [];
-  }
-  selected = index;
-  selection = index === null ? null : selectionAt(scene, index);
+  selectionState.select(scene, index, options.keepSecondary);
   const item = selectedItem();
   if (!item || item.line === undefined || !item.editable) {
     info = null;
@@ -2626,8 +2618,8 @@ function statusLine(): string {
   const estimated = ghosts > 0 ? ` · ${ghosts} unmeasurable (dashed)` : "";
   const item = selectedItem();
   const picked =
-    others.length > 0
-      ? ` · ${others.length + 1} selected, ${item ? widgetTitle(item) : "none"} is the primary`
+    selectionState.secondarySceneIndices.length > 0
+      ? ` · ${selectionState.secondarySceneIndices.length + 1} selected, ${item ? widgetTitle(item) : "none"} is the primary`
       : item
         ? ` · selected ${widgetTitle(item)}${item.editable ? "" : item.declared ? " (declaration)" : " (synthetic)"}`
         : "";
@@ -2707,6 +2699,8 @@ function onLayout(
   fileNameEl.textContent = name;
   fileNameEl.title = name;
   defsFiles = result.defsFiles;
+  canvasGesture.cancel();
+  layerGesture.cancel();
   previousScene = scene.items.length > 0 ? scene : null;
   const t0 = performance.now();
   lastNodes = result.nodes;
@@ -2728,9 +2722,7 @@ function onLayout(
   // The truth arrived: draw indices, rects and source values are all new, so
   // any preview standing in for it goes, whether it was this editor's write or
   // a keystroke in the text editor.
-  gesture = null;
   committing = null;
-  rowDrag = null;
   paletteDrag = null;
   marquee = null;
   flashIndex = null;
@@ -2752,12 +2744,8 @@ function onLayout(
   // The document changed under the selection: find every member again by its
   // own identity, and re-read the primary's properties, whose lines may have
   // moved. A member the edit removed simply stops being selected.
-  const restored = selection ? indexOfSelection(scene, selection) : null;
-  const restoredOthers = otherIds
-    .map((id) => ({ id, index: indexOfSelection(scene, id) }))
-    .filter((m): m is { id: Selection; index: number } => m.index !== null);
-  others = restoredOthers.map((m) => m.index);
-  otherIds = restoredOthers.map((m) => m.id);
+  selectionState.restore(scene);
+  const restored = selectionState.primarySceneIndex;
   infoLine = null;
   info = null;
   loadTextures(textures);
@@ -2769,7 +2757,7 @@ function onLayout(
   // The next repaint is the one the stats line reports: it is the first full
   // paint of this scene, which is what "what did this push cost" means.
   measurePaint = true;
-  select(inserted ?? restored, { reveal: false, rebuildTree: true, keepOthers: inserted === null });
+  select(inserted ?? restored, { reveal: false, rebuildTree: true, keepSecondary: inserted === null });
   // An Alt+drag's second half: the copy just landed and is the selection.
   if (pendingMove) {
     if (inserted !== null) moveCopy();
@@ -3074,6 +3062,8 @@ function movingMembers(g: Gesture): GestureMember[] {
  * index and no rank.
  */
 interface ReorderContext {
+  /** No preview or commit until the host accepts the reorder probe. */
+  allowed: boolean;
   /** The container's own line: the op is addressed to the parent, not the child. */
   parentLine: number;
   /** Draw indices of the reorderable children, in source order. */
@@ -3105,6 +3095,7 @@ function reorderContextFor(index: number): ReorderContext | null {
   const children = rows.map((row) => row.index);
   const rects = children.map(rectOf);
   return {
+    allowed: false,
     parentLine: container.line,
     children,
     sources: rows.map((row) => row.source),
@@ -3146,7 +3137,15 @@ function siblingRects(index: number): SceneRect[] {
   return rects;
 }
 
-let gesture: Gesture | null = null;
+const canvasGesture = new GestureLifecycle<Gesture>({
+  commit: commitGesture,
+  cancel: (gesture) => {
+    altPress = null;
+    statusEl.textContent = statusLine();
+    if (gesture.writes) renderInspector();
+    draw();
+  },
+});
 /**
  * An Alt press, which is not yet a click or a drag: the release decides. A
  * click (no drag) steps the selection outward through the stack under the
@@ -3173,11 +3172,11 @@ let committing: LivePreview | null = null;
 function livePreview(): LivePreview | null {
   if (committing) return committing;
   if (nudge.pending) return nudgePreview(nudge.dx, nudge.dy);
-  if (gesture?.status !== "allowed" || !gesture.writes) return null;
-  const slices = movingMembers(gesture)
+  if (canvasGesture.current?.status !== "allowed" || !canvasGesture.current.writes) return null;
+  const slices = movingMembers(canvasGesture.current)
     .map((m) => ({ from: m.from, to: m.to }))
     .sort((a, b) => a.from - b.from);
-  return { slices, write: gesture.writes[0], duplicate: gesture.duplicate };
+  return { slices, write: canvasGesture.current.writes[0], duplicate: canvasGesture.current.duplicate };
 }
 
 const NO_SOURCE_HERE =
@@ -3293,7 +3292,10 @@ function beginGesture(
   // pointerdown promoted it to primary, so membership is what to test, not
   // whether it is one of the others. A grip on a multi-selection's bounds
   // resizes every member by the same delta. An Alt+drag copies ONE widget.
-  const group = !duplicate && others.length > 0 && allSelected().includes(index) ? allSelected() : [index];
+  const group =
+    !duplicate && selectionState.secondarySceneIndices.length > 0 && allSelected().includes(index)
+      ? allSelected()
+      : [index];
   const members = [memberOf(index), ...group.filter((i) => i !== index).map(memberOf)];
   const first = members[0];
   const next: Gesture = {
@@ -3319,7 +3321,7 @@ function beginGesture(
     reorder: null,
     drop: null,
   };
-  gesture = next;
+  canvasGesture.begin(next);
   if (next.line === null) return;
 
   const keys = gestureKeys(handle);
@@ -3341,7 +3343,7 @@ function beginGesture(
     "checkOps",
     asked.map((m) => ({ kind: "setProperties", line: m.line!, properties: currentOf(m) })),
     (verdict) => {
-      if (gesture !== next) return;
+      if (!canvasGesture.owns(next)) return;
       verdict.ops?.forEach((answer, i) => {
         if (answer.refused) asked[i].refused = answer.refused;
       });
@@ -3360,7 +3362,7 @@ function beginGesture(
 
 /** Turn a gesture-start verdict into what the drag may do. */
 function armGesture(g: Gesture, verdict: EditVerdict): void {
-  if (gesture !== g) return;
+  if (!canvasGesture.owns(g)) return;
   if (verdict.refused) {
     g.reason = verdict.refused;
     // A move the container refuses is not a dead gesture when the container is
@@ -3397,8 +3399,15 @@ function announceSkipped(g: Gesture): void {
 function probeReorder(ctx: ReorderContext, owner: Gesture | RowDrag): void {
   const to = ctx.from === ctx.children.length - 1 ? ctx.from - 1 : ctx.from + 1;
   sendReorder("checkReorder", ctx, to, (verdict) => {
-    if (gesture !== owner && rowDrag !== owner) return;
-    if (!verdict.refused) return;
+    if (!canvasGesture.owns(owner) && !layerGesture.owns(owner)) return;
+    if (!verdict.refused) {
+      ctx.allowed = true;
+      if ("ctx" in owner) {
+        owner.status = "allowed";
+        if (owner.engaged) markDropRow(owner);
+      }
+      return;
+    }
     owner.status = "blocked";
     owner.reason = verdict.refused;
     if (owner.engaged) announceGesture(owner);
@@ -3426,7 +3435,7 @@ function updateGesture(g: Gesture, world: { x: number; y: number }, screen: { x:
     g.engaged = true;
     announceGesture(g);
   }
-  if (g.status === "reorder" && g.reorder) {
+  if (g.status === "reorder" && g.reorder?.allowed) {
     updateReorderDrag(g, world);
     return;
   }
@@ -3454,7 +3463,7 @@ function updateGesture(g: Gesture, world: { x: number; y: number }, screen: { x:
   statusEl.textContent = gestureReadout(g);
   // An Alt+drag can carry a widget that is not the selection; the inspector
   // shows the selection's rows and must not take the other widget's numbers.
-  if (g.index === selected) previewInspector(g.writes[0]);
+  if (g.index === selectionState.primarySceneIndex) previewInspector(g.writes[0]);
   requestDraw();
 }
 
@@ -3484,8 +3493,7 @@ function dropLine(ctx: ReorderContext, to: number): Guide {
   const rects = ctx.rects;
   const lo = (r: SceneRect) => (axis === "x" ? r.x : r.y);
   const hi = (r: SceneRect) => (axis === "x" ? r.x + r.w : r.y + r.h);
-  // The children the dragged one is landing among; named `rest` because
-  // `others` is the multi-selection at this scope.
+  // The remaining rectangles belong to siblings, not the selection.
   const rest = rects.filter((_, i) => i !== ctx.from);
   const at =
     to <= 0
@@ -3518,9 +3526,8 @@ function gestureReadout(g: Gesture): string {
 }
 
 /** Release: one op (or one batch), or an honest reason there is none. */
-function endGesture(g: Gesture): void {
-  gesture = null;
-  if (g.status === "reorder" && g.engaged && g.reorder && g.drop && g.drop.to !== g.reorder.from) {
+function commitGesture(g: Gesture): void {
+  if (g.status === "reorder" && g.engaged && g.reorder?.allowed && g.drop && g.drop.to !== g.reorder.from) {
     commitReorder(g.reorder, g.drop.to);
     return;
   }
@@ -3637,7 +3644,12 @@ function moveCopy(): void {
   }
   const base = baseOf(item);
   const write = moveWrite(base, hitRect(item), move.dx, move.dy);
-  committing = { slices: [{ from: selected!, to: subtreeEnd(scene, selected!) }], write };
+  committing = {
+    slices: [
+      { from: selectionState.primarySceneIndex!, to: subtreeEnd(scene, selectionState.primarySceneIndex!) },
+    ],
+    write,
+  };
   sendEdit("applyEdit", item.line, write.properties, (verdict) => {
     if (!verdict.refused) return;
     committing = null;
@@ -3684,7 +3696,13 @@ interface RowDrag {
   reason: string | null;
 }
 
-let rowDrag: RowDrag | null = null;
+const layerGesture = new GestureLifecycle<RowDrag>({
+  commit: commitRowDrag,
+  cancel: (drag) => {
+    cleanRowDrag(drag);
+    if (drag.engaged) renderLayers();
+  },
+});
 
 function onLayerPointerDown(ev: PointerEvent, row: LayerRow, reorderable: boolean): void {
   if (ev.button !== 0) return;
@@ -3692,7 +3710,7 @@ function onLayerPointerDown(ev: PointerEvent, row: LayerRow, reorderable: boolea
   if (!reorderable || row.rank < 0 || committing) return;
   const ctx = reorderContextFor(row.index);
   if (!ctx) return;
-  rowDrag = {
+  layerGesture.begin({
     ctx,
     index: row.index,
     screen: { x: ev.clientX, y: ev.clientY },
@@ -3700,11 +3718,11 @@ function onLayerPointerDown(ev: PointerEvent, row: LayerRow, reorderable: boolea
     to: null,
     status: "pending",
     reason: null,
-  };
+  });
 }
 
 function onLayerPointerMove(ev: PointerEvent, row: LayerRow): void {
-  const drag = rowDrag;
+  const drag = layerGesture.current;
   if (!drag) return;
   if (!drag.engaged) {
     if (Math.hypot(ev.clientX - drag.screen.x, ev.clientY - drag.screen.y) < DRAG_THRESHOLD) return;
@@ -3716,7 +3734,7 @@ function onLayerPointerMove(ev: PointerEvent, row: LayerRow): void {
   }
   if (drag.status === "blocked" || row.rank < 0) return;
   drag.to = row.rank;
-  markDropRow(drag);
+  if (drag.status === "allowed") markDropRow(drag);
 }
 
 /**
@@ -3729,12 +3747,12 @@ function markDropRow(drag: RowDrag): void {
   const moving = layerEls.get(drag.index);
   if (!moving || drag.to === null) return;
   const rows = drag.ctx.children.map((i) => layerEls.get(i)).filter((n): n is HTMLElement => !!n);
-  const others = rows.filter((n) => n !== moving);
-  const anchor = others[drag.to] ?? null;
-  if ((anchor ? anchor.previousElementSibling : others[others.length - 1]) === moving) return;
+  const siblingRows = rows.filter((n) => n !== moving);
+  const anchor = siblingRows[drag.to] ?? null;
+  if ((anchor ? anchor.previousElementSibling : siblingRows[siblingRows.length - 1]) === moving) return;
   const before = new Map(rows.map((n) => [n, n.getBoundingClientRect().top]));
   if (anchor) layersEl.insertBefore(moving, anchor);
-  else others[others.length - 1]?.after(moving);
+  else siblingRows[siblingRows.length - 1]?.after(moving);
   for (const [row, top] of before) {
     if (row === moving) continue;
     const delta = top - row.getBoundingClientRect().top;
@@ -3748,16 +3766,17 @@ function markDropRow(drag: RowDrag): void {
   }
 }
 
-function endRowDrag(): void {
-  const drag = rowDrag;
-  rowDrag = null;
-  if (!drag) return;
+function cleanRowDrag(drag: RowDrag): void {
   layerEls.get(drag.index)?.removeAttribute("data-dragging");
   for (const node of layerEls.values()) {
     node.style.transition = "";
     node.style.transform = "";
   }
-  if (!drag.engaged || drag.status === "blocked" || drag.to === null || drag.to === drag.ctx.from) {
+}
+
+function commitRowDrag(drag: RowDrag): void {
+  cleanRowDrag(drag);
+  if (!drag.engaged || drag.status !== "allowed" || drag.to === null || drag.to === drag.ctx.from) {
     // Nothing was written, so the rows go back to the order the file still has.
     if (drag.engaged) renderLayers();
     return;
@@ -4074,7 +4093,7 @@ function pasteTarget(): { line: number; index?: number } | null {
     toast("Select a widget first: a paste needs a container to go into.", "info");
     return null;
   }
-  const parent = parentIndex(scene, selected!);
+  const parent = parentIndex(scene, selectionState.primarySceneIndex!);
   const container = parent === null ? null : scene.items[parent];
   if (container && canEdit(container) && item.srcIndex !== undefined) {
     return { line: container.line, index: item.srcIndex + 1 };
@@ -4986,7 +5005,7 @@ function renderSaved(): void {
     tip: "Store the selected widgets' verbatim block text under that name.",
   });
   save.dataset.tipSide = "left";
-  save.disabled = selected === null;
+  save.disabled = selectionState.primarySceneIndex === null;
   saveTools.appendChild(save);
   haloBodyEl.appendChild(saveTools);
 
@@ -5025,7 +5044,7 @@ function renderSaved(): void {
       size: "xs",
       tip: "Write every property of this preset onto the selection, as one undo step.",
     });
-    apply.disabled = selected === null;
+    apply.disabled = selectionState.primarySceneIndex === null;
     tools.appendChild(apply);
     tools.appendChild(forgetButton("preset", preset.name));
     row.appendChild(tools);
@@ -5146,15 +5165,15 @@ stage.addEventListener("pointerdown", (ev) => {
   const bounds = selectionBounds();
   const handle = bounds
     ? handleAt(bounds, world.x, world.y, zoom)
-    : current && selected !== null && canEdit(current)
+    : current && selectionState.primarySceneIndex !== null && canEdit(current)
       ? handleAt(hitRect(current), world.x, world.y, zoom)
       : null;
-  if (handle !== null && selected !== null) {
+  if (handle !== null && selectionState.primarySceneIndex !== null) {
     // A commit still in flight owns the widget's source values; a second
     // gesture on top of it would add its delta to values the file has left.
     if (committing) return;
     capture(ev.pointerId);
-    beginGesture(selected, handle, world, screen);
+    beginGesture(selectionState.primarySceneIndex, handle, world, screen);
     return;
   }
   const stack = hitStack(scene, world.x, world.y, skipMask);
@@ -5164,8 +5183,11 @@ stage.addEventListener("pointerdown", (ev) => {
     // Alt is two gestures on one press: a CLICK steps outward through the
     // stack (decided on release, when no drag happened) and a DRAG duplicates
     // the widget under the cursor, the selected one when the press is on it.
-    const target = selected !== null && stack.includes(selected) ? selected : stack[0];
-    altPress = { next: nextInStack(stack, selected) };
+    const target =
+      selectionState.primarySceneIndex !== null && stack.includes(selectionState.primarySceneIndex)
+        ? selectionState.primarySceneIndex
+        : stack[0];
+    altPress = { next: nextInStack(stack, selectionState.primarySceneIndex) };
     capture(ev.pointerId);
     beginGesture(target, null, world, screen, true);
     return;
@@ -5191,9 +5213,9 @@ stage.addEventListener("pointerdown", (ev) => {
   // pressed one as the primary; pressing anything else replaces the selection.
   if (members.includes(next)) selectMany([...members.filter((i) => i !== next), next], { reveal });
   else select(next, { reveal });
-  if (selected === null || committing) return;
+  if (selectionState.primarySceneIndex === null || committing) return;
   capture(ev.pointerId);
-  beginGesture(selected, null, world, screen);
+  beginGesture(selectionState.primarySceneIndex, null, world, screen);
 });
 stage.addEventListener("pointermove", (ev) => {
   if (panning) {
@@ -5218,8 +5240,10 @@ stage.addEventListener("pointermove", (ev) => {
     requestDraw();
     return;
   }
-  if (gesture) {
-    updateGesture(gesture, world, { x: ev.clientX, y: ev.clientY });
+  if (canvasGesture.current) {
+    canvasGesture.update(canvasGesture.current, (active) =>
+      updateGesture(active, world, { x: ev.clientX, y: ev.clientY })
+    );
     return;
   }
   if (mode === "interact") {
@@ -5249,34 +5273,27 @@ stage.addEventListener("pointerup", (ev) => {
     selectMany([...new Set(caught)], { reveal: false });
     return;
   }
-  if (!gesture) return;
+  if (!canvasGesture.current) return;
   release(ev.pointerId);
-  const g = gesture;
+  const g = canvasGesture.current;
   const alt = altPress;
   altPress = null;
   if (alt && !g.engaged) {
     // The Alt+click half: nothing was dragged, so step through the stack.
-    gesture = null;
+    canvasGesture.cancel();
     select(alt.next, { reveal: false });
     return;
   }
-  endGesture(g);
+  canvasGesture.commit();
 });
 stage.addEventListener("pointercancel", () => {
   altPress = null;
-  // The pointer went away mid-gesture (a touch cancelled, the window lost it):
-  // drop the gesture without committing anything.
-  if (!gesture) return;
-  const previewed = gesture.writes !== null;
-  gesture = null;
-  statusEl.textContent = statusLine();
-  if (previewed) renderInspector();
-  draw();
+  canvasGesture.cancel();
 });
 // A row drag has no pointer capture to end it: the panel scrolls and the drop
 // can land anywhere, so the window is what closes the gesture.
-window.addEventListener("pointerup", endRowDrag);
-window.addEventListener("pointercancel", endRowDrag);
+window.addEventListener("pointerup", () => layerGesture.commit());
+window.addEventListener("pointercancel", () => layerGesture.cancel());
 stage.addEventListener("auxclick", (ev) => {
   if (ev.button === 1) ev.preventDefault();
 });
@@ -5358,7 +5375,8 @@ window.addEventListener("keydown", (ev) => {
     // Focus the selection, or leave the focus when there is nothing new to
     // focus on: one key, both directions. With nothing to focus and nothing
     // to leave, F fits the view instead.
-    if (selected !== null && selected !== focusIndex) setFocus(selected);
+    if (selectionState.primarySceneIndex !== null && selectionState.primarySceneIndex !== focusIndex)
+      setFocus(selectionState.primarySceneIndex);
     else if (focusIndex !== null) setFocus(null);
     else fitView();
     return;
@@ -5395,25 +5413,20 @@ window.addEventListener("keydown", (ev) => {
     draw();
     return;
   }
-  if (gesture) {
+  if (canvasGesture.current) {
     // Escape abandons the drag in progress before it touches the selection:
     // the widget snaps back to where the file still has it.
-    const previewed = gesture.writes !== null;
-    gesture = null;
+    canvasGesture.cancel();
     hideToast();
-    statusEl.textContent = statusLine();
-    if (previewed) renderInspector();
-    draw();
     return;
   }
-  if (rowDrag) {
-    rowDrag.status = "blocked";
-    endRowDrag();
+  if (layerGesture.current) {
+    layerGesture.cancel();
     return;
   }
   // Selection first, focus second: Escape gives back the last thing that was
   // narrowed, and a focused user still selects and clears inside their subtree.
-  if (selected !== null) select(null, { reveal: false });
+  if (selectionState.primarySceneIndex !== null) select(null, { reveal: false });
   else if (focusIndex !== null) setFocus(null);
 });
 
@@ -5427,7 +5440,7 @@ window.addEventListener("keydown", (ev) => {
 function onNavigationKey(ev: KeyboardEvent): boolean {
   const vector = nudgeVector(ev.key, ev, GRID_STEP);
   if (vector) {
-    if (selected === null || gesture || marquee) return false;
+    if (selectionState.primarySceneIndex === null || canvasGesture.current || marquee) return false;
     ev.preventDefault();
     nudge.add(vector[0], vector[1]);
     return true;
@@ -5436,23 +5449,29 @@ function onNavigationKey(ev: KeyboardEvent): boolean {
     // Only from the canvas: with a toolbar button focused, Tab is the page's.
     if (document.activeElement && document.activeElement !== document.body) return false;
     const next =
-      selected === null
+      selectionState.primarySceneIndex === null
         ? firstRoot(scene, skipMask)
-        : siblingFrom(scene, selected, ev.shiftKey ? -1 : 1, skipMask);
+        : siblingFrom(scene, selectionState.primarySceneIndex, ev.shiftKey ? -1 : 1, skipMask);
     if (next === null) return false;
     ev.preventDefault();
     select(next, { reveal: false });
     return true;
   }
-  if (ev.key === "Enter" && selected !== null) {
-    const next = ev.shiftKey ? parentIndex(scene, selected) : firstChildOf(scene, selected, skipMask);
+  if (ev.key === "Enter" && selectionState.primarySceneIndex !== null) {
+    const next = ev.shiftKey
+      ? parentIndex(scene, selectionState.primarySceneIndex)
+      : firstChildOf(scene, selectionState.primarySceneIndex, skipMask);
     if (next === null || skipMask?.[next]) return false;
     ev.preventDefault();
     select(next, { reveal: false });
     return true;
   }
   if (ev.key === "F" && ev.shiftKey && !ev.altKey) {
-    const bounds = selectionBounds() ?? (selected !== null ? hitRect(scene.items[selected]) : null);
+    const bounds =
+      selectionBounds() ??
+      (selectionState.primarySceneIndex !== null
+        ? hitRect(scene.items[selectionState.primarySceneIndex])
+        : null);
     if (!bounds) return false;
     ev.preventDefault();
     fitRect(bounds);
@@ -5480,7 +5499,7 @@ async function deleteSelectionConfirmed(): Promise<void> {
   const count = allSelected().length;
   if (count === 0) return;
   if (count > 1) {
-    const ok = await confirmDialog({
+    const ok = await confirmAction({
       title: `Delete ${count} widgets?`,
       description: "Their blocks are removed from the file as one change; undo brings them all back.",
       confirmLabel: "Delete",
@@ -5872,7 +5891,7 @@ function setMode(next: ToolMode): void {
   stage.dataset.mode = next;
   hideClickTip();
   if (next === "interact") {
-    if (gesture || marquee) return;
+    if (canvasGesture.current || marquee) return;
     select(null, { reveal: false });
     toast("Interact: click buttons, scroll lists. Esc or V goes back to editing.", "info");
   }
@@ -6030,7 +6049,7 @@ modeInteractEl.addEventListener("click", () => setMode("interact"));
 // ---- the context menu (edit mode) ----------------------------------------------
 
 stage.addEventListener("contextmenu", (ev) => {
-  if (mode !== "edit" || gesture || marquee || paletteDrag) return;
+  if (mode !== "edit" || canvasGesture.current || marquee || paletteDrag) return;
   ev.preventDefault();
   const world = toWorld(ev);
   const hit = hitStack(scene, world.x, world.y, skipMask)[0] ?? null;
@@ -6054,7 +6073,7 @@ stage.addEventListener("contextmenu", (ev) => {
       items.push({ value: "click", label: "Run onclick (interact)", description: item.onclick.slice(0, 60) });
     items.push({
       value: "focus",
-      label: selected === focusIndex ? "Leave focus" : "Focus subtree",
+      label: selectionState.primarySceneIndex === focusIndex ? "Leave focus" : "Focus subtree",
       hint: "F",
     });
     if (item.line !== undefined)
@@ -6110,7 +6129,8 @@ function runContextAction(value: string, item: SceneItem | null): void {
       }
       return;
     case "focus":
-      if (selected !== null) setFocus(selected === focusIndex ? null : selected);
+      if (selectionState.primarySceneIndex !== null)
+        setFocus(selectionState.primarySceneIndex === focusIndex ? null : selectionState.primarySceneIndex);
       return;
     case "reveal":
       if (item?.line !== undefined) host.send({ type: "reveal", line: item.line });

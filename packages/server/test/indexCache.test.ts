@@ -26,6 +26,7 @@ describe("vanilla index cache identity", () => {
         file: path.join(gameRoot, "common/cache_test/example.txt"),
         source: "vanilla",
         line: 3,
+        container: "parent_definition",
         value: "value",
         params: ["VALUE"],
         doc: "Cache round-trip fixture.",
@@ -89,6 +90,7 @@ describe("vanilla index cache identity", () => {
     { kind: "other_cache_test" },
     { ext: ".gui" },
     { extraction: "named-block" },
+    { nestedDefinitions: { kind: "child", path: ["children"] } },
   ])("invalidates changed extraction schema: %j", (change) => {
     const identity = createIndexCacheIdentity(gameRoot, entries);
     const changed = createIndexCacheIdentity(gameRoot, [{ ...entries[0], ...change }]);

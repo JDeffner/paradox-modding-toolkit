@@ -2,7 +2,7 @@
   "name": "px-toolkit",
   "displayName": "Paradox Modding Toolkit",
   "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3, Europa Universalis V): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and a visual GUI editor.",
-  "version": "0.5.0",
+  "version": "0.5.2",
   "publisher": "JDeffner",
   "author": {
     "name": "Joël Deffner"
@@ -2533,10 +2533,12 @@
   "devDependencies": {
     "@px-lsp/protocol": "workspace:*",
     "@px-lsp/server": "workspace:*",
+    "@types/pngjs": "6.0.5",
     "@types/vscode": "^1.90.0"
   },
   "dependencies": {
     "ignore": "7.0.5",
+    "pngjs": "7.0.0",
     "steamwand.js": "^0.4.0",
     "vscode-languageclient": "^10.1.0",
     "vscode-languageserver": "^10.1.0",

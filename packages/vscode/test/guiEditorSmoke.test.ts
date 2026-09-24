@@ -977,6 +977,55 @@ describe("the layers panel", () => {
     expect(editor.sent.filter((m) => m.type === "reorder")).toHaveLength(1);
   });
 
+  it.each(["before verdict", "after verdict"])(
+    "cancels a layer drag %s and permits the next drag",
+    (when) => {
+      const layout = openDoc(REFUSALS, "refusal-shapes.gui");
+      const child = centreOf(layout, "px_refuse_drag_in_vbox");
+      editor.click(child.x, child.y);
+      const originalOrder = editor.layers();
+      const source = editor.layer("px_refuse_drag_in_vbox");
+      editor.rowPointer(source, "pointerdown");
+      editor.rowPointer(source, "pointermove", { x: 0, y: 20 });
+      if (when === "after verdict") serveEdits();
+      editor.rowPointer(editor.layer("px_refuse_size_one"), "pointermove", { x: 0, y: 60 });
+      if (when === "after verdict") expect(editor.layers()).not.toEqual(originalOrder);
+      editor.cancelPointer("window");
+      serveEdits();
+      editor.releasePointer();
+      expect(editor.layers()).toEqual(originalOrder);
+      expect(editor.document.querySelector("[data-dragging]")).toBeNull();
+      expect(editor.sent.filter((message) => message.type === "reorder")).toHaveLength(0);
+      expect(doc).toBe(REFUSALS);
+
+      const nextSource = editor.layer("px_refuse_drag_in_vbox");
+      editor.rowPointer(nextSource, "pointerdown");
+      editor.rowPointer(nextSource, "pointermove", { x: 0, y: 20 });
+      serveEdits();
+      editor.rowPointer(editor.layer("px_refuse_size_one"), "pointermove", { x: 0, y: 60 });
+      editor.releasePointer();
+      editor.releasePointer();
+      serveEdits();
+      expect(editor.sent.filter((message) => message.type === "reorder")).toHaveLength(1);
+      expect(editor.layers().at(-1)).toContain("px_refuse_drag_in_vbox");
+    }
+  );
+
+  it("does not commit a released layer drag while its verdict is pending", () => {
+    const layout = openDoc(REFUSALS, "refusal-shapes.gui");
+    const child = centreOf(layout, "px_refuse_drag_in_vbox");
+    editor.click(child.x, child.y);
+    const originalOrder = editor.layers();
+    editor.rowPointer(editor.layer("px_refuse_drag_in_vbox"), "pointerdown");
+    editor.rowPointer(editor.layer("px_refuse_size_one"), "pointermove", { x: 0, y: 60 });
+    editor.releasePointer();
+    serveEdits();
+    editor.releasePointer();
+    expect(editor.layers()).toEqual(originalOrder);
+    expect(editor.sent.filter((message) => message.type === "reorder")).toHaveLength(0);
+    expect(doc).toBe(REFUSALS);
+  });
+
   it("a declaration between the children shifts the index the drag sends", () => {
     // The blockoverride is a source child with no layout node, so the widgets
     // are at source indices 0 and 2. A drag that ranked the visible rows would
@@ -1283,6 +1332,62 @@ function openGroup(): GuiLayoutResult {
 }
 
 describe("multi-selection", () => {
+  it.each(["before verdict", "after verdict"])("cancels a group drag %s without losing selection", (when) => {
+    const layout = openGroup();
+    withoutGuides();
+    const a = centreOf(layout, "px_g5_a");
+    const b = centreOf(layout, "px_g5_b");
+    editor.click(a.x, a.y);
+    editor.click(b.x, b.y, { shiftKey: true });
+    editor.press(a.x, a.y);
+    if (when === "after verdict") serveEdits();
+    editor.move(a.x + 20, a.y + 10);
+    editor.cancelPointer();
+    serveEdits();
+    editor.up(a.x + 20, a.y + 10);
+    expect(editor.selectedRows("tree")).toHaveLength(2);
+    expect(
+      editor.sent.filter((message) => message.type === "applyOps" || message.type === "applyEdit")
+    ).toHaveLength(0);
+    expect(doc).toBe(GROUP);
+
+    editor.press(a.x, a.y);
+    serveEdits();
+    editor.move(a.x + 20, a.y + 10);
+    editor.up(a.x + 20, a.y + 10);
+    editor.up(a.x + 20, a.y + 10);
+    serveEdits();
+    expect(editor.sent.filter((message) => message.type === "applyOps")).toHaveLength(1);
+    expect(doc).toContain('name = "px_g5_a" position = { 30 20 }');
+    expect(doc).toContain('name = "px_g5_b" position = { 120 40 }');
+  });
+
+  it("restores every selection identity after relayout and cancels the old gesture", () => {
+    const layout = openGroup();
+    const a = centreOf(layout, "px_g5_a");
+    const b = centreOf(layout, "px_g5_b");
+    editor.click(a.x, a.y);
+    editor.click(b.x, b.y, { shiftKey: true });
+    editor.press(a.x, a.y);
+    editor.move(a.x + 20, a.y + 10);
+    const inserted = '\twidget = { name = "inserted" position = { 600 300 } size = { 20 20 } }\n';
+    const changed = inserted + GROUP;
+    expect(changed).not.toBe(GROUP);
+    serveLayout(editor, changed);
+    serveEdits();
+    editor.up(a.x + 20, a.y + 10);
+    expect(editor.selectedRows("tree")).toHaveLength(2);
+    expect(editor.selectedRows("tree").join(" ")).toContain("px_g5_a");
+    expect(editor.selectedRows("tree").join(" ")).toContain("px_g5_b");
+    expect(editor.selectedRow()).toContain("px_g5_a");
+    expect(
+      editor.sent.filter((message) => message.type === "applyOps" || message.type === "applyEdit")
+    ).toHaveLength(0);
+    serveLayout(editor, GROUP);
+    expect(editor.selectedRows("tree")).toHaveLength(2);
+    expect(editor.selectedRow()).toContain("px_g5_a");
+  });
+
   it("shift+click adds and removes, and every panel shows the whole set", () => {
     const layout = openGroup();
     const a = centreOf(layout, "px_g5_a");

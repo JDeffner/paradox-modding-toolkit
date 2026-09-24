@@ -434,6 +434,64 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     fs.rmSync(depDir, { recursive: true, force: true });
   });
 
+  it.each([
+    [
+      "common/religion/religion_types",
+      "faith",
+      "px_nested_religion = { faiths = { NAME = {} } }",
+      "faith = faith:",
+    ],
+    ["common/laws", "law", "px_nested_group = { NAME = {} }", "add_realm_law = "],
+  ])(
+    "indexes unsaved %s children over the wire and removes them on close",
+    async (folder, kind, template, field) => {
+      const name = `px_nested_${kind}`;
+      const uri = toUri(path.join(modDir, folder, "px_nested.txt"));
+      const useUri = toUri(path.join(modDir, "events", `px_nested_${kind}.txt`));
+      const prefix = `namespace = nested\nnested.1 = { immediate = { ${field}`;
+      const useText = `${prefix}${name} } }`;
+      const position = { line: 1, character: prefix.split("\n")[1].length + 2 };
+      const complete = () =>
+        conn.sendRequest<CompletionList>("textDocument/completion", {
+          textDocument: { uri: useUri },
+          position: { ...position, character: position.character - 2 },
+        });
+      try {
+        for (const [docUri, text] of [
+          [uri, template.replace("NAME", name)],
+          [useUri, useText],
+        ]) {
+          await conn.sendNotification("textDocument/didOpen", {
+            textDocument: { uri: docUri, text, version: 1, languageId: "paradox-ck3" },
+          });
+        }
+        expect((await complete()).items.map((item) => item.label)).toContain(name);
+        const target = await conn.sendRequest<Location[]>("textDocument/definition", {
+          textDocument: { uri: useUri },
+          position,
+        });
+        expect(target.map((location) => decodeURIComponent(location.uri).toLowerCase())).toEqual([
+          decodeURIComponent(uri).toLowerCase(),
+        ]);
+        await expect(
+          conn.sendRequest("textDocument/prepareRename", { textDocument: { uri: useUri }, position })
+        ).rejects.toThrow(/not all indirect reference forms/);
+        await conn.sendNotification("textDocument/didChange", {
+          textDocument: { uri, version: 2 },
+          contentChanges: [{ text: template.replace("NAME", `${name}_changed`) }],
+        });
+        const changed = (await complete()).items.map((item) => item.label);
+        expect(changed).toContain(`${name}_changed`);
+        expect(changed).not.toContain(name);
+        await conn.sendNotification("textDocument/didClose", { textDocument: { uri } });
+        expect((await complete()).items.map((item) => item.label)).not.toContain(`${name}_changed`);
+      } finally {
+        for (const docUri of [uri, useUri])
+          await conn.sendNotification("textDocument/didClose", { textDocument: { uri: docUri } });
+      }
+    }
+  );
+
   it("separates same-name kinds and refreshes unsaved script definitions and references", async () => {
     const files: string[] = [];
     const opened: string[] = [];

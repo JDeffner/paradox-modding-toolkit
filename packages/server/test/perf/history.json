@@ -1543,6 +1543,155 @@
         "peakRssMb": 3332,
         "rssSamples": 127
       }
+    },
+    {
+      "version": "audit-inference-baseline-3a25fa3",
+      "recordedAt": "2026-09-24",
+      "workspace": "ck3-agot-audit.code-workspace",
+      "roots": 2,
+      "build": "3a25fa3 baseline (isolated build)",
+      "machine": {
+        "cpu": "AMD Ryzen AI 7 350 w/ Radeon 860M              ",
+        "totalMemGb": 15,
+        "node": "v24.18.1"
+      },
+      "results": {
+        "timeToIndexedMs": 41143,
+        "definitions": 973316,
+        "completionCold": 961,
+        "completionWarm": 21,
+        "semanticTokens": 3,
+        "hover": 11,
+        "documentSymbol": 1,
+        "completionAfterSave": 604,
+        "tokensAfterSave": 2,
+        "heapMb": 1080,
+        "rssAtBuildMb": 2237,
+        "internedIdentifiers": 1029857,
+        "peakRssMb": 3279,
+        "rssSamples": 104
+      },
+      "gameVersion": "1.19.0.6",
+      "corpus": "A Game of Thrones 0.5.2.1",
+      "note": "Sequential before/after on the same workspace and Node runtime. OS disk cache was not controlled; these single runs do not establish a speed change."
+    },
+    {
+      "version": "audit-inference-final",
+      "recordedAt": "2026-09-24",
+      "workspace": "ck3-agot-audit.code-workspace",
+      "roots": 2,
+      "build": "3a25fa3 plus audit scope-cache and directory-walk changes",
+      "machine": {
+        "cpu": "AMD Ryzen AI 7 350 w/ Radeon 860M              ",
+        "totalMemGb": 15,
+        "node": "v24.18.1"
+      },
+      "results": {
+        "timeToIndexedMs": 42943,
+        "definitions": 973316,
+        "completionCold": 753,
+        "completionWarm": 18,
+        "semanticTokens": 4,
+        "hover": 11,
+        "documentSymbol": 2,
+        "completionAfterSave": 665,
+        "tokensAfterSave": 1,
+        "heapMb": 1080,
+        "rssAtBuildMb": 2453,
+        "internedIdentifiers": 1029857,
+        "peakRssMb": 3377,
+        "rssSamples": 109
+      },
+      "gameVersion": "1.19.0.6",
+      "corpus": "A Game of Thrones 0.5.2.1",
+      "note": "Sequential before/after on the same workspace and Node runtime. OS disk cache was not controlled; these single runs do not establish a speed change."
+    },
+    {
+      "version": "requirements-before",
+      "note": "Baseline before nested faith/law indexing. Desktop workload and OS disk cache were not controlled.",
+      "recordedAt": "2026-09-24",
+      "workspace": "ck3-agot-audit.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen AI 7 350 w/ Radeon 860M              ",
+        "totalMemGb": 15,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 47499,
+        "definitions": 973316,
+        "completionCold": 887,
+        "completionWarm": 17,
+        "semanticTokens": 3,
+        "hover": 8,
+        "documentSymbol": 1,
+        "completionAfterSave": 625,
+        "tokensAfterSave": 1,
+        "heapMb": 1080,
+        "rssAtBuildMb": 2371,
+        "internedIdentifiers": 1029857,
+        "peakRssMb": 3536,
+        "rssSamples": 118
+      }
+    },
+    {
+      "version": "requirements-after",
+      "note": "Other agent tests and editor checks ran during this measurement. Timings are not a controlled regression comparison.",
+      "recordedAt": "2026-09-24",
+      "workspace": "ck3-agot-audit.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen AI 7 350 w/ Radeon 860M              ",
+        "totalMemGb": 15,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 65088,
+        "definitions": 973952,
+        "completionCold": 909,
+        "completionWarm": 22,
+        "semanticTokens": 3,
+        "hover": 10,
+        "documentSymbol": 2,
+        "completionAfterSave": 1042,
+        "tokensAfterSave": 1,
+        "heapMb": 1080,
+        "rssAtBuildMb": 1692,
+        "internedIdentifiers": 1029857,
+        "peakRssMb": 3171,
+        "rssSamples": 161
+      }
+    },
+    {
+      "version": "requirements-after-idle",
+      "note": "Repeat after agent test processes finished; other desktop workloads and OS disk cache were not controlled. A separate paired extraction check across all 85 CK3/AGOT religion and law files measured 2-4 ms without nested definitions and 7-17 ms with them, adding 636 definitions.",
+      "recordedAt": "2026-09-24",
+      "workspace": "ck3-agot-audit.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen AI 7 350 w/ Radeon 860M              ",
+        "totalMemGb": 15,
+        "node": "v24.12.0"
+      },
+      "results": {
+        "timeToIndexedMs": 76581,
+        "definitions": 973952,
+        "completionCold": 1248,
+        "completionWarm": 22,
+        "semanticTokens": 4,
+        "hover": 11,
+        "documentSymbol": 1,
+        "completionAfterSave": 845,
+        "tokensAfterSave": 1,
+        "heapMb": 1080,
+        "rssAtBuildMb": 1678,
+        "internedIdentifiers": 1029857,
+        "peakRssMb": 3036,
+        "rssSamples": 187
+      }
     }
   ]
 }

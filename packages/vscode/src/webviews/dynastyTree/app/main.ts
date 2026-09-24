@@ -31,7 +31,7 @@ import type {
 import { iconEl, type IconName } from "../../shared/icons";
 import { fieldRow, numberField } from "../../shared/fields";
 import { modifierLine, renderModifierLine } from "../../shared/modifierLines";
-import { confirmDialog, menu, popover, toast, type MenuItem } from "../../shared/overlay";
+import { confirmAction, menu, popover, toast, type MenuItem } from "../../shared/overlay";
 import { saveTargetLine } from "../../shared/saveTarget";
 import { sidePanel } from "../../shared/sidePanel";
 import { clampToViewport, installTips } from "../../shared/tips";
@@ -1612,7 +1612,7 @@ async function newDynasty(): Promise<void> {
   const id = textInput(state.nextDynastyId, () => undefined);
   const culture = textInput(state.tree?.dynasty.culture ?? "", () => undefined);
   form.append(field("Name", name), field("Id", id), field("Culture", culture));
-  const ok = await confirmDialog({
+  const ok = await confirmAction({
     title: "New dynasty",
     description: "The name is written to your mod's localization; the block goes into common/dynasties.",
     content: form,
@@ -1642,7 +1642,7 @@ async function newHouse(): Promise<void> {
   });
   key.addEventListener("input", () => (key.dataset.touched = "1"));
   form.append(field("Name", name), field("Key", key));
-  const ok = await confirmDialog({
+  const ok = await confirmAction({
     title: `New house of ${tree.dynasty.name || tree.dynasty.id}`,
     description: "The name is written to your mod's localization; the block goes into common/dynasty_houses.",
     content: form,

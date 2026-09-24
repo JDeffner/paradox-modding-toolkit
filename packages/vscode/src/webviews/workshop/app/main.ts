@@ -11,7 +11,7 @@ import { versionAtLeast, type ItemDetails, type WorkshopVisibility } from "../..
 import { bbcodeToHtml } from "../bbcode";
 import { markdownToBBCode } from "../../../steam/bbcodeMarkdown";
 import { iconEl } from "../../shared/icons";
-import { confirmDialog, menu, type MenuItem } from "../../shared/overlay";
+import { confirmAction, menu, type MenuItem } from "../../shared/overlay";
 import type {
   AppToHost,
   DlcChoice,
@@ -585,7 +585,7 @@ function translationRow(lang: string): HTMLElement {
       void (async () => {
         e.stopPropagation();
         if (hasText) {
-          const go = await confirmDialog({
+          const go = await confirmAction({
             title: `Remove the ${langLabel(lang)} translation?`,
             description:
               "The local draft is deleted from workshop.json. Text already uploaded stays on Steam.",
@@ -1329,7 +1329,7 @@ $("pullDesc").addEventListener(
     void (async () => {
       if (!live) return;
       if (draftDescription.trim() && draftDescription !== live.description) {
-        const go = await confirmDialog({
+        const go = await confirmAction({
           title: "Replace the description draft?",
           description: "The local draft differs from what is on Steam and will be overwritten.",
           confirmLabel: "Replace",
@@ -1508,7 +1508,7 @@ async function uploadModal(): Promise<UploadChoice | null> {
   body.append(head, rows, noteBox, warn);
 
   const vis = pickedVisibility ?? live?.visibility ?? null;
-  const go = await confirmDialog({
+  const go = await confirmAction({
     title: isNew ? `Publish "${name}" to the Steam Workshop` : `Upload "${name}" to the Steam Workshop`,
     description: isNew
       ? "A new item. It starts private until you change its visibility."
@@ -1842,7 +1842,7 @@ $("pull").addEventListener(
         "Replaces the local drafts with what the item shows on Steam. Local text never uploaded is lost: commit or copy it first if it matters.";
       warn.append(iconEl("alert"), warnText);
       wrap.append(warn);
-      const go = await confirmDialog({
+      const go = await confirmAction({
         title: "Download from Steam into files",
         description: `Into ${info.workshopDir}`,
         content: wrap,
@@ -1876,7 +1876,7 @@ const commitField = (id: string, field: "title" | "version" | "supportedVersion"
         }
         // Going backwards is almost always a typo - say so before writing.
         if (field !== "title" && current && !versionAtLeast(v, current)) {
-          const go = await confirmDialog({
+          const go = await confirmAction({
             title: field === "version" ? "Lower the mod version?" : "Lower the game version?",
             description:
               `"${v}" is lower than the current "${current}". ` +

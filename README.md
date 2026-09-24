@@ -229,3 +229,5 @@ schema import is MIT, and the icons the webviews draw are Lucide (ISC) and VS
 Code codicons (CC BY 4.0), all in
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). No game assets are
 redistributed.
+
+PNG conversion bundles [pngjs](https://github.com/pngjs/pngjs) (MIT) to preserve all mask channels. Its license is included in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

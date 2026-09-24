@@ -23,6 +23,7 @@ const MAX_WORKERS = 4;
 interface Slot {
   worker: Worker;
   busy: boolean;
+  closed: boolean;
   /** The job this worker is running, so a death can answer it. */
   job: number | null;
 }
@@ -46,8 +47,9 @@ function usable(): boolean {
 function spawn(): Slot | null {
   try {
     const worker = new Worker(WORKER_FILE);
-    const slot: Slot = { worker, busy: false, job: null };
+    const slot: Slot = { worker, busy: false, closed: false, job: null };
     worker.on("message", (reply: DecodeReply) => {
+      if (slot.closed || slot.job !== reply.id) return;
       slot.busy = false;
       slot.job = null;
       pending.get(reply.id)?.(reply.size);
@@ -59,15 +61,7 @@ function spawn(): Slot | null {
     // own thread instead. Both "error" and "exit" arrive for one death, so the
     // second one finds the job already answered.
     const fail = (): void => {
-      slots = slots?.filter((s) => s !== slot) ?? null;
-      slot.busy = false;
-      if (slot.job !== null) {
-        const answer = pending.get(slot.job);
-        pending.delete(slot.job);
-        slot.job = null;
-        answer?.(null);
-      }
-      pump();
+      if (retire(slot)) pump();
     };
     worker.on("error", fail);
     worker.on("exit", fail);
@@ -79,24 +73,51 @@ function spawn(): Slot | null {
   }
 }
 
+/** Settle a failed worker's job once, even when error is followed by exit. */
+function retire(slot: Slot): boolean {
+  if (slot.closed) return false;
+  slot.closed = true;
+  slots = slots?.filter((s) => s !== slot) ?? null;
+  slot.busy = false;
+  if (slot.job !== null) {
+    const answer = pending.get(slot.job);
+    pending.delete(slot.job);
+    slot.job = null;
+    answer?.(null);
+  }
+  return true;
+}
+
 function pump(): void {
   if (!slots) return;
   while (queue.length > 0) {
     let slot = slots.find((s) => !s.busy);
-    if (!slot && slots.length < MAX_WORKERS) {
+    if (!slot && available && slots.length < MAX_WORKERS) {
       const fresh = spawn();
       if (fresh) {
         slots.push(fresh);
         slot = fresh;
       }
     }
-    if (!slot) return;
+    if (!slot) {
+      // A constructor failure disables new workers. Existing workers can
+      // still drain the queue; without one, every caller needs its fallback.
+      if (slots.length === 0) {
+        for (const waiting of queue.splice(0)) waiting.resolve(null);
+      }
+      return;
+    }
     const next = queue.shift()!;
     const id = nextId++;
     pending.set(id, next.resolve);
     slot.busy = true;
     slot.job = id;
-    slot.worker.postMessage({ id, ...next.job } satisfies DecodeJob);
+    try {
+      slot.worker.postMessage({ id, ...next.job } satisfies DecodeJob);
+    } catch {
+      retire(slot);
+      void slot.worker.terminate().catch(() => undefined);
+    }
   }
 }
 

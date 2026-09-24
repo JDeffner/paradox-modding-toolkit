@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { encodeDds, encodePng } from "../packages/server/src/dds";
+import { decodeDds, encodeDds, encodePng } from "../packages/server/src/dds";
 import type { BatchResult } from "../packages/vscode/src/imageBatch";
 import { run as checkBBCode } from "./ux-vscode-suite";
 import { run as checkEncoding } from "./encoding-vscode-suite";
@@ -189,8 +189,10 @@ async function checks(): Promise<void> {
     await fs.writeFile(input, encodePng(2, 1, pixels));
     const toDds = vscode.commands.executeCommand<BatchResult>("px.convertToDds", vscode.Uri.file(input));
     await pick(3);
+    await pick(0);
     await pick(1);
     assert.equal((await toDds)?.written.length, 1);
+    assert.deepEqual(decodeDds(await fs.readFile(path.join(dir, "other.dds"))).pixels, pixels);
     const corrupt = path.join(dir, "broken.dds");
     await fs.writeFile(corrupt, "bad DDS");
     const failed = vscode.commands.executeCommand<BatchResult>(

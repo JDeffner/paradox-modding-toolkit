@@ -19,6 +19,7 @@ export function createIndexCacheIdentity(
     entry.kind,
     entry.ext ?? ".txt",
     entry.extraction ?? "top-level-key",
+    entry.nestedDefinitions ?? null,
   ]);
   const schemaHash = createHash("sha256").update(JSON.stringify(extraction)).digest("hex");
   return { gameRoot, schemaHash };

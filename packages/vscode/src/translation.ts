@@ -9,6 +9,7 @@ import * as fs from "fs";
 import * as path from "path";
 import type { PxConfig } from "./config";
 import { listFiles } from "@px-lsp/protocol/fsWalk";
+import { readDocument, writeDocument } from "./documentWrite";
 import {
   LOC_LANGUAGES,
   buildTranslation,
@@ -44,9 +45,10 @@ export async function createTranslationCommand(cfg: PxConfig, log: (msg: string)
     if (!language) return;
     const file = path.join(locDir, language, `mod_l_${language}.yml`);
     try {
-      fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, `\uFEFFl_${language}:\n`, { encoding: "utf8", flag: "wx" });
-      await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file));
+      const snapshot = await readDocument(file, true);
+      if (!snapshot.created) throw new Error("Localization file already exists");
+      await writeDocument(snapshot, `l_${language}:\n`, true);
+      await vscode.window.showTextDocument(snapshot.document);
     } catch (error) {
       void vscode.window.showErrorMessage(`Could not add localization: ${String(error)}`);
     }
@@ -84,39 +86,42 @@ export async function createTranslationCommand(cfg: PxConfig, log: (msg: string)
   let updated = 0;
   let addedKeys = 0;
   let firstFile: string | null = null;
+  let failed = 0;
 
   for (const src of sourceFiles) {
     const dst = retargetLocPath(src, source, target);
     if (!dst) continue;
-    let content: string;
     try {
-      content = fs.readFileSync(src, "utf8");
-    } catch {
-      continue;
-    }
-    try {
-      if (fs.existsSync(dst)) {
-        const merged = mergeTranslation(fs.readFileSync(dst, "utf8"), content, source);
+      const sourceSnapshot = await readDocument(src);
+      const destination = await readDocument(dst, true);
+      if (!destination.created) {
+        const merged = mergeTranslation(destination.text, sourceSnapshot.text, source);
         if (merged.added > 0) {
-          fs.writeFileSync(dst, merged.content, "utf8");
+          await writeDocument(destination, merged.content, true, [sourceSnapshot]);
           updated++;
           addedKeys += merged.added;
           firstFile = firstFile ?? dst;
         }
       } else {
-        fs.mkdirSync(path.dirname(dst), { recursive: true });
-        fs.writeFileSync(dst, buildTranslation(content, target, source), "utf8");
+        await writeDocument(destination, buildTranslation(sourceSnapshot.text, target, source), true, [
+          sourceSnapshot,
+        ]);
         created++;
         firstFile = firstFile ?? dst;
       }
     } catch (err) {
       log(`translation: failed for ${dst}: ${String(err)}`);
+      failed++;
+      void vscode.window.showErrorMessage(
+        `Could not add translation for ${path.basename(src)}: ${String(err)}`
+      );
+      break;
     }
   }
 
   const summary = `Paradox Modding Toolkit: ${target} translation — ${created} file(s) created, ${updated} updated (${addedKeys} entries appended).`;
   log(summary);
-  void vscode.window.showInformationMessage(summary);
+  if (!failed) void vscode.window.showInformationMessage(summary);
   if (firstFile) {
     const doc = await vscode.workspace.openTextDocument(firstFile);
     await vscode.window.showTextDocument(doc);

@@ -19,6 +19,31 @@ const DEF_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 export const EVENT_ID = /^[A-Za-z0-9_-]+\.\d+$/;
 const TITLE_KEY = /^[ekdcb]_[A-Za-z0-9_-]+$/;
 
+/** The extractor and symbol resolver must agree about nested declaration sites. */
+export function nestedDefinitionKind(entry: SchemaEntry, path: readonly Statement[]): string | null {
+  const rule = entry.nestedDefinitions;
+  if (!rule || path.length !== rule.path.length + 2) return null;
+  if (
+    path.some(
+      (s) =>
+        s.kind !== "assignment" ||
+        s.key.quoted ||
+        s.value?.kind !== "block" ||
+        (s.op !== "=" && s.op !== "?=") ||
+        !DEF_NAME.test(s.key.text)
+    )
+  )
+    return null;
+  const last = path.at(-1)!;
+  if (last.kind !== "assignment" || rule.excludedKeys?.includes(last.key.text)) return null;
+  return rule.path.every((key, i) => {
+    const wrapper = path[i + 1];
+    return wrapper.kind === "assignment" && wrapper.key.text === key;
+  })
+    ? rule.kind
+    : null;
+}
+
 export function extractDefinitions(
   content: string,
   entry: SchemaEntry,
@@ -55,9 +80,9 @@ export function extractDefinitionsParsed(
   // Raw lines (split on \n; entries may keep a trailing \r) for encoding-safe
   // leading-comment capture (§E). Computed once per file, near-zero cost.
   const rawLines = content.split("\n");
-  const push = (name: string, offset: number, container?: string) => {
+  const push = (name: string, offset: number, container?: string, kind = entry.kind) => {
     const line = lines.positionAt(offset).line;
-    const def: Definition = { name, kind: entry.kind, file, line, source };
+    const def: Definition = { name, kind, file, line, source };
     if (container !== undefined) def.container = container;
     const block = docForDefinition(rawLines, line);
     if (block) {
@@ -267,6 +292,14 @@ export function extractDefinitionsParsed(
       scan(root.statements);
       break;
     }
+  }
+  if (entry.nestedDefinitions) {
+    walkStatements(root, (stmt, ancestors) => {
+      if (stmt.kind !== "assignment") return;
+      const path = ancestors.filter((s) => s.kind === "assignment");
+      const kind = nestedDefinitionKind(entry, [...path, stmt]);
+      if (kind) push(stmt.key.text, stmt.key.range.start, path[0].key.text, kind);
+    });
   }
   // Every string above is a slice of `content` and would pin the whole file for
   // as long as the index holds the definition (§C2).

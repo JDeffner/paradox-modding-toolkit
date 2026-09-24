@@ -18,7 +18,13 @@ mirrors that file method by method.
 
 Send each unsaved script or localization change through `textDocument/didChange` with a new version before requesting language features. The server refreshes definitions and script references from that buffer; closing it restores the saved file. File watcher events update closed files and invalidate cached dependency searches. They do not replace an open buffer.
 
+Reloading game documentation or changing indexed definitions, schema or root-scope context also invalidates derived scope inference. Subsequent scope, hover and completion requests reflect the new data even when document text and version are unchanged. Syntax-only parses remain reusable. This behavior uses the existing requests and capability gates; clients do not need to send a dummy text edit after a reload.
+
 Definition kinds have independent names and override chains. A localization key and a trait may share a name, as may a scripted GUI and a scripted trigger. Navigation uses the type required at the cursor and still returns the mod, parent and vanilla declarations of that type.
+
+CK3 also indexes `faith` definitions inside a religion's `faiths` block and `law` definitions inside law groups. Completion, hover, navigation, workspace symbols and typed references use the child kind; the definition's `container` identifies its parent. This applies to saved files and current open buffers. Rename for these nested kinds is unavailable because indirect forms, such as faith-derived modifier names, are not fully indexed. Victoria 3 and EU5 keep their existing profile extraction rules.
+
+Schema overlay entries can add `nestedDefinitions: { "kind": "child_kind", "path": ["wrapper"], "excludedKeys": ["property_block"] }`. The path is the exact sequence of wrapper blocks below each top-level definition; an empty path selects direct child blocks. Only unquoted block assignments with valid definition names are extracted. The parent entry's required-localization patterns apply to the parent kind, not the child kind. Cache identity includes this rule, so changing it rebuilds the index.
 
 Declare `workspace.workspaceEdit.documentChanges: true` in standard LSP capabilities if the host can enforce document versions when applying rename. The server supplies versions for open files and null for closed files. Without that capability, rename requires open sources to match disk and returns plain `changes`. Show rename errors to the user; do not apply a partial edit after an error. See [the rename contract](PROTOCOL.md#symbol-lookup-and-rename) for unsupported and ambiguous cases.
 
@@ -637,6 +643,10 @@ These VS Code extension features are implemented in the client rather than the l
   images in hover markdown shows the link text instead. The DDS decoder itself
   is vscode-free (`packages/server/src/dds/`) if you need to build your own
   viewer.
+
+The `@px-lsp/server/dds` module also exports `encodeDds(width, height, rgba, format, mipmaps = false)`. Formats are `bc1`, `bc3` and `bgra8`. BC1/BC3 base dimensions must be positive multiples of four; incompatible dimensions throw instead of producing a texture Direct3D cannot load. Set `mipmaps` to `true` to write a full chain down to 1×1, or pass an integer count including the base level to write a partial chain. Invalid counts throw. Mip filtering treats RGBA channels independently, without gamma correction or normal-vector normalization. Callers replacing texture-array entries must match the original dimensions, format and mip count. These helpers do not add a conversion request to the LSP protocol.
+
+`ddsMipLevels(bytes)` returns the stored levels as `{ level, width, height, offset, byteLength }[]`, validating the count and byte ranges. `decodeDds(bytes, mipLevel = 0)` decodes the selected stored level. Both operate on the first array slice or cubemap face. Mip enumeration rejects volume textures and padded uncompressed rows; default base-level decoding keeps its existing behavior. Layout follows [Microsoft's DDS texture layout](https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dds-file-layout-for-textures), including complete blocks for compressed levels smaller than 4×4. No new LSP request or client capability is required.
 
 ## Reference clients in this repository
 

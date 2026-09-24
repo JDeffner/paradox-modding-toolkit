@@ -9,6 +9,9 @@ export function ddsPreviewHtml(opts: {
   error: string | null;
   nonce: string;
   scriptSrc: string;
+  mipLevels?: { level: number; width: number; height: number }[];
+  selectedMip?: number;
+  mipError?: string;
 }): string {
   const { name, meta, dataUri, error, nonce, scriptSrc } = opts;
   const checker = texturePreviewColors("checkerboard");
@@ -17,7 +20,17 @@ export function ddsPreviewHtml(opts: {
   const toolButton = (id: string, name_: Parameters<typeof icon>[0], tip: string): string =>
     `<button id="${id}" class="px-btn" data-variant="ghost" data-size="icon-sm" data-tip="${tip}" data-tip-side="top" data-tip-wrap>${icon(name_)}</button>`;
 
-  const stageInfo = meta ? `<div id="stageInfo">${escapeHtml(meta)}</div>` : "";
+  const stageInfo = `<div id="stageInfo">${escapeHtml(meta)}</div>`;
+  const mips = opts.mipLevels ?? [];
+  const mipItems = mips.map((mip) => ({
+    value: String(mip.level),
+    label: `${mip.level} · ${mip.width}×${mip.height}${mip.level === 0 ? " (base)" : ""}`,
+  }));
+  const selectedMip = mipItems.find((mip) => mip.value === String(opts.selectedMip ?? 0)) ?? mipItems[0];
+  const mipPicker =
+    dataUri && mips.length
+      ? `<div id="mipControl"><span>Mip level</span><button id="mipLevel" class="px-btn px-dropdown" data-variant="outline" data-size="sm" aria-label="Mip level" aria-haspopup="dialog" value="${selectedMip.value}" data-mips="${escapeHtml(JSON.stringify(mipItems))}" ${mips.length === 1 ? "disabled" : ""}><span class="px-truncate">${escapeHtml(selectedMip.label)}</span>${icon("chevronDown")}</button>${mips.length === 1 ? '<span class="px-muted px-xs">No smaller mipmaps</span>' : ""}</div>`
+      : "";
   const stage = error
     ? `<div class="err">${escapeHtml(error)}</div><div id="stageTools"></div>${stageInfo}`
     : /* html */ `
@@ -45,10 +58,13 @@ ${uiCss}
   body { overflow: hidden; }
   #app { display: flex; flex-direction: column; height: 100vh; }
   #bar {
-    display: flex; align-items: center; gap: 6px; flex: 0 0 auto;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 0 0 auto;
     padding: 6px 8px; border-bottom: 1px solid var(--px-border);
   }
   #bar .px-separator { height: 20px; align-self: center; }
+  #mipControl { display: flex; align-items: center; gap: 6px; font-size: var(--px-text-xs); }
+  #mipLevel { width: auto; }
+  #mipError:not(:empty) { padding: 6px 8px; color: var(--px-destructive); }
   /* The name has its own padding-free text edge; the buttons carry inner padding.
      Extra margin around this divider keeps the visual gaps equal. */
   #fileNameWrap + .px-separator { margin: 0 4px; }
@@ -100,8 +116,10 @@ ${uiCss}
     <div class="px-separator" data-orientation="vertical"></div>
     ${barButton("copyPath", "copy", "Copy path", "Copy the path from the gfx/ root, as script references it")}
     ${barButton("reveal", "folderOpen", "Reveal", "Show the file in the system file explorer")}
-    ${dataUri ? barButton("savePng", "imageDown", "Save PNG", "Decode the texture and save it as a .png") : ""}
+    ${dataUri ? barButton("savePng", "imageDown", "Save preview PNG", "Save only the displayed surface and selected mip level as a .png") : ""}
+    ${mipPicker}
   </div>
+  <div id="mipError" role="status">${escapeHtml(opts.mipError ?? "")}</div>
   <div id="stage">${stage}</div>
 </div>
 <script nonce="${nonce}" src="${scriptSrc}"></script>

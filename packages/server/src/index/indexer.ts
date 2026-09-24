@@ -286,7 +286,8 @@ export function scanRoot(root: string, source: DefSource, opts: ScanOptions): De
 // Bumped to 6 when event files started contributing inline
 // scripted_trigger/scripted_effect declarations (#5); older caches lack them.
 // Named .asset definitions are absent from older caches.
-const INDEX_CACHE_FORMAT = 8;
+// Nested definitions retain their parent on cache reload.
+const INDEX_CACHE_FORMAT = 9;
 
 export interface IndexCacheIdentity {
   gameRoot: string;
@@ -306,9 +307,19 @@ interface IndexCacheFile {
   /** Kind string table (schema-driven, open set). */
   kinds: string[];
   files: string[];
-  // [name, kindIdx, fileIdx, line, value|0, paramsSpaceJoined|0, doc|0, tags|0]
+  // [name, kindIdx, fileIdx, line, value|0, paramsSpaceJoined|0, doc|0, tags|0, container|0]
   defs: Array<
-    [string, number, number, number, string | Absent, string | Absent, string | Absent, CachedTags]
+    [
+      string,
+      number,
+      number,
+      number,
+      string | Absent,
+      string | Absent,
+      string | Absent,
+      CachedTags,
+      string | Absent,
+    ]
   >;
 }
 
@@ -360,6 +371,7 @@ export function saveIndexCache(
       def.params ? def.params.join(" ") : 0,
       def.doc ?? 0,
       tags,
+      def.container ?? 0,
     ]);
   }
   const payload: IndexCacheFile = {
@@ -394,7 +406,7 @@ export function loadIndexCache(
   if (!Array.isArray(payload.files) || !Array.isArray(payload.defs) || !Array.isArray(payload.kinds))
     return null;
   const defs: Definition[] = [];
-  for (const [name, kindIdx, fileIdx, line, value, params, doc, tags] of payload.defs) {
+  for (const [name, kindIdx, fileIdx, line, value, params, doc, tags, container] of payload.defs) {
     const kind = payload.kinds[kindIdx];
     const file = payload.files[fileIdx];
     if (!kind || !file) return null;
@@ -403,6 +415,7 @@ export function loadIndexCache(
     if (typeof params === "string" && params !== "") def.params = params.split(" ");
     if (typeof doc === "string" && doc !== "") def.doc = doc;
     if (Array.isArray(tags) && tags.length > 0) def.tags = tags.map(([tag, text]) => ({ tag, text }));
+    if (typeof container === "string") def.container = container;
     defs.push(def);
   }
   return defs;

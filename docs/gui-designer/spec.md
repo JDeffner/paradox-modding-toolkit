@@ -259,12 +259,7 @@ toolkit's own coverage of each is tracked in
   Vic3 measured the BROAD rule — an EMPTY sized container keeps its size too
   (probe 2026-08-09, warn-yet-apply); carried as the vic3 profile quirk
   `emptySizedContainerKept`.
-- A percentage WIDTH inside a `vbox` CRASHES the game: the vbox's width is
-  content-derived and therefore indeterminate, so the `%` has nothing to
-  resolve against. A percentage HEIGHT is the milder case. This is the
-  exception to "percent sizes resolve against the parent's rect" above, and
-  an authoring hazard rather than a rect rule. (Studio, encoded rule;
-  Linter GUI007)
+- A percentage width inside a content-sized `vbox` is a reported authoring hazard, with a possible circular size dependency. The original source is Studio's encoded GUI007 rule, not a measured game probe. A game crash and its exact conditions remain unverified. Do not treat this as a blanket ban on percentage widths or as an accepted limitation of the editor. A live CK3 probe must compare content-sized and explicitly sized parents before defining a structural warning or changing writer behavior.
 - An EMPTY `container` collapses to 0: it sizes to content, and a fixed
   `size` will not hold it open. A `widget` keeps its size when empty, so a
   spacer or padding row must be a `widget`. (Studio, encoded rule)

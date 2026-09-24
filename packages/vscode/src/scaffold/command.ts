@@ -15,8 +15,7 @@ import type { ScaffoldTemplate } from "@px-lsp/server/games/profile";
 import { renderScaffold, type ScaffoldFile, type ScaffoldResult } from "./templates";
 import { templatesForFolder, samePath, containsPath } from "../commandTargets";
 import { metaFor } from "../meta";
-
-const BOM = "﻿";
+import { readDocument, writeDocument } from "../documentWrite";
 
 /** Remembers the last-used prefix within a session so repeat scaffolds are quick. */
 let lastPrefix: string | null = null;
@@ -133,11 +132,6 @@ async function askTemplateName(template: ScaffoldTemplate, prefix: string): Prom
   return askName(prefix, template.nameLabel);
 }
 
-/** Detect a UTF-8 BOM on the first three bytes of an existing file. */
-function fileHasBom(buf: Buffer): boolean {
-  return buf.length >= 3 && buf[0] === 0xef && buf[1] === 0xbb && buf[2] === 0xbf;
-}
-
 interface WriteOutcome {
   absPath: string;
   action: "created" | "appended" | "skipped";
@@ -145,17 +139,15 @@ interface WriteOutcome {
   cursorLineOffset: number;
 }
 
-function materializeFile(modPath: string, file: ScaffoldFile): WriteOutcome {
+async function materializeFile(modPath: string, file: ScaffoldFile): Promise<WriteOutcome> {
   const absPath = path.join(modPath, ...file.relPath.split("/"));
+  const snapshot = await readDocument(absPath, true);
 
-  if (fs.existsSync(absPath)) {
+  if (!snapshot.created) {
     if (!file.appendIfExists) {
       return { absPath, action: "skipped", cursorLineOffset: 0 };
     }
-    const buf = fs.readFileSync(absPath);
-    const hadBom = fileHasBom(buf);
-    let existing = buf.toString("utf8");
-    if (hadBom) existing = existing.replace(/^﻿/, "");
+    let existing = snapshot.text.replace(/^\uFEFF/, "");
     const eol = existing.includes("\r\n") ? "\r\n" : "\n";
 
     // The game requires event files to START with their namespace line; an
@@ -175,14 +167,13 @@ function materializeFile(modPath: string, file: ScaffoldFile): WriteOutcome {
     const prefixText = trimmedExisting + eol + eol;
     const cursorLineOffset = prefixText.split(eol).length - 1;
     const combined = prefixText + block;
-    fs.writeFileSync(absPath, (hadBom || file.bom ? BOM : "") + combined, "utf8");
+    await writeDocument(snapshot, combined, file.bom);
     return { absPath, action: "appended", cursorLineOffset };
   }
 
-  fs.mkdirSync(path.dirname(absPath), { recursive: true });
   const eol = process.platform === "win32" ? "\r\n" : "\n";
   const body = file.content.replace(/\n/g, eol);
-  fs.writeFileSync(absPath, (file.bom ? BOM : "") + body, "utf8");
+  await writeDocument(snapshot, body, file.bom);
   return { absPath, action: "created", cursorLineOffset: 0 };
 }
 
@@ -197,7 +188,7 @@ async function materialize(
   let cursorTarget: { absPath: string; line: number; character: number } | null = null;
 
   for (const file of result.files) {
-    const outcome = materializeFile(cfg.modPath!, file);
+    const outcome = await materializeFile(cfg.modPath!, file);
     onFileChanged(outcome.absPath);
     if (outcome.action === "created") created.push(file.relPath);
     else if (outcome.action === "appended") appended.push(file.relPath);

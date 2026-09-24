@@ -254,6 +254,8 @@ export async function pickSaveTarget(
   return choice ? openSaveTarget(cfg, folder, choice) : null;
 }
 
+export type DefinitionSaveResult = "saved" | "stale" | "failed";
+
 /**
  * Apply the server's edits as ONE `WorkspaceEdit`, save, and (unless
  * `reveal: false`) show the file beside without stealing focus. `text` is the
@@ -265,29 +267,36 @@ export async function applyDefinitionEdits(
   text: string,
   edits: readonly GuiTextEdit[],
   opts: { reveal?: boolean } = {}
-): Promise<boolean> {
-  const doc = await vscode.workspace.openTextDocument(abs);
-  if (doc.getText() !== text) {
-    void vscode.window.showWarningMessage(
-      `Paradox Modding Toolkit: ${path.basename(abs)} changed while the editor was open, so nothing was written. Try again.`
-    );
-    return false;
-  }
-  if (edits.length > 0) {
-    const edit = new vscode.WorkspaceEdit();
-    for (const e of edits) {
-      edit.replace(doc.uri, new vscode.Range(doc.positionAt(e.start), doc.positionAt(e.end)), e.newText);
+): Promise<DefinitionSaveResult> {
+  try {
+    const doc = await vscode.workspace.openTextDocument(abs);
+    if (doc.getText() !== text) {
+      void vscode.window.showWarningMessage(
+        `Paradox Modding Toolkit: ${path.basename(abs)} changed while the editor was open, so nothing was written. Try again.`
+      );
+      return "stale";
     }
-    if (!(await vscode.workspace.applyEdit(edit))) return false;
-    await doc.save();
+    if (edits.length > 0) {
+      const edit = new vscode.WorkspaceEdit();
+      for (const e of edits) {
+        edit.replace(doc.uri, new vscode.Range(doc.positionAt(e.start), doc.positionAt(e.end)), e.newText);
+      }
+      if (!(await vscode.workspace.applyEdit(edit))) throw new Error("The definition edit was rejected");
+    }
+    if (!(await doc.save())) throw new Error(`${path.basename(abs)} could not be saved`);
+    if (opts.reveal !== false) {
+      await vscode.window.showTextDocument(doc, {
+        viewColumn: vscode.ViewColumn.Beside,
+        preserveFocus: true,
+      });
+    }
+    return "saved";
+  } catch (error) {
+    void vscode.window.showErrorMessage(
+      `Paradox Modding Toolkit: failed to save ${path.basename(abs)}: ${String(error)}`
+    );
+    return "failed";
   }
-  if (opts.reveal !== false) {
-    await vscode.window.showTextDocument(doc, {
-      viewColumn: vscode.ViewColumn.Beside,
-      preserveFocus: true,
-    });
-  }
-  return true;
 }
 
 /**

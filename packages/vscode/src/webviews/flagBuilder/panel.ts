@@ -185,14 +185,18 @@ export class FlagBuilderPanel {
   private async save(name: string, script: string, modPath: string, sourceFile?: string): Promise<void> {
     // The app only offers paths the host listed, but the message is still text from a webview.
     if (!this.options.mods.some((m) => m.path === modPath)) return;
-    const file = await saveFlagToMod({
-      name,
-      script,
-      modPath,
-      stageRoot: this.options.meta.stageRoots?.[0],
-      sourceFile,
-    });
-    if (file) this.post({ type: "toast", message: `Saved ${name} to ${file}.` });
+    try {
+      const file = await saveFlagToMod({
+        name,
+        script,
+        modPath,
+        stageRoot: this.options.meta.stageRoots?.[0],
+        sourceFile,
+      });
+      if (file) this.post({ type: "toast", message: `Saved ${name} to ${file}.` });
+    } catch (error) {
+      this.post({ type: "toast", message: `Could not save ${name}: ${String(error)}` });
+    }
   }
 
   private async exportPng(name: string, dataUrl: string): Promise<void> {

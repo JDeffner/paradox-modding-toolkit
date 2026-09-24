@@ -41,6 +41,8 @@ const LINK_OUTPUT_PATCHES: Record<string, string[]> = {
 };
 
 export class ScopeModel {
+  /** Changes when indexed scripted lists replace the derived iterator table. */
+  revision = 0;
   /** Event-target links: liege, primary_title, faith, ... */
   readonly links = new Map<string, LinkInfo>();
   /** Iterator base name → scope of the iterated items (every_vassal → character). */
@@ -104,6 +106,7 @@ export class ScopeModel {
    * Called whenever the definition index changes; replaces the previous set.
    */
   setScriptedLists(lists: ReadonlyArray<{ name: string; base?: string }>): void {
+    this.revision++;
     for (const name of this.scriptedListNames) this.iteratorTargets.delete(name);
     this.scriptedListNames.clear();
     const byName = new Map<string, string | undefined>();

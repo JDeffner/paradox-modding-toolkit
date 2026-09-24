@@ -150,9 +150,7 @@ the ~156 schema folders; the reference scan then walked the whole root for
 `.txt` and read it all again, because `extractDefinitions` and
 `extractReferences` each called `parseScript` themselves. 154 of the 156 CK3
 schema entries are `.txt`, so the two file sets overlapped on essentially all
-script. A workspace mod root is now walked once: each file is read once,
-parsed once, and that one CST feeds both extractors, with `classifyFile`
-supplying the schema entry the folder walk would have found it under.
+script. Each physical directory in a workspace mod root is visited once for `.txt` files, with schema folders before the whole-root reference fallback. This preserves the meaning of a linked folder such as `events/` while avoiding duplicate scans through directory aliases. Each file is read once and parsed once, and that one CST feeds both extractors, with `classifyFile` supplying the schema entry the folder walk would have found it under.
 Localization (`.yml`) and `gui` (`.gui`) are not `.txt` and keep the
 schema-folder listing. Dependency parents stay definition-only, and vanilla
 references are still lazy.

@@ -15,10 +15,13 @@ const DDSD_WIDTH = 0x4;
 const DDSD_PITCH = 0x8;
 const DDSD_PIXELFORMAT = 0x1000;
 const DDSD_LINEARSIZE = 0x80000;
+const DDSD_MIPMAPCOUNT = 0x20000;
 const DDPF_ALPHAPIXELS = 0x1;
 const DDPF_FOURCC = 0x4;
 const DDPF_RGB = 0x40;
 const DDSCAPS_TEXTURE = 0x1000;
+const DDSCAPS_COMPLEX = 0x8;
+const DDSCAPS_MIPMAP = 0x400000;
 
 function fourCC(s: string): number {
   return (s.charCodeAt(0) | (s.charCodeAt(1) << 8) | (s.charCodeAt(2) << 16) | (s.charCodeAt(3) << 24)) >>> 0;
@@ -30,16 +33,42 @@ export function hasTransparency(rgba: Uint8Array): boolean {
   return false;
 }
 
-/** Encode RGBA8 pixels as a DDS file (no mipmaps). */
+/** Encode RGBA8 pixels, optionally with a full mip chain filtered per channel (including alpha). */
 export function encodeDds(
   width: number,
   height: number,
   rgba: Uint8Array,
-  format: DdsEncodeFormat
+  format: DdsEncodeFormat,
+  mipmaps: boolean | number = false
 ): Uint8Array {
+  if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) || width <= 0 || height <= 0)
+    throw new Error("Invalid image dimensions");
   if (rgba.length < width * height * 4) throw new Error("pixel buffer too small");
-  const data =
-    format === "bgra8" ? encodeBgra(width, height, rgba) : encodeBlocks(width, height, rgba, format);
+  const fullCount = Math.floor(Math.log2(Math.max(width, height))) + 1;
+  const mipCount = typeof mipmaps === "number" ? mipmaps : mipmaps ? fullCount : 1;
+  if (!Number.isInteger(mipCount) || mipCount < 1 || mipCount > fullCount)
+    throw new Error(`Mipmap count must be between 1 and ${fullCount}`);
+  // Direct3D requires the base level of BC textures to be block-aligned. Smaller mip levels are valid.
+  if (format !== "bgra8" && (width % 4 !== 0 || height % 4 !== 0))
+    throw new Error(
+      `BC1/BC3 requires width and height to be multiples of 4 (got ${width}x${height}). Choose Auto or Uncompressed to keep this size.`
+    );
+  const levels: Uint8Array[] = [];
+  let levelWidth = width,
+    levelHeight = height,
+    pixels = rgba;
+  for (;;) {
+    levels.push(
+      format === "bgra8"
+        ? encodeBgra(levelWidth, levelHeight, pixels)
+        : encodeBlocks(levelWidth, levelHeight, pixels, format)
+    );
+    if (levels.length === mipCount) break;
+    pixels = downsampleChannels(levelWidth, levelHeight, pixels);
+    levelWidth = Math.max(1, Math.floor(levelWidth / 2));
+    levelHeight = Math.max(1, Math.floor(levelHeight / 2));
+  }
+  const hasMipmaps = levels.length > 1;
 
   const header = new Uint8Array(128);
   const dv = new DataView(header.buffer);
@@ -48,13 +77,19 @@ export function encodeDds(
   const compressed = format !== "bgra8";
   dv.setUint32(
     8,
-    DDSD_CAPS | DDSD_HEIGHT | DDSD_WIDTH | DDSD_PIXELFORMAT | (compressed ? DDSD_LINEARSIZE : DDSD_PITCH),
+    DDSD_CAPS |
+      DDSD_HEIGHT |
+      DDSD_WIDTH |
+      DDSD_PIXELFORMAT |
+      (compressed ? DDSD_LINEARSIZE : DDSD_PITCH) |
+      (hasMipmaps ? DDSD_MIPMAPCOUNT : 0),
     true
   );
   dv.setUint32(12, height, true);
   dv.setUint32(16, width, true);
-  dv.setUint32(20, compressed ? data.length : width * 4, true); // linear size / pitch
-  // depth, mipmaps, 11 reserved dwords stay 0
+  dv.setUint32(20, compressed ? levels[0].length : width * 4, true); // base level linear size / pitch
+  if (hasMipmaps) dv.setUint32(28, levels.length, true);
+  // depth and 11 reserved dwords stay 0
   const pf = 76; // pixel-format struct offset
   dv.setUint32(pf, 32, true); // pf size
   if (format === "bc1") {
@@ -71,11 +106,41 @@ export function encodeDds(
     dv.setUint32(pf + 24, 0x000000ff, true); // B
     dv.setUint32(pf + 28, 0xff000000, true); // A
   }
-  dv.setUint32(108, DDSCAPS_TEXTURE, true);
+  dv.setUint32(108, DDSCAPS_TEXTURE | (hasMipmaps ? DDSCAPS_COMPLEX | DDSCAPS_MIPMAP : 0), true);
 
-  const out = new Uint8Array(128 + data.length);
+  const out = new Uint8Array(128 + levels.reduce((sum, level) => sum + level.length, 0));
   out.set(header, 0);
-  out.set(data, 128);
+  let offset = 128;
+  for (const level of levels) {
+    out.set(level, offset);
+    offset += level.length;
+  }
+  return out;
+}
+
+/** Area box filter: masks store independent channels, so never multiply RGB by alpha. */
+function downsampleChannels(width: number, height: number, rgba: Uint8Array): Uint8Array {
+  const nextWidth = Math.max(1, Math.floor(width / 2));
+  const nextHeight = Math.max(1, Math.floor(height / 2));
+  const out = new Uint8Array(nextWidth * nextHeight * 4);
+  for (let y = 0; y < nextHeight; y++) {
+    const top = (y * height) / nextHeight,
+      bottom = ((y + 1) * height) / nextHeight;
+    for (let x = 0; x < nextWidth; x++) {
+      const left = (x * width) / nextWidth,
+        right = ((x + 1) * width) / nextWidth;
+      const sums = [0, 0, 0, 0];
+      for (let sy = Math.floor(top); sy < Math.ceil(bottom); sy++) {
+        for (let sx = Math.floor(left); sx < Math.ceil(right); sx++) {
+          const weight =
+            (Math.min(sx + 1, right) - Math.max(sx, left)) * (Math.min(sy + 1, bottom) - Math.max(sy, top));
+          for (let c = 0; c < 4; c++) sums[c] += rgba[(sy * width + sx) * 4 + c] * weight;
+        }
+      }
+      const area = (right - left) * (bottom - top);
+      for (let c = 0; c < 4; c++) out[(y * nextWidth + x) * 4 + c] = Math.round(sums[c] / area);
+    }
+  }
   return out;
 }
 
@@ -136,25 +201,25 @@ function from565(c: number): [number, number, number] {
 
 /**
  * Range-fit BC1 color block (always 4-color mode: c0 > c1). Endpoints are the
- * extremes of the block's principal luminance ordering; each pixel snaps to
+ * approximate extremes in RGB space; each pixel snaps to
  * the nearest of the 4 palette entries.
  */
 function writeColorBlock(px: Uint8Array, out: Uint8Array, offset: number): void {
-  // Find the two extreme pixels by projecting on the max-variance axis
-  // (approximated by luminance — adequate for icon/illustration content).
-  let minL = Infinity;
-  let maxL = -Infinity;
-  let minI = 0;
-  let maxI = 0;
-  for (let i = 0; i < 16; i++) {
-    const l = px[i * 4] * 3 + px[i * 4 + 1] * 6 + px[i * 4 + 2];
-    if (l < minL) {
-      minL = l;
-      minI = i;
-    }
-    if (l > maxL) {
-      maxL = l;
-      maxI = i;
+  // Two farthest-point passes keep distinct colors even when their luminance is identical.
+  let minI = 0,
+    maxI = 0;
+  for (let pass = 0; pass < 2; pass++) {
+    let distance = -1;
+    minI = maxI;
+    for (let i = 0; i < 16; i++) {
+      const dr = px[i * 4] - px[minI * 4];
+      const dg = px[i * 4 + 1] - px[minI * 4 + 1];
+      const db = px[i * 4 + 2] - px[minI * 4 + 2];
+      const d = dr * dr + dg * dg + db * db;
+      if (d > distance) {
+        distance = d;
+        maxI = i;
+      }
     }
   }
   let c0 = to565(px[maxI * 4], px[maxI * 4 + 1], px[maxI * 4 + 2]);
@@ -163,8 +228,9 @@ function writeColorBlock(px: Uint8Array, out: Uint8Array, offset: number): void 
     const t = c0;
     c0 = c1;
     c1 = t;
-  } else if (c0 === c1 && c1 > 0) {
-    c1 = c1 - 1; // keep 4-color mode; palette entry 0 still matches exactly
+  } else if (c0 === c1) {
+    if (c1 > 0) c1--;
+    else c0++; // black remains palette entry 1
   }
   const [r0, g0, b0] = from565(c0);
   const [r1, g1, b1] = from565(c1);

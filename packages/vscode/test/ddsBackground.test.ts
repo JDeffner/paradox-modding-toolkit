@@ -23,8 +23,9 @@ describe("DDS editor shared background", () => {
     const listeners = new Set<(event: { affectsConfiguration: (key: string) => boolean }) => void>();
     const writes: Array<{ key: string; value: unknown; target: number }> = [];
     let exported: Uint8Array | undefined;
+    let exportPath = "";
     const errors: string[] = [];
-    const dds = encodeDds(1, 1, new Uint8Array([0, 0, 0, 0]), "bgra8");
+    const dds = encodeDds(4, 4, new Uint8Array(64), "bgra8", true);
     class Disposable {
       constructor(public dispose: () => void) {}
     }
@@ -63,7 +64,10 @@ describe("DDS editor shared background", () => {
       },
       window: {
         showErrorMessage: (message: string) => errors.push(message),
-        showSaveDialog: async () => URI.file("/out.png"),
+        showSaveDialog: async (options: { defaultUri: URI }) => {
+          exportPath = options.defaultUri.path;
+          return URI.file("/out.png");
+        },
       },
     };
     const module = { exports: {} as typeof import("../src/ddsEditor") };
@@ -127,6 +131,22 @@ describe("DDS editor shared background", () => {
     const idat = png.indexOf("IDAT");
     const raw = inflateSync(png.subarray(idat + 4, idat + 4 + png.readUInt32BE(idat - 4)));
     expect([...raw.subarray(1, 5)]).toEqual([0, 0, 0, 0]);
+    expect(png.readUInt32BE(16)).toBe(4);
+    await first.receive({ type: "mip", level: 2 });
+    expect(first.posted.at(-1)).toMatchObject({
+      type: "mip",
+      level: 2,
+      meta: expect.stringContaining("1×1"),
+    });
+    await first.receive({ type: "savePng" });
+    expect(Buffer.from(exported!).readUInt32BE(16)).toBe(1);
+    expect(exportPath).toBe("/mod/image.mip-2.png");
+    await first.receive({ type: "mip", level: 99 });
+    expect(first.posted.at(-1)).toMatchObject({ type: "mipError", level: 2 });
+    // Selecting a mip in one editor does not change another editor of the same document.
+    await second.receive({ type: "savePng" });
+    expect(Buffer.from(exported!).readUInt32BE(16)).toBe(4);
+    expect(exportPath).toBe("/mod/image.png");
     expect(errors).toEqual([]);
     for (const editor of [first, second, reopened]) editor.dispose();
     expect(listeners.size).toBe(0);

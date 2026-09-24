@@ -131,10 +131,14 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
   { path: "common/combat_effects", kind: "combat_effect" },
 
   // --- Realm structure: laws, governments, titles, buildings, holdings ---
-  // NOTE: common/laws top-level keys are law *groups* (e.g. title_succession_laws);
-  // the individual laws (feudal_elective_succession_law) are second-level and are
-  // NOT extractable with the current modes. We index the groups only.
-  { path: "common/laws", kind: "law_group", rootScopes: ["character"] },
+  // common/laws top-level keys are law groups; their direct child blocks are laws.
+  {
+    path: "common/laws",
+    kind: "law_group",
+    rootScopes: ["character"],
+    // _laws.info: direct children are laws, except the group's own trigger block.
+    nestedDefinitions: { kind: "law", path: [], excludedKeys: ["can_change_law_group"] },
+  },
   { path: "common/governments", kind: "government", rootScopes: ["character"] },
   {
     path: "common/landed_titles",
@@ -201,10 +205,13 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
   { path: "common/culture/eras", kind: "culture_era" },
 
   // --- Religion ---
-  // religion_types top-level keys are religions (akom_religion). Faiths are
-  // NESTED under `faiths = { faith_x = {...} }` and cannot be extracted with the
-  // current modes, so faiths are NOT indexed here (limitation).
-  { path: "common/religion/religion_types", kind: "religion", requiredLoc: ["$"] },
+  // _religion_types.info: religions contain faiths = { faith_name = { ... } }.
+  {
+    path: "common/religion/religion_types",
+    kind: "religion",
+    requiredLoc: ["$"],
+    nestedDefinitions: { kind: "faith", path: ["faiths"] },
+  },
   // doctrine_types top-level keys ARE the doctrine names (doctrine_monogamy),
   // which is exactly what `has_doctrine =` references. Doctrine *groups* live in
   // doctrine_group_types (indexed separately).
@@ -401,10 +408,6 @@ export const CK3_SCHEMA: SchemaEntry[] = CK3_SCHEMA_BASE.map((entry) => {
 });
 
 // Not covered (layout doesn't fit any extraction mode, or wrong-data risk):
-//  - Faiths: nested under religion_types' `faiths = { ... }` blocks; only the
-//    top-level religions are indexable. Faiths would need a dedicated mode.
-//  - Individual laws: common/laws top-level keys are law *groups*; the actual
-//    laws are second-level (only law_group indexed).
 //  - common/defines, common/named_colors,
 //    common/genes, common/ethnicities, common/coat_of_arms/dynamic_definitions:
 //    these are engine/data config, not script-referenced named definitions in
@@ -489,6 +492,17 @@ export const REF_FIELDS: RefField[] = [
   { key: "government", kinds: ["government"] },
   { key: "change_government", kinds: ["government"] },
   { key: "has_government", kinds: ["government"] },
+  // effects.log/triggers.log, with scalar usages in vanilla laws, events and history.
+  { key: "add_realm_law", kinds: ["law"] },
+  { key: "add_realm_law_skip_effects", kinds: ["law"] },
+  { key: "remove_realm_law", kinds: ["law"] },
+  { key: "has_realm_law", kinds: ["law"] },
+  { key: "has_realm_law_in_group", kinds: ["law_group"] },
+  { key: "add_title_law", kinds: ["law"] },
+  { key: "add_title_law_effects", kinds: ["law"] },
+  { key: "remove_title_law", kinds: ["law"] },
+  { key: "remove_title_law_effects", kinds: ["law"] },
+  { key: "has_title_law", kinds: ["law"] },
 
   // Modifiers. `modifier` and add_*_modifier can reference static/opinion/scripted
   // modifiers depending on context; carry all candidate kinds on the reference.

@@ -8,7 +8,7 @@
  * watches it, so editing anything here (or in shared/) reloads the page. The
  * server serves ui.css fresh from disk. Never shipped.
  */
-import { confirmDialog, menu, popover, toast } from "../../packages/vscode/src/webviews/shared/overlay";
+import { confirmAction, menu, popover, toast } from "../../packages/vscode/src/webviews/shared/overlay";
 import { scrubbable } from "../../packages/vscode/src/webviews/shared/scrub";
 import { sortable } from "../../packages/vscode/src/webviews/shared/sortable";
 import { colorPicker, paintSwatch, type Rgb } from "../../packages/vscode/src/webviews/shared/colorPicker";
@@ -260,7 +260,7 @@ byId("demo-popover").addEventListener("click", () => {
   popover(byId("demo-popover"), content);
 });
 byId("demo-confirm").addEventListener("click", () => {
-  void confirmDialog({
+  void confirmAction({
     title: "Delete 3 emblems?",
     description: "They are removed from the coat of arms.",
     details: ["emblem_lion_rampant", "emblem_cross_bold", "emblem_border_simple"],
