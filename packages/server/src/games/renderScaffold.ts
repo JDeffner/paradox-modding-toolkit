@@ -9,7 +9,7 @@
  * Template strings use tabs for indentation and LF only; the writer converts EOL
  * and prepends the BOM per the `bom` flag.
  */
-import type { ScaffoldTemplate } from "@px-lsp/server/games/profile";
+import type { ScaffoldTemplate } from "./profile";
 
 export interface ScaffoldFile {
   /** Mod-relative path with forward slashes (e.g. `events/foo_events.txt`). */

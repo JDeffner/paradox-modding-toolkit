@@ -8,6 +8,10 @@ changes. Before the split it moved inside the extension's version (up to
 
 ## Unreleased
 
+- Share the unchanged profile scaffold renderer with standalone CLI preparation commands.
+
+- Expose the existing game metadata through a shared registry for the editor and standalone `pxtk` client. The CLI bundles this server and uses its existing stdio requests; it does not add an LSP method.
+
 ## 0.3.6
 
 Ships with the toolkit's 0.5.0 release.

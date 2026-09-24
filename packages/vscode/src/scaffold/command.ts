@@ -12,7 +12,7 @@ import type { PxConfig } from "../config";
 import { escapeRegExp } from "@px-lsp/protocol/regex";
 import { hasKindStyle, kindStyle } from "@px-lsp/protocol/kinds";
 import type { ScaffoldTemplate } from "@px-lsp/server/games/profile";
-import { renderScaffold, type ScaffoldFile, type ScaffoldResult } from "./templates";
+import { renderScaffold, type ScaffoldFile, type ScaffoldResult } from "@px-lsp/server/games/renderScaffold";
 import { templatesForFolder, samePath, containsPath } from "../commandTargets";
 import { metaFor } from "../meta";
 

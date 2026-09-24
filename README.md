@@ -229,3 +229,12 @@ schema import is MIT, and the icons the webviews draw are Lucide (ISC) and VS
 Code codicons (CC BY 4.0), all in
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). No game assets are
 redistributed.
+
+The standalone CLI also bundles these libraries and their transitive dependencies. Its build includes the actual license texts in `dist/licenses/`.
+
+| Source | Use | License |
+|---|---|---|
+| [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) | Local stdio MCP tools | MIT |
+| [Zod](https://github.com/colinhacks/zod) | Configuration and tool-input validation | MIT |
+| [Sharp](https://github.com/lovell/sharp) | CLI image decoding, encoding and resizing; installed native dependency | Apache-2.0; libvips LGPL-2.1-or-later |
+| [VS Code language-server libraries](https://github.com/microsoft/vscode-languageserver-node) | LSP transport and bundled server | MIT |

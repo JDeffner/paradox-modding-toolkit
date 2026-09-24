@@ -7,18 +7,17 @@
  * never publishes diagnostics, and never shows the tiger status segment.
  */
 import * as vscode from "vscode";
-import * as crypto from "crypto";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
-import { spawn, type ChildProcess } from "child_process";
+import type { ChildProcess } from "child_process";
+import { startTiger } from "@px-lsp/protocol/tigerProcess";
 import type { PxConfig } from "../config";
 import { isUnder, modRootFor } from "../config";
 import { metaFor } from "../meta";
-import { renderLoadModBlocks } from "./loadMods";
+import { prepareTigerConfig } from "@px-lsp/protocol/tigerConfig";
 import { resolveConfigDir } from "@px-lsp/protocol/configDir";
 import { hasMetadataDescriptor } from "@px-lsp/protocol/descriptorMetadata";
-import { parseTigerJson, type TigerReport } from "@px-lsp/protocol/tigerParser";
+import type { TigerReport } from "@px-lsp/protocol/tigerParser";
 import {
   isIgnoredByConfig,
   isSuppressedInline,
@@ -37,40 +36,6 @@ const SEVERITY_MAP: Record<string, vscode.DiagnosticSeverity> = {
 
 const DEBOUNCE_MS = 1500;
 
-/** Past this much output from one run the bytes are dropped and the run is reported as unreadable. */
-const MAX_OUTPUT_BYTES = 256 * 1024 * 1024;
-
-/**
- * A child stream kept as buffers and decoded once, at close.
- *
- * `stdout += chunk.toString("utf8")` had two faults: it grew until V8's ~512 MB
- * string ceiling with nothing to stop it, and it decoded each chunk on its own,
- * so a multi-byte character split across a chunk boundary was corrupted before
- * parseTigerJson ever saw it.
- */
-function collectOutput(stream: NodeJS.ReadableStream | null | undefined): {
-  text(): string;
-  overflowed: boolean;
-} {
-  const chunks: Buffer[] = [];
-  let bytes = 0;
-  const out = {
-    overflowed: false,
-    text: () => Buffer.concat(chunks).toString("utf8"),
-  };
-  stream?.on("data", (chunk: Buffer) => {
-    if (out.overflowed) return;
-    bytes += chunk.length;
-    if (bytes > MAX_OUTPUT_BYTES) {
-      out.overflowed = true;
-      chunks.length = 0;
-      return;
-    }
-    chunks.push(chunk);
-  });
-  return out;
-}
-
 function hasDescriptor(root: string): boolean {
   try {
     return fs.existsSync(path.join(root, "descriptor.mod")) || hasMetadataDescriptor(root);
@@ -85,9 +50,11 @@ export class TigerRunner implements vscode.Disposable {
   private readonly status: vscode.StatusBarItem;
   /** Report count of the last completed run, kept visible until the next one. */
   private lastCount: number | null = null;
+  private lastFailure = false;
   private child: ChildProcess | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private errorNotified = false;
+  private disposed = false;
   private rerunRequested = false;
   /** Mod root of the run queued behind a still-running instance. */
   private rerunRoot: string | undefined;
@@ -115,6 +82,7 @@ export class TigerRunner implements vscode.Disposable {
    * unrelated project never grows a tiger segment).
    */
   refreshStatus(): void {
+    if (this.disposed) return;
     const cfg = this.getConfig();
     if (!this.tigerExists() || !cfg.tigerPath || !cfg.isCk3Workspace) {
       this.status.hide();
@@ -124,7 +92,11 @@ export class TigerRunner implements vscode.Disposable {
       this.showRunning();
       return;
     }
-    if (this.lastCount === null) {
+    if (this.lastFailure) {
+      this.status.text = "$(error) Tiger";
+      this.status.tooltip =
+        "Tiger validation failed. See the Paradox Modding Toolkit output. Click to retry.";
+    } else if (this.lastCount === null) {
       this.status.text = "$(play) Tiger";
       this.status.tooltip = `${this.tigerName()}: click to validate the mod`;
     } else {
@@ -155,7 +127,10 @@ export class TigerRunner implements vscode.Disposable {
 
   /** Record a finished run (null = no result, e.g. killed) and re-sync. */
   private showDone(problemCount: number | null): void {
-    if (problemCount !== null) this.lastCount = problemCount;
+    if (problemCount !== null) {
+      this.lastCount = problemCount;
+      this.lastFailure = false;
+    }
     this.refreshStatus();
   }
 
@@ -176,42 +151,25 @@ export class TigerRunner implements vscode.Disposable {
     return cfg.modPath;
   }
 
-  /**
-   * The conf a run uses, in order: the one in the mod's config dir
-   * (`.px-toolkit/`, where px.tigerGenerateConf writes it, kept out of Workshop
-   * uploads) passed with --config; else a conf at the mod root, which tiger
-   * loads by itself; else, for dependency mods without any user conf, a
-   * generated temp conf holding only `load_mod` blocks for cfg.parentPaths, so
-   * definitions from dependency mods resolve during validation.
-   */
-  private configArgs(cfg: PxConfig, modRoot: string): string[] {
+  private prepareConfig(cfg: PxConfig, modRoot: string) {
     const meta = metaFor(cfg.gameId);
-    if (!meta.tiger) return [];
-    // Per mod root, not cfg.modPath: multi-mod workspaces run tiger per mod.
-    const inConfigDir = path.join(resolveConfigDir(modRoot, meta), meta.tiger.confName);
-    if (fs.existsSync(inConfigDir)) return ["--config", inConfigDir];
-    if (fs.existsSync(path.join(modRoot, meta.tiger.confName))) return [];
-    const deps = renderLoadModBlocks(meta.descriptor, cfg.parentPaths, modRoot);
-    for (const dir of deps.skipped) this.log(`tiger: dependency mod skipped (no descriptor found): ${dir}`);
-    if (deps.conf === "") return [];
-    // Stable per-mod temp path: rewritten each run, never accumulates.
-    const hash = crypto.createHash("sha1").update(modRoot.toLowerCase()).digest("hex").slice(0, 8);
-    const tmp = path.join(os.tmpdir(), "px-toolkit", `${hash}-${meta.tiger.confName}`);
+    return prepareTigerConfig({
+      modRoot,
+      configDir: resolveConfigDir(modRoot, meta),
+      confName: meta.tiger!.confName,
+      descriptor: meta.descriptor,
+      parentPaths: cfg.parentPaths,
+    });
+  }
+
+  private disposeConfig(config?: ReturnType<typeof prepareTigerConfig>): void {
     try {
-      fs.mkdirSync(path.dirname(tmp), { recursive: true });
-      fs.writeFileSync(
-        tmp,
-        `# Generated per run by the Paradox Modding Toolkit extension: dependency mods of ${modRoot}\n${deps.conf}`,
-        "utf8"
+      config?.dispose();
+    } catch (error) {
+      this.notifyError(
+        `Paradox Modding Toolkit: could not remove temporary Tiger configuration: ${String(error)}`
       );
-    } catch (err) {
-      this.log(
-        `tiger: could not write the dependency conf (${String(err)}); running without dependency mods`
-      );
-      return [];
     }
-    this.log(`tiger: loading ${deps.loaded.length} dependency mod(s) via ${tmp}`);
-    return ["--config", tmp];
   }
 
   onDidSaveDocument(doc: vscode.TextDocument): void {
@@ -293,7 +251,14 @@ export class TigerRunner implements vscode.Disposable {
       return;
     }
 
-    const args = ["--json", ...this.configArgs(cfg, modRoot), ...this.extraArgs(modRoot)];
+    let config: ReturnType<typeof prepareTigerConfig>;
+    try {
+      config = this.prepareConfig(cfg, modRoot);
+    } catch (error) {
+      this.notifyError(`Paradox Modding Toolkit: could not configure validation: ${String(error)}`);
+      return;
+    }
+    const args = ["--json", ...config.args, ...this.extraArgs(modRoot)];
     if (cfg.gamePath) {
       // tiger's game flag (--ck3 / --vic3, matching the profile id) wants the
       // install root (".../<game name>"), while the resolved gamePath points at
@@ -305,128 +270,75 @@ export class TigerRunner implements vscode.Disposable {
     args.push(modRoot);
 
     this.log(`tiger: ${cfg.tigerPath} ${args.join(" ")}`);
-    let child: ChildProcess;
+    let run: ReturnType<typeof startTiger>;
     try {
-      child = spawn(cfg.tigerPath, args, { windowsHide: true });
-    } catch (err) {
-      this.notifyError(`Paradox Modding Toolkit: failed to start ${meta.tiger.binaryName}: ${String(err)}`);
+      run = startTiger(cfg.tigerPath, args, { cwd: modRoot });
+    } catch (error) {
+      this.disposeConfig(config);
+      this.notifyError(`Paradox Modding Toolkit: validation failed: ${String(error)}`);
       return;
     }
-    this.child = child;
+    this.child = run.child;
     this.showRunning();
-    const stdout = collectOutput(child.stdout);
-    const stderr = collectOutput(child.stderr);
-    child.on("error", (err) => {
-      this.child = null;
-      this.showDone(null);
-      this.notifyError(
-        `Paradox Modding Toolkit: could not run ${meta.tiger?.binaryName ?? "tiger"} (${err.message}). Check px.tigerPath.`
-      );
-    });
-    child.on("close", (code, signal) => {
-      this.child = null;
-      this.showDone(null);
-      if (this.rerunRequested) {
-        this.rerunRequested = false;
-        const queuedRoot = this.rerunRoot;
-        this.rerunRoot = undefined;
-        this.run(false, queuedRoot);
-        return;
-      }
-      if (signal) return; // killed by us
-      if (stdout.overflowed) {
-        this.notifyError(
-          `Paradox Modding Toolkit: ${meta.tiger?.binaryName ?? "tiger"} produced more than ` +
-            `${MAX_OUTPUT_BYTES / (1024 * 1024)} MB of output, so the report was discarded.`
-        );
-        return;
-      }
-      const reports = parseTigerJson(stdout.text());
-      if (reports === null) {
-        // Non-zero exit with no JSON = broken invocation; parse failures degrade to
-        // a notification, never a crash.
-        const err = stderr.text();
-        this.notifyError(
-          `Paradox Modding Toolkit: ${meta.tiger?.binaryName ?? "tiger"} produced no readable JSON report (exit code ${code}).` +
-            (err ? ` stderr: ${err.slice(0, 300)}` : "")
-        );
-        return;
-      }
-      this.publish(reports, modRoot);
-      this.showDone(reports.length);
-      this.log(`tiger: ${reports.length} report(s)`);
-    });
+    void run.result
+      .then(({ reports }) => {
+        if (this.rerunRequested || this.disposed) return;
+        this.publish(reports, modRoot);
+        this.showDone(reports.length);
+        this.log(`tiger: ${reports.length} report(s)`);
+      })
+      .catch((error: unknown) => {
+        if (!this.rerunRequested && !this.disposed) {
+          this.notifyError(`Paradox Modding Toolkit: validation failed: ${String(error)}`);
+        }
+      })
+      .finally(() => {
+        this.disposeConfig(config);
+        this.child = null;
+        if (this.disposed) return;
+        this.showDone(null);
+        if (this.rerunRequested) {
+          this.rerunRequested = false;
+          const queuedRoot = this.rerunRoot;
+          this.rerunRoot = undefined;
+          this.run(false, queuedRoot);
+        }
+      });
   }
 
   /**
    * Run tiger once and write the raw JSON report to `outFile` (the baseline
    * for --suppress). Independent of the debounced diagnostic runs.
    */
-  createBaseline(outFile: string): Promise<number | null> {
-    return new Promise((resolve) => {
-      const cfg = this.getConfig();
-      const meta = metaFor(cfg.gameId);
-      if (!meta.tiger) {
-        void vscode.window.showInformationMessage(
-          `Paradox Modding Toolkit: no tiger validator exists for ${meta.name} yet, so there is no baseline to create.`
-        );
-        resolve(null);
-        return;
-      }
-      if (!cfg.tigerPath || !cfg.modPath) {
-        void vscode.window.showWarningMessage(
-          "Paradox Modding Toolkit: tiger and a mod folder are required for a baseline."
-        );
-        resolve(null);
-        return;
-      }
-      // Same dependency wiring as diagnostic runs: a baseline created without
-      // the dependency mods would suppress the wrong report set.
-      const args = ["--json", ...this.configArgs(cfg, cfg.modPath)];
+  async createBaseline(outFile: string): Promise<number | null> {
+    const cfg = this.getConfig();
+    const meta = metaFor(cfg.gameId);
+    if (!meta.tiger || !cfg.tigerPath || !cfg.modPath) {
+      void vscode.window.showWarningMessage(
+        "Paradox Modding Toolkit: a supported validator and mod folder are required for a baseline."
+      );
+      return null;
+    }
+    let config: ReturnType<typeof prepareTigerConfig> | undefined;
+    try {
+      config = this.prepareConfig(cfg, cfg.modPath);
+      const args = ["--json", ...config.args];
       if (cfg.gamePath) {
         const gameDir =
           path.basename(cfg.gamePath).toLowerCase() === "game" ? path.dirname(cfg.gamePath) : cfg.gamePath;
         args.push(`--${cfg.gameId}`, gameDir);
       }
       args.push(cfg.modPath);
-      this.log(`tiger baseline: ${cfg.tigerPath} ${args.join(" ")}`);
-      let child: ChildProcess;
-      try {
-        child = spawn(cfg.tigerPath, args, { windowsHide: true });
-      } catch (err) {
-        this.notifyError(`Paradox Modding Toolkit: failed to start ${meta.tiger.binaryName}: ${String(err)}`);
-        resolve(null);
-        return;
-      }
-      const stdout = collectOutput(child.stdout);
-      child.on("error", () => resolve(null));
-      child.on("close", () => {
-        if (stdout.overflowed) {
-          this.notifyError(
-            `Paradox Modding Toolkit: tiger produced more than ${MAX_OUTPUT_BYTES / (1024 * 1024)} MB ` +
-              `of output, so no baseline was written.`
-          );
-          resolve(null);
-          return;
-        }
-        const text = stdout.text();
-        const reports = parseTigerJson(text);
-        if (reports === null) {
-          this.notifyError("Paradox Modding Toolkit: tiger produced no readable JSON for the baseline.");
-          resolve(null);
-          return;
-        }
-        try {
-          fs.mkdirSync(path.dirname(outFile), { recursive: true });
-          fs.writeFileSync(outFile, text);
-        } catch (err) {
-          this.notifyError(`Paradox Modding Toolkit: could not write the baseline file: ${String(err)}`);
-          resolve(null);
-          return;
-        }
-        resolve(reports.length);
-      });
-    });
+      const { reports, stdout } = await startTiger(cfg.tigerPath, args, { cwd: cfg.modPath }).result;
+      fs.mkdirSync(path.dirname(outFile), { recursive: true });
+      fs.writeFileSync(outFile, stdout);
+      return reports.length;
+    } catch (error) {
+      this.notifyError(`Paradox Modding Toolkit: could not create baseline: ${String(error)}`);
+      return null;
+    } finally {
+      this.disposeConfig(config);
+    }
   }
 
   private publish(reports: TigerReport[], modPath: string): void {
@@ -504,12 +416,15 @@ export class TigerRunner implements vscode.Disposable {
 
   private notifyError(message: string): void {
     this.log(message);
+    this.lastFailure = true;
+    this.refreshStatus();
     if (this.errorNotified) return;
     this.errorNotified = true;
     void vscode.window.showErrorMessage(message);
   }
 
   dispose(): void {
+    this.disposed = true;
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     this.child?.kill();
     this.diagnostics.dispose();

@@ -8,6 +8,14 @@ beside the binary where that is noted.
 
 ---
 
+## Standalone CLI runtime
+
+The CLI installs [Sharp](https://github.com/lovell/sharp) (Apache-2.0) as a native runtime dependency for common image formats and resizing. Sharp's platform packages include libvips (LGPL-2.1-or-later) and codec dependencies with their own notices. Those packages provide their license and third-party notice files; they are installed through the package manager rather than embedded in the JavaScript bundle. Upstream distribution and license details: https://sharp.pixelplumbing.com/install/.
+
+The `pxtk` build bundles the [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) (MIT, Anthropic PBC), [Zod](https://github.com/colinhacks/zod) (MIT, Colin McDonnell), and [VS Code language-server libraries](https://github.com/microsoft/vscode-languageserver-node) (MIT, Microsoft), plus their runtime dependencies. The build records every included package and version in `dist/licenses/dependencies.json` and copies each upstream license into that directory. These license files ship in the CLI tarball. Per-game data keeps the notices included with the server data.
+
+---
+
 ## cwtools-eu5-config
 
 - Upstream: https://github.com/kaiser-chris/cwtools-eu5-config

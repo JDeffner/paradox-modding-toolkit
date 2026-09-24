@@ -10,7 +10,8 @@
     "name": "Joël Deffner"
   },
   "scripts": {
-    "compile": "pnpm --filter px-toolkit run compile",
+    "compile": "pnpm --filter px-toolkit run compile && pnpm --filter @px-lsp/cli run compile",
+    "pxtk": "node packages/cli/dist/pxtk.cjs",
     "perf:history": "node --experimental-strip-types packages/server/test/perf/profileWorkspace.ts",
     "package:test": "node scripts/package-test.mjs",
     "typecheck": "tsc --noEmit && node scripts/compile-webviews.mjs --typecheck",

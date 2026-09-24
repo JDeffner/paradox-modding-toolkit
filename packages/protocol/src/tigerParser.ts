@@ -28,7 +28,7 @@ export interface TigerReport {
 }
 
 /** Parse tiger's JSON output. Returns null if no JSON array can be found at all. */
-export function parseTigerJson(stdout: string): TigerReport[] | null {
+export function parseTigerJson(stdout: string, options: { strict?: boolean } = {}): TigerReport[] | null {
   let raw: unknown;
   try {
     raw = JSON.parse(stdout);
@@ -46,6 +46,34 @@ export function parseTigerJson(stdout: string): TigerReport[] | null {
 
   const reports: TigerReport[] = [];
   for (const entry of raw) {
+    if (options.strict) {
+      if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return null;
+      const row = entry as Record<string, unknown>;
+      if (
+        typeof row.message !== "string" ||
+        typeof row.key !== "string" ||
+        typeof row.severity !== "string" ||
+        !Array.isArray(row.locations)
+      )
+        return null;
+      if (!["fatal", "error", "warning", "info", "untidy", "tips"].includes(row.severity.toLowerCase()))
+        return null;
+      for (const location of row.locations) {
+        if (typeof location !== "object" || location === null) return null;
+        const loc = location as Record<string, unknown>;
+        if (typeof loc.fullpath !== "string" && typeof loc.path !== "string") return null;
+        // Tiger's "line" is the source text; only older numeric forms use it
+        // as a fallback for linenr.
+        for (const key of ["linenr", "column", "length"]) {
+          if (
+            loc[key] !== undefined &&
+            loc[key] !== null &&
+            (typeof loc[key] !== "number" || !Number.isInteger(loc[key]) || (loc[key] as number) < 0)
+          )
+            return null;
+        }
+      }
+    }
     if (typeof entry !== "object" || entry === null) continue;
     const e = entry as Record<string, unknown>;
     const message = typeof e.message === "string" ? e.message : null;

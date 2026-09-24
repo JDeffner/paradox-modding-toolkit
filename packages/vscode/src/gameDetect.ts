@@ -14,12 +14,8 @@ import { vic3Meta } from "@px-lsp/server/games/vic3/meta";
 import { eu5Meta } from "@px-lsp/server/games/eu5/meta";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 
-/** Metas by id, for per-game path fallbacks and user-facing names. */
-export const GAME_METAS: Record<string, GameMeta> = {
-  [ck3Meta.id]: ck3Meta,
-  [vic3Meta.id]: vic3Meta,
-  [eu5Meta.id]: eu5Meta,
-};
+export { gameMetas as GAME_METAS } from "@px-lsp/server/games/metaRegistry";
+import { gameMetas as GAME_METAS } from "@px-lsp/server/games/metaRegistry";
 
 /** A metadata-style mod: .metadata/metadata.json, no launcher .mod descriptor. */
 export function looksLikeMetadataMod(dir: string): boolean {

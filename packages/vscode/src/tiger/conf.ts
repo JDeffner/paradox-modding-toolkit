@@ -14,7 +14,7 @@ import * as path from "path";
 import type { PxConfig } from "../config";
 import { metaFor } from "../meta";
 import { migrateConfigDir } from "@px-lsp/protocol/configDir";
-import { renderLoadModBlocks } from "./loadMods";
+import { renderLoadModBlocks } from "@px-lsp/protocol/tigerLoadMods";
 
 export async function generateTigerConfCommand(cfg: PxConfig): Promise<void> {
   const meta = metaFor(cfg.gameId);

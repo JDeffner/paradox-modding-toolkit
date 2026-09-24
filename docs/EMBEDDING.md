@@ -14,6 +14,16 @@ The wire types are the contract. TypeScript hosts should import them from
 `@px-lsp/protocol/protocol`; everyone else reads `docs/PROTOCOL.md`, which
 mirrors that file method by method.
 
+## Headless agent clients
+
+Use the separate `@px-lsp/cli` package when the host needs game research and saved-file validation through commands or MCP. Its `pxtk` command bundles the LSP and per-game data; it does not depend on a VS Code installation. See the [CLI setup guide](../packages/cli/README.md) and [JSON/MCP contract](PROTOCOL.md#pxtk-cli-and-mcp).
+
+Indexed CLI operations start a stdio LSP session, wait for indexing to finish, then shut it down. Formatting, scaffolding, initialization, logs and image preparation use shared modules without starting the LSP. It reuses the server's disk cache. MCP serializes calls and resolves project configuration again between calls, so subsequent saved edits are loaded. The CLI does not synchronize unsaved editor buffers. Hosts that need live editor state should use the document-sync contract below.
+
+Game metadata and Steam discovery are shared with the editor. Explicit CLI paths override environment and project configuration; invalid explicit paths are errors. The resolved dependency list includes the toolkit's per-mod playset overlay and is passed to both LSP and Tiger. Existing Tiger configuration retains its own load-mod and suppression settings. Deep validation uses the same bounded process and strict report handling as the editor, with capabilities gated by the selected GameProfile.
+
+Queries read saved mod and reference files and maintain caches or temporary process configuration. Preparation operations preview changes and require explicit write mode to apply them inside the editable mod. Preview tokens reject changed inputs. New image, configuration, checkpoint and baseline outputs cannot replace existing files. Updates replace individual files atomically; a batch failure reports completed paths. Image preparation installs Sharp as a native CLI dependency; the editor keeps its existing codec adapter. Queries reject concurrent changes to editable script/GUI/localization content and relevant configuration, generated documentation or dependency content. Runtime behavior still requires a game playtest.
+
 ## Live documents and symbol identity
 
 Send each unsaved script or localization change through `textDocument/didChange` with a new version before requesting language features. The server refreshes definitions and script references from that buffer; closing it restores the saved file. File watcher events update closed files and invalidate cached dependency searches. They do not replace an open buffer.

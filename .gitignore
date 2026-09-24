@@ -38,6 +38,8 @@ dev-paths.json
 # Build-time copy of the server bundle data (scripts/copy-server.mjs).
 packages/vscode/data/
 packages/vscode/THIRD-PARTY-NOTICES.md
+packages/cli/LICENSE
+packages/cli/THIRD-PARTY-NOTICES.md
 *.tar.gz
 px-lsp-win-x64-*.zip
 # Checksum-verified nodejs.org download cached by scripts/build-server-zip.mjs.

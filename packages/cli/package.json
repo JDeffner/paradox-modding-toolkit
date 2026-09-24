@@ -1,0 +1,45 @@
+{
+  "name": "@px-lsp/cli",
+  "version": "0.1.0",
+  "description": "Standalone Paradox Modding Toolkit commands and local MCP tools.",
+  "license": "GPL-3.0-or-later",
+  "author": {
+    "name": "Joël Deffner"
+  },
+  "engines": {
+    "node": ">=22.22.2"
+  },
+  "bin": {
+    "pxtk": "dist/pxtk.cjs"
+  },
+  "files": [
+    "dist",
+    "plugins",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE",
+    "THIRD-PARTY-NOTICES.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JDeffner/paradox-modding-toolkit.git",
+    "directory": "packages/cli"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "compile": "node ../../scripts/compile-cli.mjs",
+    "prepack": "pnpm run compile"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@px-lsp/protocol": "workspace:*",
+    "@px-lsp/server": "workspace:*",
+    "vscode-jsonrpc": "^9.0.1",
+    "zod": "^4.3.6"
+  },
+  "dependencies": {
+    "sharp": "^0.35.4"
+  }
+}

@@ -22,6 +22,71 @@ full contract below including `serverInfo` in the `initialize` result, the
 `paradox/scopeAt`, the `paradox/exampleWiki` pair, and `dataDir`
 (`paradox/*` has been the method prefix since extension 0.1.2).
 
+## pxtk CLI and MCP
+
+Preparation operations extend the core queries with init, create, loc, logs, format and image. All are available through the CLI and matching pxtk_* MCP tools. CLI --to maps to the image request's format field. Common write arguments are write (default false) and expect (a preview token).
+
+| Operation | Input | Data |
+|---|---|---|
+| init | Optional write, expect | Exclusive configuration creation for an existing mod. |
+| create | Optional kind, name, prefix, stage, language, write, expect | No kind lists profile-supported templates. A selected kind previews or writes script and localization files. |
+| loc | action: get/set/check; optional name, value, file, stage, language, limit, write, expect | Lookup sources, bounded language coverage or a localization edit proposal. Only set writes. |
+| logs | action: read/checkpoint; optional file, since, output, limit, write, expect | Grouped records, rotation status, pending bytes and checkpoint metadata. Only checkpoint creates an output file. |
+| format | files array; optional check, write, expect | Conservative indentation edits and changed count. |
+| image | action: inspect/convert; files array; optional output, format, dds, width, height, fit, background, limit, write, expect | Image metadata or conversion results. Only convert writes. |
+
+Utility write results contain mode (preview/check/written), previewToken, changed, written and files. Each file has its mod-relative path, create/update action, before/after SHA-256 and output byte count. Text previews include at most 16,000 characters with contentTruncated. Passing expect binds application to the recomputed preview and rejects changed inputs or options. Writers check source snapshots immediately before applying changes. New files are exclusive creations; each update is atomic, but a batch is not transactional. A failure reports completed paths. Destinations cannot escape the editable mod or traverse linked paths. Image, configuration and checkpoint outputs never replace existing files.
+
+Inspect accepts examples and templates booleans for separate bounded lists. Impact returns exact standard-LSP reference sites (file, line, column, 1-based) separately from callers grouped by definition. Its coverage labels dynamic-reference limits and override ordering/winners. Validate accepts an optional files array to focus structural checks. Tiger still checks the whole mod and all Tiger findings remain visible. The scope field reports structural (selected_files/workspace), tiger (workspace) and selected paths. Baseline identity includes the sorted structural selection.
+
+Formatting check differences and localization coverage findings use exit 1. Preparation commands that do not load the LSP report unknown documentation provenance and an empty serverVersion. Localization entries report their own indexed source locations. Formatting, scaffolding, initialization, logs and image preparation use shared modules directly.
+
+The standalone `@px-lsp/cli` package exposes `pxtk status`, `search`, `inspect`, `impact`, and `validate`. This adapter uses the existing LSP methods below. It does not change their names or payloads. Its JSON types live in `@px-lsp/protocol/agentTools`.
+
+`--json` prints one object to stdout:
+
+```ts
+interface PxtkResult<Data = Record<string, unknown>> {
+  schemaVersion: 1;
+  operation: "status" | "search" | "inspect" | "impact" | "validate" | "init" | "create" | "loc" | "logs" | "format" | "image";
+  status: "ok" | "not_found" | "ambiguous" | "incomplete";
+  sources: {
+    game: string;
+    gamePath: string | null;
+    gameVersion: string;
+    mod: string;
+    parents: string[];
+    logsPath: string | null;
+    documentation: "generated" | "bundled" | "wiki" | "none" | "unknown";
+    documentationMatchesGame: "unknown";
+    serverVersion: string;
+    savedFilesOnly: true;
+  };
+  warnings: string[];
+  data: Data;
+}
+```
+
+Execution and input errors use `{ schemaVersion: 1, status: "error", error: { code, message } }`. The game must be explicitly selected. The documentation field describes loaded script identifiers; the status command's index data separately reports data-type provenance. Documentation provenance is separate from patch compatibility: neither a bundled snapshot nor a generated dump certifies the latter.
+
+| Operation | Input | Data |
+|---|---|---|
+| status | No query | Resolved config file, index status, capabilities, issues, Tiger configuration, and setup steps. Invalid paths return issues without starting the LSP. |
+| search | `query`, optional `kind` | Documentation and LSP workspace-symbol matches, plus documentation sources. |
+| inspect | `name`, optional `kind` | Exact documentation entries and definition source excerpts. An ambiguous name returns candidates and asks for a kind. |
+| impact | `name`, optional `kind` | Definition, callers, outgoing dependencies, overrides, and coverage limits. Multiple definition kinds return an ambiguity result. |
+| validate | Optional `baseline` path | Structural and Tiger results, full counts, bounded findings, baseline comparison, input identity, and `gameplayTested: false`. |
+
+`limit` is optional (default 20, range 1 to 200). Lists use `{ items, total, truncated }`; totals count all matches available to the adapter before its own limit. Workspace-symbol lookup inherits the LSP cap of 512 matches, and impact inherits the override catalog cap of 2000 entries. Source excerpts contain at most 18 lines of 500 characters each. Search's standard LSP locations retain zero-based positions; source excerpts, impact sites, and findings use one-based lines. Documentation entries retain their existing LSP shapes.
+
+Validation reports `complete`, `baselineApplied`, `structural`, `tiger`, `context`, `findings`, `newFindings`, `existingFindings`, `resolvedFindings`, and `newErrors`. A finding has `source` (structural or tiger), `code`, `severity` (error, warning, or info), `message`, and nullable `file`, `line`, `column`. Files are relative to the editable mod where possible. A Tiger process error or unreadable report makes the result incomplete, even if structural checks passed. Baseline comparison is applied only after complete validation.
+
+CLI exit codes are 0 for completed work without new errors, 1 for new errors/no match/ambiguity, and 2 for invalid input, incomplete coverage, cancellation, or execution failure. `status: "ok"` on validation means the tools completed; inspect `newErrors` to determine whether it passed. Warnings do not set exit 1.
+
+`validate --write-baseline <file>` is CLI-only. It requires complete validation and creates a new JSON file in an existing directory inside the editable mod. It never overwrites a file. The baseline stores `schemaVersion: 1`, `type: "pxtk-baseline"`, validation `context`, and all findings. Comparison counts repeated findings while ignoring line and column movement. It rejects changed game/version, validator/configuration, schema, documentation, language, or dependency content. Game files are identified by installation and detected version; manual changes to vanilla without a version change require a fresh validation target.
+
+`pxtk mcp` serves the same operations over local stdio using MCP tool names `pxtk_status`, `pxtk_search`, `pxtk_inspect`, `pxtk_impact`, and `pxtk_validate`. Each tool returns the envelope in both JSON text content and `structuredContent`. Execution errors and incomplete results set `isError`. Invalid MCP arguments are rejected earlier with the SDK's standard tool-error response. New validation findings remain normal tool results so an agent can inspect them. Core query tools declare read-only annotations. Preparation tools declare write capability because their explicit write mode changes mod files. Only protocol messages go to stdout; process diagnostics go to stderr. Each call resolves the configuration again. Indexed operations use a fresh LSP session; direct preparation utilities do not start one. Requests are serialized; cancellation and closed stdin stop active child processes.
+
 ## Transport and lifecycle
 
 - Transports: `--stdio` (what external clients use; also the default when no

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add standalone pxtk preparation commands for scaffolds, localization, formatting, game logs and images. The editor and CLI use the same profile scaffold renderer.
+
+### Standalone agent tools
+
+- Add the separate `pxtk` CLI, local MCP tools, and a portable skill/plugin for research and validation without VS Code. Share game discovery and Tiger configuration/process handling with the editor.
+- Report malformed Tiger output and process failures as validation failures. Bound validation time and output, and stop a run when a declared dependency descriptor is missing instead of silently dropping it.
+
 ## 0.5.0 (beta) - editor improvements
 
 - Keep the new-mod wizard open when focus changes, show the created folder with opening actions if the final step is canceled, and show Explorer when adding the new mod to the workspace.

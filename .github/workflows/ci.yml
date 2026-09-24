@@ -27,6 +27,10 @@ jobs:
       # dist/server.js and silently skip when it does not exist.
       - run: pnpm run compile
       - run: pnpm test
+      - name: Packed standalone CLI
+        run: |
+          pnpm --filter @px-lsp/cli pack --pack-destination .local/artifacts
+          node scripts/test-pxtk-package.mjs .local/artifacts/px-lsp-cli-*.tgz
       # The browser build is the only thing that proves the language service
       # still links without node. esbuild fails outright on an unaliased node
       # builtin, so a new fs/child_process import on a reachable path breaks

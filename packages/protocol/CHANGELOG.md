@@ -8,6 +8,11 @@ version (up to 0.3.2); that history is in the extension changelog
 
 ## Unreleased
 
+- Extend the pxtk command contract with preparation operations, preview tokens, exact reference sites and focused validation coverage.
+
+- Add the versioned `pxtk` JSON result contract in `agentTools`. Share Steam discovery, Tiger configuration, dependency blocks, and bounded process handling with the standalone CLI.
+- Add opt-in strict Tiger report parsing. Preserve the existing tolerant parser default; process integrations reject incomplete reports instead of reporting a false pass.
+
 ## 0.2.6
 
 Ships with the toolkit's 0.5.0 release.
