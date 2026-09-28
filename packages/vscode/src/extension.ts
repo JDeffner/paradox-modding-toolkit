@@ -66,6 +66,7 @@ import { openInfoDocsCommand, openVanillaExamplesCommand, updateInfoDocContext }
 import { FocusMod, registerPxViews } from "./views";
 import { addDependencyModCommand } from "./dependencyMods";
 import { registerDashboardView, hiddenRows, PROJECT_GROUPS } from "./webviews/dashboard/view";
+import { SettingsPanel } from "./webviews/settings/panel";
 import { actionGroups } from "./webviews/dashboard/actions";
 import { EventGraphPanel, type EventGraphActions } from "./webviews/eventGraph/panel";
 import { ExampleWikiPanel, type ExampleWikiTarget } from "./webviews/exampleWiki/panel";
@@ -290,7 +291,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           else if (choice === "Reduce VS Code Load")
             await vscode.commands.executeCommand("px.reduceEditorLoad");
           else if (choice === "Settings")
-            await vscode.commands.executeCommand("workbench.action.openSettings", "px.excludedMods");
+            await vscode.commands.executeCommand("px.openSettings", "excludedMods");
         },
       });
     }
@@ -612,6 +613,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   lc.onNotification(statusNotification, (payload: StatusPayload) => {
     lastServerStatus = payload;
     updateStatus();
+    SettingsPanel.refresh();
   });
 
   lc.onNotification(progressNotification, (payload: ProgressPayload) => {
@@ -929,16 +931,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.openKeybindings", () =>
       vscode.commands.executeCommand("workbench.action.openGlobalKeybindings", "@ext:jdeffner.px-toolkit")
     ),
-    // Workspace scope: the settings that matter here (paths, focus, excludes)
-    // are per-project taste, and the User tab is one click away in the editor.
+    vscode.commands.registerCommand("px.openSettings", (key?: string) => {
+      SettingsPanel.show(context, { getCfg: () => cfg, getStatus: () => lastServerStatus }, key);
+    }),
     // Since VS Code 1.135 the settings editor opens as a modal overlay whenever
     // workbench.editor.useModal is not "off" (default "some"); the preferences
     // service decides that before any command argument is read, and the group id
     // that would override it is stripped from the command's options. Merging the
     // modal part back into the main window is the only command-level route to a
     // normal tab, and the move carries the search query in the editor view state.
-    vscode.commands.registerCommand("px.openSettings", async () => {
-      await vscode.commands.executeCommand("workbench.action.openWorkspaceSettings", {
+    vscode.commands.registerCommand("px.openNativeSettings", async () => {
+      const command =
+        vscode.workspace.workspaceFolders?.length || vscode.workspace.workspaceFile
+          ? "workbench.action.openWorkspaceSettings"
+          : "workbench.action.openSettings";
+      await vscode.commands.executeCommand(command, {
         query: "@ext:jdeffner.px-toolkit",
       });
       // Undefined on builds before 1.135, where neither the setting nor the

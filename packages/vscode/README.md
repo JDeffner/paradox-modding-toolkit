@@ -27,6 +27,8 @@ This is a beta. Check generated content in the game before publishing it. After 
 
 ## At the cursor
 
+- **Toolkit Settings:** open Project > Settings > All settings to search, filter and reset settings. Choose User, Workspace or a supported folder scope before saving. Drafts survive view changes, and stale saves leave newer values intact.
+
 - **Live editing:** suggestions, navigation and rename follow unsaved edits. Problems update when referenced events or required translations change in another file.
 
 - **Completion templates:** choose Minimal, Examples or Names with `px.completion.mode`. Preview inserted code and expected values, or run **Paradox: Export Generated Snippets (HTML / Print)** to browse, copy and print the full catalogue.
@@ -52,9 +54,13 @@ The **GUI Editor** lets you select, move and resize widgets, inspect inherited p
 
 ![CK3 Trait Creator with editable values, a game-style preview and generated script](media/screenshots/trait-creator.png)
 
-The **Dynasty Tree** supports copying DNA for mod files or the game, including lookup in dependency mods and pasting portrait-editor DNA.
+The **Dynasty Tree** supports copying DNA for mod files or the game, including lookup in dependency mods and pasting portrait-editor DNA. Character edits preserve comments, spacing, trait groups and detailed death blocks. Choose a death reason and quotation preferences; stale forms retain your draft and leave newer source edits intact.
 
 Convert batches of DDS, PNG, JPEG and WebP images from Utils or file context menus, with progress, cancellation and a choice to skip or overwrite existing outputs. The Project panel also opens game launch options, custom calendars, multi-mod indexing and the **Steam Workshop Panel**. Workshop uploads use your running Steam client and show the parts being uploaded before confirmation.
+
+DDS conversion offers full or custom mip chains and a reference-matching option for format and mip count. Inspect stored mip levels in the viewer and export the displayed level. Conversion rejects texture arrays, cubemaps and volume textures instead of exporting only one surface.
+
+In the Workshop panel, **Create legacy version** makes a separate listing for a game version. Its first upload uses the current project files. Later uploads change Workshop information only, so keep a separate project if you need to update legacy mod files. **Stop waiting** ends a stalled wait without retrying the upload; check Steam before trying again if the result is uncertain.
 
 ## Choose your workflow
 

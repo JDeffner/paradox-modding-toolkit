@@ -2149,7 +2149,7 @@ export const DYNASTY_SKILLS = [
 export interface DynastyCharacter {
   /** The block's own key: numeric in vanilla, but `han_1234` shapes exist too. */
   id: string;
-  /** The `name = ` value, a plain string in history, not a loc key. */
+  /** The `name = ` value as authored, which can be a name or localization key. */
   name: string;
   female: boolean;
   dynasty?: string;
@@ -2162,6 +2162,8 @@ export interface DynastyCharacter {
   /** `Y.M.D` of the dated block holding `birth`. */
   birth?: string;
   death?: string;
+  /** `death_reason` inside the first dated death block, when specified. */
+  deathReason?: string;
   /**
    * `dna = `, the portrait DNA name, without the quotes the file may put
    * around it (350 of 438 vanilla statements write it bare).

@@ -270,7 +270,7 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
         this.refresh();
         return;
       case "openSettings":
-        // The same Workspace-scoped @ext view the overflow menu opens.
+        // The same settings tab the command palette and walkthrough open.
         await vscode.commands.executeCommand("px.openSettings");
         return;
       case "pickPath": {
@@ -531,7 +531,15 @@ ${uiCss}
   .path-row .path-value.none { direction: ltr; font-family: inherit; font-style: italic; }
   .mod-row.excluded .px-item-label, .mod-row.missing .px-item-label { color: var(--px-muted-fg); }
   .mod-row.missing .px-item-label { text-decoration: line-through; }
-  #body-mods { max-height: calc(5 * var(--px-h-sm) + 8px); overflow-y: auto; }
+  #body-mods {
+    /* Three mods plus Follow, including list padding and row gaps. */
+    max-height: calc(4 * var(--px-h-sm) + 11px); overflow-y: auto;
+    scrollbar-gutter: stable; overscroll-behavior-y: contain;
+    scrollbar-color: var(--vscode-scrollbarSlider-background, var(--px-muted-fg)) transparent;
+  }
+  #body-mods:focus-visible { outline-offset: -2px; }
+  #body-mods::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background, var(--px-muted-fg)); }
+  #body-mods::-webkit-scrollbar-thumb:hover { background: var(--vscode-scrollbarSlider-hoverBackground, var(--px-fg)); }
   #body-mods > .px-item { flex: 0 0 var(--px-h-sm); }
   #troubleshoot-actions { display: flex; flex-direction: column; gap: 1px; }
   #troubleshoot-actions:empty { display: none; }
@@ -576,11 +584,11 @@ ${
 ${
   section === "px.tools"
     ? `<details class="project-group" id="section-mods" open>
-  <summary>${icon("chevronDown")}Workspace Mods<span class="mod-actions">
+  <summary>${icon("chevronDown")}Workspace Mods<span id="mod-count" class="px-muted px-xs" hidden></span><span class="mod-actions">
     <button type="button" class="px-btn" data-variant="ghost" data-size="icon-sm" data-mod-command="px.createMod" aria-label="New Mod" data-tip="New Mod">${icon("plus")}</button>
     <button type="button" class="px-btn" data-variant="ghost" data-size="icon-sm" data-mod-command="px.addModToWorkspace" aria-label="Add Existing Mod to Workspace" data-tip="Add Existing Mod to Workspace">${icon("folderOpen")}</button>
   </span></summary>
-  <div class="section-body px-list" id="body-mods"></div>
+  <div class="section-body px-list" id="body-mods" role="region" aria-label="Workspace mods" tabindex="0"></div>
 </details>
 ${PROJECT_GROUPS.map(
   (
@@ -806,6 +814,11 @@ function radio(on, tipText, onClick) {
 }
 function renderMods() {
   const box = document.getElementById("body-mods");
+  const count = document.getElementById("mod-count");
+  count.hidden = !state.mods.length;
+  count.textContent = state.mods.length ? String(state.mods.length) : "";
+  count.setAttribute("data-tip", state.mods.length + " workspace mods. Scroll the list to reach more mods.");
+  box.setAttribute("aria-label", "Workspace mods (" + state.mods.length + "). Use the mouse wheel or arrow keys to scroll.");
   const focusedId = box.contains(document.activeElement) ? document.activeElement.id : null;
   const scrollTop = box.scrollTop;
   box.textContent = "";

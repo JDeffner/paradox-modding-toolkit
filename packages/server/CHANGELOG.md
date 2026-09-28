@@ -6,7 +6,14 @@ changes. Before the split it moved inside the extension's version (up to
 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
-## Unreleased
+## 0.3.7
+
+Ships with the toolkit's 0.5.2 prerelease.
+
+- Report declared DDS mip-level counts from valid headers independently of pixel decoding and allocation limits.
+- Classify saved-scope reference prefixes as semantic keywords independently of index state, preserving comments, strings and reference names.
+
+- Return the optional death reason from character history in `paradox/dynastyTree`, preserving raw character names and localization keys.
 
 - Index CK3 faiths inside religions and laws inside law groups through profile schema rules. Include them in completion, hover, navigation and typed references, preserve their parent in the disk cache, and refresh them from unsaved documents. Reject rename for nested kinds whose indirect reference forms are not fully indexed.
 

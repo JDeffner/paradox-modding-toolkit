@@ -6,7 +6,11 @@ the shared helpers change. Before the split it moved inside the extension's
 version (up to 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
-## Unreleased
+## 0.2.7
+
+Ships with the toolkit's 0.5.2 prerelease.
+
+- Add optional `DynastyCharacter.deathReason` for the first dated death block. Clarify that character names can be localization keys.
 
 - Deduplicate directory aliases during file enumeration while retaining configured linked roots and cycle guards. Add `iterFilesInRoots` so consumers can prioritize semantic folders over a containing fallback root. Report unavailable symlink test cases as skipped, with a reason, instead of passing them without assertions.
 

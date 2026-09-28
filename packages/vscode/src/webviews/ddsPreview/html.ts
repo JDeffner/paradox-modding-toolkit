@@ -32,9 +32,10 @@ export function ddsPreviewHtml(opts: {
       ? `<div id="mipControl"><span>Mip level</span><button id="mipLevel" class="px-btn px-dropdown" data-variant="outline" data-size="sm" aria-label="Mip level" aria-haspopup="dialog" value="${selectedMip.value}" data-mips="${escapeHtml(JSON.stringify(mipItems))}" ${mips.length === 1 ? "disabled" : ""}><span class="px-truncate">${escapeHtml(selectedMip.label)}</span>${icon("chevronDown")}</button>${mips.length === 1 ? '<span class="px-muted px-xs">No smaller mipmaps</span>' : ""}</div>`
       : "";
   const stage = error
-    ? `<div class="err">${escapeHtml(error)}</div><div id="stageTools"></div>${stageInfo}`
+    ? `<div class="err">${escapeHtml(error)}</div><div id="stageFooter"><div id="stageTools"></div>${stageInfo}</div>`
     : /* html */ `
   <img id="img" src="${dataUri}" />
+  <div id="stageFooter">
   <div id="stageTools">
     ${toolButton("zout", "zoomOut", "Zoom out")}
     <span id="zoomLabel" class="px-muted px-xs" data-tip="Wheel zooms, drag pans" data-tip-side="top" data-tip-wrap>100%</span>
@@ -45,7 +46,8 @@ export function ddsPreviewHtml(opts: {
     <div class="px-separator" data-orientation="vertical"></div>
     <label class="px-toggle" data-size="sm" data-tip="Pixelated: nearest-neighbour scaling to inspect single pixels. Off matches how the game samples the texture (smooth)" data-tip-side="top" data-tip-wrap><input id="pix" type="checkbox" />${icon("grid")}</label>
   </div>
-  ${stageInfo}`;
+  ${stageInfo}
+  </div>`;
 
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
@@ -93,14 +95,18 @@ ${uiCss}
     background: repeating-conic-gradient(${checker[0]} 0% 25%, ${checker[1]} 0% 50%) 0 0 / ${TEXTURE_CHECKER_SIZE * 2}px ${TEXTURE_CHECKER_SIZE * 2}px;
   }
   #img.pixelated { image-rendering: pixelated; }
+  #stageFooter {
+    position: absolute; left: 8px; right: 8px; bottom: 8px;
+    display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px; pointer-events: none;
+  }
   #stageTools {
-    position: absolute; left: 8px; bottom: 8px; display: flex; align-items: center; gap: 2px;
+    display: flex; flex: 0 0 auto; align-items: center; gap: 2px; pointer-events: auto;
     padding: 2px; border-radius: var(--px-radius);
     background: color-mix(in oklch, var(--px-bg) 75%, transparent);
   }
   #zoomLabel { min-width: 44px; height: var(--px-h-sm); line-height: var(--px-h-sm); padding: 0 6px; text-align: center; font-variant-numeric: tabular-nums; cursor: default; }
   #stageInfo {
-    position: absolute; right: 8px; bottom: 8px;
+    margin-left: auto; max-width: 100%; overflow-wrap: anywhere;
     padding: 4px 10px; border-radius: var(--px-radius);
     color: var(--px-muted-fg); font-size: var(--px-text-xs); font-variant-numeric: tabular-nums;
     background: color-mix(in oklch, var(--px-bg) 75%, transparent);

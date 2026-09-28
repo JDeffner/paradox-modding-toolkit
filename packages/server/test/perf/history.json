@@ -1692,6 +1692,35 @@
         "peakRssMb": 3036,
         "rssSamples": 187
       }
+    },
+    {
+      "version": "0.5.2-pre-release",
+      "note": "CK3 plus AGOT with graphics asset indexing enabled. Full corpus tests had finished; a separate minimum-editor smoke ran during this measurement. Node differs from earlier rows and OS file cache was not controlled, so this is a release measurement, not a paired speed comparison.",
+      "recordedAt": "2026-09-28",
+      "workspace": "ck3-agot-audit.code-workspace",
+      "roots": 2,
+      "build": "working tree dist/server.js",
+      "machine": {
+        "cpu": "AMD Ryzen AI 7 350 w/ Radeon 860M              ",
+        "totalMemGb": 15,
+        "node": "v22.22.2"
+      },
+      "results": {
+        "timeToIndexedMs": 53359,
+        "definitions": 973952,
+        "completionCold": 1777,
+        "completionWarm": 30,
+        "semanticTokens": 3,
+        "hover": 6,
+        "documentSymbol": 1,
+        "completionAfterSave": 709,
+        "tokensAfterSave": 1,
+        "heapMb": 1080,
+        "rssAtBuildMb": 3092,
+        "internedIdentifiers": 1029857,
+        "peakRssMb": 3727,
+        "rssSamples": 137
+      }
     }
   ]
 }

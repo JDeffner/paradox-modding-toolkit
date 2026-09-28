@@ -115,6 +115,9 @@ interface State {
   draft: CharacterForm | null;
   /** The file the drafted character already lives in (an edit, not an add). */
   draftFile?: string;
+  draftSourceFile?: string;
+  sourceReady?: boolean;
+  saving?: boolean;
   /** A birth date worth suggesting for the draft; shown as a placeholder only. */
   birthHint?: string;
   layout: Layout | null;
@@ -1002,6 +1005,7 @@ function drawTree(): void {
 // ---------------------------------------------------------------------------
 
 function select(id: string | null): void {
+  if (state.saving) return;
   state.selected = id;
   state.draft = null;
   state.draftFile = undefined;
@@ -1228,6 +1232,7 @@ function shiftYears(date: string | undefined, years: number): string | undefined
 }
 
 function startEdit(char: DynastyCharacter): void {
+  if (state.saving) return;
   state.draft = {
     id: char.id,
     name: char.name,
@@ -1240,6 +1245,7 @@ function startEdit(char: DynastyCharacter): void {
     religion: char.religion,
     birth: char.birth,
     death: char.death,
+    deathReason: char.deathReason ?? "",
     dna: char.dna,
     skills: char.skills ? { ...char.skills } : undefined,
     traits: [...char.traits],
@@ -1248,10 +1254,11 @@ function startEdit(char: DynastyCharacter): void {
   // A game character has no file of ours to write back to: the override goes
   // where a new character goes, and the form says so in its heading.
   state.draftFile = char.source === "mod" ? char.file : undefined;
+  state.draftSourceFile = char.file;
+  state.sourceReady = false;
   state.overriding = char.source !== "mod";
   state.birthHint = undefined;
-  if (char.source === "mod") post({ type: "target", file: char.file });
-  else post({ type: "target" });
+  post({ type: "target", file: state.draftFile, character: char.id, sourceFile: char.file });
   renderInspector();
 }
 
@@ -1263,6 +1270,10 @@ function startEdit(char: DynastyCharacter): void {
  * date must not end up in a history file because nobody looked at the field.
  */
 function startChild(parent: DynastyCharacter): void {
+  if (state.saving) return;
+  state.draftSourceFile = undefined;
+  state.sourceReady = true;
+  state.overriding = false;
   const form = blankForm();
   form.house = parent.house ?? form.house;
   form.dynasty = parent.house ? undefined : (parent.dynasty ?? form.dynasty);
@@ -1284,6 +1295,10 @@ function startChild(parent: DynastyCharacter): void {
 
 /** A new spouse of `partner`: same generation, married into the dynasty. */
 function startSpouse(partner: DynastyCharacter): void {
+  if (state.saving) return;
+  state.draftSourceFile = undefined;
+  state.sourceReady = true;
+  state.overriding = false;
   const form = blankForm();
   form.female = !partner.female;
   form.house = undefined;
@@ -1313,12 +1328,23 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
     )
   );
   if (state.setupProblem) root.append(node("div", "note", state.setupProblem));
+  if (state.sourceReady === false) {
+    root.append(
+      node(
+        "p",
+        "note",
+        "Reading the current character source. Reopen the character if the source cannot be read."
+      )
+    );
+    return;
+  }
 
   const body = node("div", "sec");
   const name = textInput(form.name, (v) => (form.name = v));
   // An example rather than a description: the name of someone already here.
   name.placeholder = tree?.characters[0]?.name || tree?.dynasty.name || tree?.dynasty.id || "";
   body.append(field("Name", name));
+  name.setAttribute("aria-label", "Name or localization key");
 
   // Two named choices, not a switch: a switch reads as on/off, and "off" is
   // not a sex. The glyphs match the ones the cards wear.
@@ -1405,6 +1431,51 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
       (v) => (form.death = v)
     )
   );
+  const reason = textInput(form.deathReason ?? "", (v) => (form.deathReason = v.trim()));
+  reason.setAttribute("aria-label", "Death reason");
+  reason.setAttribute("list", "deathReasons");
+  const reasons = document.createElement("datalist");
+  reasons.id = "deathReasons";
+  for (const item of state.options.deathReason ?? []) {
+    const option = document.createElement("option");
+    option.value = item.value;
+    option.label = item.label ?? item.value;
+    reasons.append(option);
+  }
+  body.append(field("Death reason", reason), reasons);
+
+  const quotes = document.createElement("details");
+  quotes.append(node("summary", undefined, "Quotation marks"));
+  for (const [key, label] of [
+    ["name", "Name"],
+    ["culture", "Culture"],
+    ["religion", "Faith"],
+  ] as const) {
+    const select = document.createElement("select");
+    select.className = "px-input";
+    select.setAttribute("aria-label", `${label} quotation marks`);
+    for (const [value, text] of [
+      ["", state.draftSourceFile ? "Keep source" : "Project default"],
+      ["true", "Quoted"],
+      ["false", "Unquoted"],
+    ]) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = text;
+      select.append(option);
+    }
+    select.value = form.quotes?.[key]?.toString() ?? "";
+    select.addEventListener("change", () => {
+      form.quotes ??= {};
+      if (select.value === "") delete form.quotes[key];
+      else form.quotes[key] = select.value === "true";
+    });
+    quotes.append(field(label, select));
+  }
+  quotes.append(
+    node("p", "note", "New values use the Character History settings. Values with spaces still need quotes.")
+  );
+  body.append(quotes);
 
   const parentField = (
     label: string,
@@ -1574,24 +1645,28 @@ function renderForm(root: HTMLElement, form: CharacterForm): void {
     body.append(field("Married", married));
   }
   root.append(body);
+  body.inert = state.saving === true;
 
   const actions = node("div", "actions");
   const save = button(state.draftFile ? "Save" : "Create", "save", "default");
+  save.disabled = state.saving === true;
   save.addEventListener("click", () => {
     const problems = [dateProblem(form.birth ?? ""), dateProblem(form.death ?? "")].filter(
       (p): p is string => p !== null
     );
     if (form.name.trim() === "") problems.push("A character needs a name.");
+    if (form.deathReason && !form.death) problems.push("Set a death date before choosing a death reason.");
     if (problems.length > 0) {
       toast(problems[0], "destructive");
       return;
     }
+    state.saving = true;
+    save.disabled = true;
     post({ type: "saveCharacter", form, file: state.draftFile });
-    state.draft = null;
-    state.draftFile = undefined;
     renderInspector();
   });
   const cancel = button("Cancel", "x", "ghost");
+  cancel.disabled = state.saving === true;
   cancel.addEventListener("click", () => {
     state.draft = null;
     state.draftFile = undefined;
@@ -1666,6 +1741,7 @@ async function newHouse(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 function showPicker(): void {
+  if (state.saving) return;
   state.tree = null;
   state.selected = null;
   state.draft = null;
@@ -1720,7 +1796,7 @@ window.addEventListener("keydown", (ev) => {
 });
 /** Escape closes the inspector's form; the tree and its toolbar stay put. */
 window.addEventListener("keydown", (ev) => {
-  if (ev.key !== "Escape" || !state.draft) return;
+  if (ev.key !== "Escape" || !state.draft || state.saving) return;
   ev.preventDefault();
   state.draft = null;
   state.draftFile = undefined;
@@ -1752,10 +1828,18 @@ const centre = (): { x: number; y: number } => {
 };
 el("zoomIn").addEventListener("click", () => zoomAt(centre().x, centre().y, 1.2));
 el("zoomOut").addEventListener("click", () => zoomAt(centre().x, centre().y, 1 / 1.2));
-el("newDynasty").addEventListener("click", () => void newDynasty());
-el("newHouse").addEventListener("click", () => void newHouse());
+el("newDynasty").addEventListener("click", () => {
+  if (!state.saving) void newDynasty();
+});
+el("newHouse").addEventListener("click", () => {
+  if (!state.saving) void newHouse();
+});
 el("newCharacter").addEventListener("click", () => {
+  if (state.saving) return;
   state.draft = blankForm();
+  state.draftSourceFile = undefined;
+  state.sourceReady = true;
+  state.overriding = false;
   state.draftFile = undefined;
   state.birthHint = undefined;
   post({ type: "target" });
@@ -1802,6 +1886,18 @@ $canvas.addEventListener(
 window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
   const msg = event.data;
   switch (msg.type) {
+    case "characterSource":
+      if (state.draft?.id === msg.id && state.draftSourceFile === msg.file && state.sourceReady === false) {
+        state.draft = msg.form;
+        state.sourceReady = true;
+        renderInspector();
+      }
+      break;
+    case "characterSaveFailed":
+      state.saving = false;
+      toast(msg.message, "destructive");
+      renderInspector();
+      break;
     case "init":
       state.mods = msg.mods;
       state.gameName = msg.gameName;
@@ -1834,6 +1930,12 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       break;
     case "saved":
       state.saved = { name: msg.name, file: msg.file, line: msg.line };
+      if (state.saving && state.draft?.id === msg.name) {
+        state.saving = false;
+        state.draft = null;
+        state.draftFile = undefined;
+        state.draftSourceFile = undefined;
+      }
       if (!state.draft) renderInspector();
       break;
     case "pasted":
@@ -1855,8 +1957,7 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       break;
     case "tree":
       state.tree = msg.tree;
-      state.selected = null;
-      state.draft = null;
+      if (!state.draft) state.selected = null;
       // Next time the picker opens, this dynasty is the first row.
       vscode.setState?.({ ...vscode.getState?.(), lastDynasty: msg.tree.dynasty.id });
       showTree();

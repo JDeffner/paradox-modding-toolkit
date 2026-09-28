@@ -28,6 +28,8 @@ Schema overlay entries can add `nestedDefinitions: { "kind": "child_kind", "path
 
 Declare `workspace.workspaceEdit.documentChanges: true` in standard LSP capabilities if the host can enforce document versions when applying rename. The server supplies versions for open files and null for closed files. Without that capability, rename requires open sources to match disk and returns plain `changes`. Show rename errors to the user; do not apply a partial edit after an error. See [the rename contract](PROTOCOL.md#symbol-lookup-and-rename) for unsupported and ambiguous cases.
 
+`paradox/dynastyTree` includes optional `DynastyCharacter.deathReason` from character history. Character names remain raw source values and may be localization keys. Existing clients can ignore the added field for display, but writers must preserve the source details their forms do not model. The quotation controls and character save workflow belong to the VS Code Dynasty Tree; they do not change LSP formatting or other clients.
+
 ## The process contract
 
 ### Spawning
@@ -647,6 +649,8 @@ These VS Code extension features are implemented in the client rather than the l
 The `@px-lsp/server/dds` module also exports `encodeDds(width, height, rgba, format, mipmaps = false)`. Formats are `bc1`, `bc3` and `bgra8`. BC1/BC3 base dimensions must be positive multiples of four; incompatible dimensions throw instead of producing a texture Direct3D cannot load. Set `mipmaps` to `true` to write a full chain down to 1×1, or pass an integer count including the base level to write a partial chain. Invalid counts throw. Mip filtering treats RGBA channels independently, without gamma correction or normal-vector normalization. Callers replacing texture-array entries must match the original dimensions, format and mip count. These helpers do not add a conversion request to the LSP protocol.
 
 `ddsMipLevels(bytes)` returns the stored levels as `{ level, width, height, offset, byteLength }[]`, validating the count and byte ranges. `decodeDds(bytes, mipLevel = 0)` decodes the selected stored level. Both operate on the first array slice or cubemap face. Mip enumeration rejects volume textures and padded uncompressed rows; default base-level decoding keeps its existing behavior. Layout follows [Microsoft's DDS texture layout](https://learn.microsoft.com/en-us/windows/win32/direct3ddds/dds-file-layout-for-textures), including complete blocks for compressed levels smaller than 4×4. No new LSP request or client capability is required.
+
+`ddsFormatInfo(bytes)` returns `{ format, width, height, mipLevelCount }` for a valid header, including unsupported pixel formats and images above the decode budget. `mipLevelCount` includes the base image and normalizes header counts of zero to one without requiring the mipmap flag. It describes the header declaration, not the integrity of the mip payload. Invalid or truncated headers return `null`.
 
 ## Reference clients in this repository
 

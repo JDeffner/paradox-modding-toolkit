@@ -25,10 +25,18 @@ ${uiCss}
   body { overflow: hidden; }
   #app { display: flex; flex-direction: column; height: 100%; }
   #toolbar {
-    display: flex; align-items: center; gap: 6px; flex: 0 0 auto;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 0 0 auto;
     padding: 6px 8px; border-bottom: 1px solid var(--px-border);
   }
   #toolbar .px-grow { flex: 1 1 auto; }
+  #listingBar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--px-border); }
+  #listing { width: auto; min-width: 160px; max-width: 280px; }
+  #legacyNotice { flex: 1 1 300px; font-size: var(--px-text-xs); color: var(--px-muted-fg); }
+  #app[data-legacy] { background: color-mix(in srgb, var(--px-bg) 95%, #b87b25); }
+  #app[data-legacy] #toolbar, #app[data-legacy] #listingBar { background: color-mix(in srgb, var(--px-bg) 88%, #b87b25); }
+  #app[data-legacy] .section { background: color-mix(in srgb, var(--px-bg) 94%, #b87b25); }
+  #app[data-legacy] #listing { font-weight: 600; background: color-mix(in srgb, var(--px-bg) 78%, #b87b25); }
+  #stopWaiting[hidden], #legacyNotice[hidden] { display: none; }
   /* Indeterminate activity line under the toolbar while the bridge runs. */
   #busy { height: 2px; flex: 0 0 auto; overflow: hidden; visibility: hidden; }
   #busy.on { visibility: visible; }
@@ -266,7 +274,14 @@ ${BBPREV_CSS}
     <span class="px-grow"></span>
     <button id="openPage" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open the item's Workshop page in Steam (in the browser when Steam is not installed)" data-tip-wrap>${icon("externalLink")}</button>
     <button id="upload" class="px-btn" data-variant="default" data-tip="Upload what is checked under Publish">${icon("cloudUpload")} Upload</button>
+    <button id="stopWaiting" class="px-btn" data-variant="outline" hidden>Stop waiting</button>
     <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon" data-tip="How this panel works" data-tip-side="left" aria-label="How this panel works">${icon("circleHelp")}</button>
+  </div>
+  <div id="listingBar">
+    <label for="listing" class="px-label">Workshop item</label>
+    <select id="listing" class="px-input" aria-label="Workshop item"><option value="">Main item</option></select>
+    <button id="createLegacy" class="px-btn" data-variant="outline" data-size="sm">${icon("plus")} Create legacy version</button>
+    <span id="legacyNotice" role="status" hidden></span>
   </div>
   <div id="busy"><div></div></div>
   <div id="main"><div id="page">
@@ -389,7 +404,7 @@ ${BBPREV_CSS}
           <label class="hdr-switch" data-tip="Upload every file of the mod, replacing what subscribers have." data-tip-wrap data-tip-side="left"><span class="px-switch"><input id="incContent" type="checkbox" checked /><span></span></span></label>
         </div>
         <div id="modRoot" class="px-truncate"></div>
-        <div class="px-muted px-xs">Everything in the mod folder except the workshop folder and what .pxignore excludes.</div>
+        <div id="contentHint" class="px-muted px-xs">Everything in the mod folder except the workshop folder and what .pxignore excludes.</div>
       </div>
       <div class="section" id="noteSection">
         <div class="px-panel-title">Changenote

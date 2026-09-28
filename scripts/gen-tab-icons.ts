@@ -31,6 +31,7 @@ export const TAB_ICONS: Record<string, IconName> = {
   // The Dynasty Legacy Creator: the glyph its Create row uses (ck3/meta.ts).
   "legacy-creator": "layers",
   wiki: "library",
+  settings: "settings",
   credits: "heart",
   workshop: "cloudUpload",
   "bbcode-preview": "eye",

@@ -58,6 +58,11 @@ export interface SteamLanguage {
 /** What the mod's descriptor + workshop.json say, plus what upload can do. */
 export interface WorkshopModInfo {
   root: string;
+  /** Null selects the main item; legacy keys are relative version directory names. */
+  legacyKey: string | null;
+  legacyVersions: { key: string; supportedVersion: string }[];
+  legacyContent: "new" | "creating" | "ready" | "submitted" | "published" | null;
+  visibility: WorkshopVisibility | null;
   gameName: string;
   /** True when the mod has no descriptor at all: nothing can upload. */
   descriptorMissing: boolean;
@@ -145,7 +150,7 @@ export interface LiveTranslation {
   description: string;
 }
 
-export type HostToApp =
+type HostMessage =
   | { type: "init"; mods: ModChoice[]; active: string | null; info: WorkshopModInfo | null }
   | { type: "info"; active: string; info: WorkshopModInfo | null }
   | { type: "liveBegin" }
@@ -174,8 +179,12 @@ export type ProgressJob = "upload" | "download";
 /** Where a DLC list came from: the install, Steam, or nowhere yet. */
 export type DlcSource = "game" | "steam" | "none";
 
-export type AppToHost =
+type WorkshopAction =
   | { type: "ready" }
+  | { type: "selectListing"; key: string | null }
+  | { type: "createLegacy" }
+  | { type: "stopWaiting" }
+  | { type: "setVisibility"; value: WorkshopVisibility }
   | { type: "selectMod"; path: string }
   /** Pick any mod folder on disk, in or out of the workspace; the host adds it to the choices. */
   | { type: "browseMod" }
@@ -245,3 +254,7 @@ export type AppToHost =
   | { type: "openPreviewsFolder" }
   /** Open the wiki's BBCode page: which tags Steam renders in a description. */
   | { type: "bbcodeHelp" };
+
+/** Every context-sensitive message names the item whose data the user saw. */
+export type AppToHost = WorkshopAction & { target?: { root: string; legacyKey: string | null } };
+export type HostToApp = HostMessage & { target?: { root: string; legacyKey: string | null } };

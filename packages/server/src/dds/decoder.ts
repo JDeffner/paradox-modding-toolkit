@@ -93,11 +93,6 @@ function parseHeader(buf: Uint8Array): ParsedHeader | null {
   const height = readU32(buf, 12);
   const width = readU32(buf, 16);
   if (width === 0 || height === 0) return null;
-  // Throw rather than return null so ddsFormatInfo still reports the declared
-  // size (its catch branch) and the caller can say why the preview is missing.
-  if (width * height > MAX_DECODE_PIXELS) {
-    throw new Error(`image too large: ${width}x${height} exceeds ${MAX_DECODE_PIXELS} pixels`);
-  }
 
   // DDS_PIXELFORMAT starts at offset 76, size 32 bytes
   const pfOffset = 76;
@@ -210,8 +205,12 @@ function parseHeader(buf: Uint8Array): ParsedHeader | null {
   return { width, height, kind, dataOffset, formatName };
 }
 
-/** Cheap header peek: returns format name + dimensions, or null if not a DDS. */
-export function ddsFormatInfo(buf: Uint8Array): { format: string; width: number; height: number } | null {
+/** Header metadata only. Declared mip levels do not certify the pixel payload or a complete chain. */
+export function ddsFormatInfo(
+  buf: Uint8Array
+): { format: string; width: number; height: number; mipLevelCount: number } | null {
+  // Microsoft DDS_HEADER: some writers omit DDSD_MIPMAPCOUNT. Zero means the field is unused.
+  const mipLevelCount = Math.max(1, readU32(buf, 28));
   let parsed: ParsedHeader | null;
   try {
     parsed = parseHeader(buf);
@@ -220,12 +219,12 @@ export function ddsFormatInfo(buf: Uint8Array): { format: string; width: number;
     if (buf.length >= 128 && readU32(buf, 0) === DDS_MAGIC) {
       const height = readU32(buf, 12);
       const width = readU32(buf, 16);
-      return { format: "unsupported", width, height };
+      return { format: "unsupported", width, height, mipLevelCount };
     }
     return null;
   }
   if (!parsed) return null;
-  return { format: parsed.formatName, width: parsed.width, height: parsed.height };
+  return { format: parsed.formatName, width: parsed.width, height: parsed.height, mipLevelCount };
 }
 
 // ---------------------------------------------------------------------------
@@ -1022,6 +1021,11 @@ export function decodeDds(buf: Uint8Array, mipLevel = 0): DecodedImage {
     const mip = ddsMipLevels(buf)[mipLevel];
     if (!mip) throw new Error(`DDS mip level ${mipLevel} does not exist`);
     ({ width, height, offset: dataOffset } = mip);
+  }
+
+  // Header inspection does not allocate pixels. Enforce the budget only for the surface being decoded.
+  if (width * height > MAX_DECODE_PIXELS) {
+    throw new Error(`image too large: ${width}x${height} exceeds ${MAX_DECODE_PIXELS} pixels`);
   }
 
   let pixels: Uint8Array;

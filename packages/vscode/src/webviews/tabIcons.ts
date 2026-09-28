@@ -25,6 +25,7 @@ export type TabIconName =
   | "tradition-creator"
   | "legacy-creator"
   | "wiki"
+  | "settings"
   | "credits";
 
 let extensionUri: vscode.Uri | undefined;

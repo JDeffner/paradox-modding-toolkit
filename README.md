@@ -37,6 +37,8 @@ Open **Start Here** in the PX Toolkit sidebar to create a mod or find an existin
 
 ## What you get
 
+Open **Toolkit Settings** from Project > Settings > All settings to search, filter and reset settings, with an explicit choice of save scope. CK3 character-history edits preserve source formatting and comments. DDS conversion can match a reference texture or write a custom mip chain. Workshop legacy listings keep a separate item for each saved game version; their first upload uses the current project files, and later uploads change listing information only.
+
 Create your first mod with the guided tutorial, convert batches of images, and get suggestions and navigation that follow unsaved edits. Problems update when referenced events or required translations change in another file.
 
 Right-click files, definitions, overrides or localization references to act on that source. The Project panel shows the current mod, with **All Tools** and **Customize** in its title bar. BBCode files offer **BBCode Preview** in VS Code's editor selector and can preview unsaved edits beside the source.

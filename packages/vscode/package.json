@@ -658,8 +658,13 @@
       {
         "command": "px.openSettings",
         "category": "Paradox",
-        "title": "Extension Settings",
+        "title": "Toolkit Settings",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "px.openNativeSettings",
+        "category": "Paradox",
+        "title": "Open Native VS Code Settings"
       },
       {
         "command": "px.openBBCodePreview",
@@ -1102,6 +1107,24 @@
             "order": 0,
             "markdownDescription": "How much a hover shows. Longer examples and extra meanings stay reachable from the disclosure inside the hover, so `standard` hides nothing permanently."
           },
+          "px.characterHistory.quoteNames": {
+            "type": "boolean",
+            "default": true,
+            "scope": "resource",
+            "markdownDescription": "Quote names in newly generated character history values. Existing values keep their quotation marks unless changed in the Dynasty Tree form. Names with spaces always need quotes."
+          },
+          "px.characterHistory.quoteCultures": {
+            "type": "boolean",
+            "default": true,
+            "scope": "resource",
+            "markdownDescription": "Quote cultures in newly generated character history values. Existing values keep their quotation marks unless changed in the Dynasty Tree form. Names with spaces always need quotes."
+          },
+          "px.characterHistory.quoteReligions": {
+            "type": "boolean",
+            "default": true,
+            "scope": "resource",
+            "markdownDescription": "Quote religions in newly generated character history values. Existing values keep their quotation marks unless changed in the Dynasty Tree form. Names with spaces always need quotes."
+          },
           "px.texturePreview.background": {
             "type": "string",
             "default": "checkerboard",
@@ -1123,11 +1146,14 @@
             "markdownDescription": "Index definitions and references in graphics `.asset` files for supported games, across mods, dependencies and vanilla. Disable to reduce indexing time and memory. Changing this rebuilds the index automatically. Syntax highlighting, folding and on-demand texture previews remain available."
           },
           "px.calendar": {
-            "type": "object",
+            "type": [
+              "object",
+              "null"
+            ],
             "default": null,
             "order": 6,
             "scope": "window",
-            "markdownDescription": "Fallback for mods without their own calendar file. A mod declares its display calendar in `<mod>/.px-toolkit/calendar.json` (`Paradox: Declare Calendar` writes it): one per mod, committed with it, read wherever the mod is opened, and it wins over this setting. Same shape here: `{ \"epoch\": 4000, \"after\": \"AD\", \"before\": \"BC\" }` makes script year 3000 display as `1000 BC` and 4000 as `1 AD` (inlay hints + hover, `Paradox: Insert Date`). Optional `months` replaces the standard 12: `[{ \"name\": \"Narvinye\", \"days\": 30 }, ...]`. Window-scoped, so it can hold one calendar per window and a `.vscode/settings.json` inside a mod subfolder is ignored by VS Code. `Paradox: Generate Calendar Localization` writes the matching game-side loc (era math + date-format overrides) into the mod.",
+            "markdownDescription": "Fallback for mods without their own calendar file. A mod declares its display calendar in `<mod>/.px-toolkit/calendar.json` (`Paradox: Declare Calendar` writes it): one per mod, committed with it, read wherever the mod is opened, and it wins over this setting.\n\n`{ \"epoch\": 4000, \"after\": \"AD\", \"before\": \"BC\" }` makes script year 3000 display as `1000 BC` and 4000 as `1 AD`. Optional `months` supplies exactly 12 distinct names as an array of strings. Month lengths stay fixed by the game.\n\nThis setting applies to the whole window. A `.vscode/settings.json` inside an unopened mod subfolder is ignored by VS Code. `Paradox: Generate Calendar Localization` writes the matching game-side localization into the mod.",
             "properties": {
               "epoch": {
                 "type": "integer",
@@ -1144,21 +1170,31 @@
               },
               "months": {
                 "type": "array",
-                "description": "Custom month names and day counts, first month first. Omit for the standard 12 months. The names must be distinct.",
+                "description": "Exactly 12 distinct month names, first month first. The game uses fixed month lengths. Omit for the standard names.",
+                "minItems": 12,
+                "maxItems": 12,
                 "items": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string"
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
                     },
-                    "days": {
-                      "type": "integer",
-                      "minimum": 1
+                    {
+                      "type": "object",
+                      "description": "Legacy format. Only the name is used; days never changes the game's month length.",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "days": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ]
                     }
-                  },
-                  "required": [
-                    "name",
-                    "days"
                   ]
                 }
               }

@@ -263,6 +263,9 @@ const CHARACTERS_TXT = `9000010 = {
 \t1020.2.2 = {
 \t\tadd_spouse = 9000011
 \t}
+\t1060.1.1 = {
+\t\tdeath = { death_reason = death_natural_causes }
+\t}
 }
 9000011 = {
 \tname = "Smokina"
@@ -1295,6 +1298,8 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(father).toMatchObject({ name: "Smoky", birth: "1000.1.1", spouses: ["9000011"] });
     // The portrait name without the quotes the file wrote, and only the skills
     // the block actually sets.
+    expect(father?.deathReason).toBe("death_natural_causes");
+    expect(father?.death).toBe("1060.1.1");
     expect(father?.dna).toBe("smoky_dna");
     expect(father?.skills).toEqual({ martial: 8, learning: 3 });
     expect(tree.characters?.find((c) => c.id === "9000012")?.skills).toBeUndefined();

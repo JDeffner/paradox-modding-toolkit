@@ -79,10 +79,15 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
     panel.webview.options = { enableScripts: true, localResourceRoots: [source.root] };
     const name = document.uri.path.split("/").pop() ?? "texture.dds";
     const info = ddsFormatInfo(document.bytes);
+    const mipStatus = info
+      ? info.mipLevelCount > 1
+        ? `Mipmaps: Yes (${info.mipLevelCount} levels including base, declared)`
+        : "Mipmaps: No"
+      : "Mipmaps: Unknown";
     let png: Uint8Array | null = null;
     let dataUri: string | null = null;
     let error: string | null = null;
-    let meta = "";
+    let meta = mipStatus;
     let mipLevels: DdsMipLevel[] = [];
     let selectedMip = 0;
     let mipError = "";
@@ -92,7 +97,7 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
       png = encoded;
       selectedMip = level;
       dataUri = `data:image/png;base64,${Buffer.from(encoded).toString("base64")}`;
-      meta = `${img.width}×${img.height} · ${info!.format} · ${formatBytes(document.bytes.length)}`;
+      meta = `${img.width}×${img.height} · ${info!.format} · ${formatBytes(document.bytes.length)} · ${mipStatus}`;
       if (mipLevels.length) meta += ` · Mip ${level} of ${mipLevels.length - 1}`;
       const header = new DataView(
         document.bytes.buffer,
@@ -107,9 +112,9 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
         meta += " · First face / array slice";
     };
     if (!info) {
-      error = "Not a DDS file (bad magic).";
+      error = "Invalid or truncated DDS header.";
     } else {
-      meta = `${info.width}×${info.height} · ${info.format} · ${formatBytes(document.bytes.length)}`;
+      meta = `${info.width}×${info.height} · ${info.format} · ${formatBytes(document.bytes.length)} · ${mipStatus}`;
       try {
         try {
           mipLevels = ddsMipLevels(document.bytes);

@@ -225,7 +225,7 @@ describe("ddsFormatInfo", () => {
   it("reports DXT5 format and dimensions", () => {
     const header = writeHeader({ width: 64, height: 32, pfFlags: DDPF_FOURCC, fourCC: fourCC("DXT5") });
     const info = ddsFormatInfo(header);
-    expect(info).toEqual({ format: "DXT5", width: 64, height: 32 });
+    expect(info).toEqual({ format: "DXT5", width: 64, height: 32, mipLevelCount: 1 });
   });
 });
 

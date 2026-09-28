@@ -27,6 +27,7 @@ const TOKEN_TYPES = [
   "event", // event IDs and on_actions
   "enumMember", // script values
   "string", // loc keys referenced from script
+  "keyword", // saved-scope reference prefix
 ] as const;
 
 const TOKEN_MODIFIERS = ["defaultLibrary"] as const; // vanilla/engine vs mod
@@ -84,6 +85,13 @@ export function provideSemanticTokens(
     if (scalar.quoted) return;
     let word = scalar.text;
     if (!IDENTIFIER_START.test(word)) return;
+    // The scope: prefix is syntax, independent of a same-named indexed symbol.
+    // Match the grammar's keyword color before and after indexing completes.
+    if (/^scope:[A-Za-z0-9_.-]+\b/.test(word)) {
+      const pos = lineIndex.positionAt(scalar.range.start);
+      builder.push(pos.line, pos.character, "scope:".length, TYPE_INDEX.keyword, 0);
+      return;
+    }
     // For prefixed references (scope:x, culture:czech) classify the prefix only —
     // the grammar colors the whole reference, we refine the head word.
     const colon = word.indexOf(":");

@@ -20,7 +20,8 @@
  * plumbing plus px.openWorkshopPage.
  */
 import * as vscode from "vscode";
-import * as cp from "child_process";
+import { runBridgeProcess, type BridgeProgress } from "./bridgeRunner";
+export { BridgeStartError, BridgeWaitError } from "./bridgeRunner";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -47,17 +48,9 @@ import {
   type ChangeNote,
 } from "./workshopFiles";
 import { markdownToBBCode } from "./bbcodeMarkdown";
-import { type BridgeDone, type BridgeEvent, type BridgeJob, type SubmitSpec } from "./jobs";
+import { type BridgeDone, type BridgeJob, type SubmitSpec } from "./jobs";
 
 export const LEGAL_AGREEMENT_URL = "https://steamcommunity.com/sharedfiles/workshoplegalagreement";
-/**
- * How long the bridge may say nothing before it counts as hung. A running job
- * streams upload progress, and every other job answers in seconds, so silence
- * this long means the Steam client or the native call is wedged: without a
- * bound on it the upload promise never settles, the panel stays "uploading"
- * for the rest of the session and the staging copy is never removed.
- */
-const BRIDGE_SILENCE_MS = 5 * 60_000;
 /** Steam rejects preview images of 1 MB or more (k_cchFilenameMax aside). */
 export const PREVIEW_MAX_BYTES = 1024 * 1024;
 
@@ -230,75 +223,17 @@ export function runBridge(
   context: vscode.ExtensionContext,
   job: BridgeJob,
   log: (msg: string) => void,
-  onProgress?: (status: string, uploaded: number, total: number, submit: number, submits: number) => void
+  onProgress?: BridgeProgress,
+  signal?: AbortSignal
 ): Promise<BridgeDone> {
-  const bridge = context.asAbsolutePath(path.join("dist", "steamBridge.js"));
-  const steamworksDir = context.asAbsolutePath(path.join("dist", "steamwand"));
-  return new Promise((resolve, reject) => {
-    const child = cp.spawn(process.execPath, [bridge, steamworksDir], {
-      env: { ...process.env, ELECTRON_RUN_AS_NODE: "1" },
-      stdio: ["pipe", "pipe", "pipe"],
-      windowsHide: true,
-    });
-    let result: BridgeDone | null = null;
-    let errorMessage: string | null = null;
-    let buffer = "";
-    let stderr = "";
-    let silence: NodeJS.Timeout | undefined;
-    let hung = false;
-    const heard = (): void => {
-      clearTimeout(silence);
-      silence = setTimeout(() => {
-        hung = true;
-        child.kill();
-      }, BRIDGE_SILENCE_MS);
-    };
-    heard();
-    child.stdout.on("data", (chunk: Buffer) => {
-      heard();
-      buffer += chunk.toString("utf8");
-      let nl: number;
-      while ((nl = buffer.indexOf("\n")) >= 0) {
-        const line = buffer.slice(0, nl).trim();
-        buffer = buffer.slice(nl + 1);
-        if (!line) continue;
-        try {
-          const event = JSON.parse(line) as BridgeEvent;
-          if (event.type === "progress" && onProgress) {
-            onProgress(event.status, event.uploaded, event.total, event.submit, event.submits);
-          } else if (event.type === "done") {
-            result = event.result;
-          } else if (event.type === "error") {
-            errorMessage = event.message;
-          }
-        } catch {
-          log(`steam bridge: unparseable line: ${line}`);
-        }
-      }
-    });
-    child.stderr.on("data", (chunk: Buffer) => {
-      heard();
-      stderr += chunk.toString("utf8");
-    });
-    child.on("error", (err) => {
-      clearTimeout(silence);
-      reject(new Error(`cannot start the Steam bridge: ${err.message}`));
-    });
-    child.on("close", (code) => {
-      clearTimeout(silence);
-      if (stderr.trim()) log(`steam bridge stderr: ${stderr.trim()}`);
-      if (result) resolve(result);
-      else if (hung)
-        reject(
-          new Error(
-            "the Steam bridge stopped responding and was closed - Steam may be busy or hung; " +
-              "restart Steam and try again"
-          )
-        );
-      else reject(new Error(errorMessage ?? `Steam bridge exited with code ${code ?? "?"}`));
-    });
-    child.stdin.end(JSON.stringify(job));
-  });
+  return runBridgeProcess(
+    context.asAbsolutePath(path.join("dist", "steamBridge.js")),
+    context.asAbsolutePath(path.join("dist", "steamwand")),
+    job,
+    log,
+    onProgress,
+    signal
+  );
 }
 
 export function workshopUrl(itemId: string): string {

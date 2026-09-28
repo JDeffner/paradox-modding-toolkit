@@ -109,7 +109,7 @@ export type BridgeEvent =
       submits: number;
     }
   | { type: "done"; result: BridgeDone }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string; operationStarted?: boolean };
 
 export type BridgeDone =
   | { action: "create"; itemId: string; needsToAcceptAgreement: boolean }

@@ -1,8 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.5.2 (pre-release)
 
-Local preview build: **0.5.2**.
+- Show the total Workspace Mods count and make the bounded list easier to scroll with a mouse or keyboard. Keep all workspace mods reachable without expanding the section for longer lists.
+- Arrange Toolkit Settings in responsive cards, with search, category and change filters, sorting and save scope at the top. Use the shared sidebar switches and preserve drafts when changing views.
+
+- Create independent legacy Workshop listings for a game version, initialized from the main item. Upload the current mod files once to a new item, then update only its Workshop information. Select saved versions in the upload view, with a distinct legacy color and fixed game version.
+- Preserve DLC query failures instead of treating unknown requirements as empty. Detect stalled Workshop uploads, allow stopping the wait, and report uncertain Steam completion without retrying uploads. Reject stale listing downloads and messages for a different selected item.
+- Show declared DDS mipmap counts even when pixel preview is unavailable, with an unknown state for invalid headers.
+- Keep saved-scope reference prefixes distinct under default light and dark themes, including during indexing.
+
+- Add a searchable Toolkit Settings tab that opens on All settings, with optional category filters, explicit User, Workspace and supported folder scopes, detected paths, setup and validation actions, and per-setting reset. Keep native settings storage, preserve drafts when settings change elsewhere, and report failed or stale saves. Correct calendar help to describe the existing fixed month lengths.
+
+- Preserve character history comments, spacing, quotation marks, trait groups and detailed death blocks when editing in the Dynasty Tree. Add death-reason suggestions, per-field quotation controls and project defaults, and grouped output for new characters. Read unsaved source text, reject stale forms and keep drafts after failed saves.
 
 - Choose a custom DDS mip level count in image conversion and creator picture imports. The count includes the base image, so 2 writes the base and one smaller mip. Reference matching still copies the original count.
 

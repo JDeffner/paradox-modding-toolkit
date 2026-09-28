@@ -1,0 +1,27 @@
+lineofmamandil16sister = {
+    name = "Melleth"
+    female = yes
+    dynasty_house = house_mamandil
+    diplomacy = 8
+    martial = 5
+    stewardship = 11
+    intrigue = 5
+    learning = 8
+    prowess = 10
+    culture = "gondorian"
+    religion = "faith_edain"
+    father = lineofmamandil13
+    mother = lineofcaranmir7
+    trait = blood_of_numenor_9
+    trait = just
+    trait = diligent
+    trait = stubborn
+    trait = education_stewardship_4
+    sexuality = heterosexual
+    4103.1.18 = {
+        birth = yes
+    }
+    4358.12.10 = {
+        death = yes
+    }
+}

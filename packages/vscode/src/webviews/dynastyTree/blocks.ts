@@ -1,247 +1,353 @@
 /**
- * The script the Dynasty Tree writes: one character, dynasty or house block,
- * generated from the form the app filled in. Pure text in, pure text out (no
- * vscode, no fs), so it is unit-tested directly.
- *
- * The key set and its spelling are MEASURED from the vanilla files, not
- * remembered (counts in packages/server/src/overview/dynastyTree.ts): a
- * character's own level carries `name` (quoted plain text, never a loc key),
- * `dna`, `female = yes`, `dynasty` or `dynasty_house`, the six skills,
- * `culture`, `religion`, `father`, `mother` and one `trait = X` per trait,
- * while `birth`, `death` and
- * `add_spouse` sit inside a dated `880.1.1 = { … }` block whose KEY is the
- * date. A dynasty is `<id> = { name = "dynn_X" culture = "y" }` and a house is
- * `house_x = { name = "dynn_X" dynasty = <id> }`
- * (game/common/dynasties/00_dynasties.txt, game/common/dynasty_houses/00_dynasty_houses.txt).
- *
- * Editing an existing block regenerates the keys the form owns and keeps
- * everything else exactly as written, comments included, by copying the source
- * LINES of the statements the form does not model.
+ * Character history uses the shapes in CK3's history/_characters.info and
+ * history/characters (including death_reason and killer in english.txt).
+ * Existing characters are edited by source span. Unmodelled statements,
+ * comments, quotation marks and gaps remain in place.
  */
 import { DYNASTY_SKILLS } from "@px-lsp/protocol/protocol";
-import { parseScript, type BlockNode, type Statement } from "@px-lsp/server/parser";
-import type { CharacterForm, DynastyForm, HouseForm } from "./messages";
-
-/** Character-level keys the form owns; everything else is kept as written. */
-const OWNED_KEYS = new Set([
-  "name",
-  "female",
-  "dynasty",
-  "dynasty_house",
-  "dna",
-  "culture",
-  "religion",
-  "father",
-  "mother",
-  "trait",
-  ...DYNASTY_SKILLS,
-]);
-
-/**
- * A dna name the game writes bare (`dna = 73957_ibn_marwan`, 350 of the 438
- * vanilla statements); anything else is quoted so a value with a space still
- * writes one statement.
- */
-const BARE_DNA = /^[A-Za-z0-9_.-]+$/;
-
-const SKILL_KEYS: ReadonlySet<string> = new Set(DYNASTY_SKILLS);
-
-/** Statements inside a dated block the form owns. */
-const OWNED_DATED = new Set(["birth", "death", "add_spouse"]);
+import { isValidScriptDate, parseScriptDate } from "@px-lsp/protocol/calendar";
+import { parseScript } from "@px-lsp/server/parser";
+import { readCharacterBlock } from "@px-lsp/server/overview/dynastyTree";
+import { parseBlock, readQuoted, type ScriptItem } from "../shared/scriptBlock";
+import type { CharacterForm, CharacterQuotes, DynastyForm, HouseForm } from "./messages";
 
 const DATE_RE = /^-?\d+\.\d+\.\d+$/;
-
+const TOKEN = /^[^\s{}"#=<>!]+$/;
+export const DEFAULT_CHARACTER_QUOTES: CharacterQuotes = { name: true, culture: true, religion: true };
 export interface GeneratedBlock {
   text: string;
-  /** What the generator could not do, for the panel to say out loud. */
   notes: string[];
 }
+const quote = (value: string): string => `"${value}"`;
+const scalar = (item: ScriptItem): string | undefined =>
+  item.block ? undefined : (readQuoted(item.value) ?? item.value);
 
-function quote(value: string): string {
-  return `"${value}"`;
+export function unquotableValue(form: object): string | null {
+  return (
+    (Object.values(form).find((v) => typeof v === "string" && /["\r\n]/.test(v)) as string | undefined) ??
+    null
+  );
 }
 
-/**
- * The first value of a form that carries a `"` itself, or null.
- *
- * Paradox script has no escape for a quote inside a quoted value, and dropping
- * it would rename the character silently, so the caller refuses the save.
- */
-export function unquotableValue(form: object): string | null {
-  for (const value of Object.values(form)) {
-    if (typeof value === "string" && value.includes('"')) return value;
+/** Read the current editor block, not an older index record. */
+export function characterForm(text: string): CharacterForm {
+  const parsed = parseScript(text);
+  const stmt = parsed.root.statements[0];
+  if (
+    parsed.errors.length ||
+    parsed.root.statements.length !== 1 ||
+    stmt?.kind !== "assignment" ||
+    stmt.value?.kind !== "block"
+  ) {
+    throw new Error("Fix the character's script syntax before editing it in the Dynasty Tree.");
   }
+  const {
+    source: _source,
+    file: _file,
+    line: _line,
+    ...form
+  } = readCharacterBlock(stmt.key.text, stmt.value, { source: "mod", file: "", line: 0 });
+  return { ...form, deathReason: form.deathReason ?? "" };
+}
+
+/** Validate form inputs before they become script. */
+export function characterProblem(form: CharacterForm): string | null {
+  if (!form.name.trim()) return "A character needs a name or localization key.";
+  if (unquotableValue(form) !== null)
+    return "Character values cannot contain quotation marks or line breaks.";
+  for (const value of [
+    form.id,
+    form.culture,
+    form.religion,
+    form.house,
+    form.dynasty,
+    form.father,
+    form.mother,
+    form.deathReason,
+    ...form.traits,
+    ...form.spouses,
+  ]) {
+    if (value !== undefined && value !== "" && !TOKEN.test(value))
+      return `${value} must be one script identifier.`;
+  }
+  if (!form.id) return "A character needs an id.";
+  for (const value of [form.birth, form.death, form.marriageDate]) {
+    if (!value) continue;
+    const d = parseScriptDate(value);
+    if (!d || !isValidScriptDate(d.y, d.m, d.d)) return `${value} is not a valid history date.`;
+  }
+  if (form.deathReason && !form.death) return "Set a death date before choosing a death reason.";
+  if (Object.values(form.skills ?? {}).some((value) => !Number.isFinite(value)))
+    return "Skills must be finite numbers.";
   return null;
 }
 
-/** `1050.3.4` as a sortable number; the game reads dates, not file order. */
+/** Edits only the selected statement/value; the shared scanner owns syntax. */
+class HistoryBlock {
+  constructor(
+    public text: string,
+    private fallbackIndent = "\t"
+  ) {}
+  get parsed() {
+    const parsed = parseBlock(this.text);
+    if (!parsed) throw new Error("The character block could not be read. Reload it before saving.");
+    return parsed;
+  }
+  get items(): ScriptItem[] {
+    return this.parsed.items;
+  }
+  get indent(): string {
+    const p = this.parsed;
+    return /\n[ \t]+\S/.test(p.body) ? p.indent : this.fallbackIndent;
+  }
+  find(key: string): ScriptItem | undefined {
+    return this.items.filter((i) => i.key === key).at(-1);
+  }
+  replace(start: number, end: number, value: string): void {
+    const offset = this.parsed.head.length;
+    this.text = this.text.slice(0, offset + start) + value + this.text.slice(offset + end);
+  }
+  value(item: ScriptItem, value: string): void {
+    this.replace(item.end - item.value.length, item.end, value);
+  }
+  remove(item: ScriptItem): void {
+    this.replace(item.start, item.end, "");
+  }
+  insert(statement: string, before?: ScriptItem): void {
+    const p = this.parsed;
+    const at = before?.start ?? p.body.length;
+    const lead = p.body.slice(0, at);
+    const line = lead.lastIndexOf("\n") + 1;
+    if (/^[ \t]*$/.test(lead.slice(line))) {
+      this.replace(line, line, this.indent + statement + p.eol);
+    } else {
+      this.replace(at, at, p.eol + this.indent + statement + p.eol);
+    }
+  }
+  set(key: string, value: string | undefined, quoted?: boolean): void {
+    const item = this.find(key);
+    if (value === undefined || value === "") {
+      for (const old of this.items.filter((i) => i.key === key).reverse()) this.remove(old);
+      return;
+    }
+    if (item && scalar(item) === value && quoted === undefined) return;
+    const useQuotes = quoted ?? (item ? readQuoted(item.value) !== null : false);
+    const rendered = useQuotes || !TOKEN.test(value) ? quote(value) : value;
+    if (item) {
+      if (item.value !== rendered) this.value(item, rendered);
+    } else
+      this.insert(
+        `${key} = ${rendered}`,
+        this.items.find((i) => DATE_RE.test(i.key ?? ""))
+      );
+  }
+  child(item: ScriptItem): HistoryBlock {
+    return new HistoryBlock(
+      `${item.key} = ${item.value}`,
+      this.indent + (this.indent.includes("\t") ? "\t" : " ".repeat(this.indent.length || 4))
+    );
+  }
+  putChild(item: ScriptItem, child: HistoryBlock): void {
+    const parsed = child.parsed;
+    this.value(item, `{${parsed.body}${parsed.tail}`);
+  }
+  addDated(date: string, statement: string): void {
+    const existing = this.items.find((i) => i.key === date && i.block);
+    if (existing) {
+      const child = this.child(existing);
+      child.insert(statement);
+      this.putChild(existing, child);
+    } else {
+      const eol = this.parsed.eol;
+      const unit = this.indent.includes("\t") ? "\t" : " ".repeat(this.indent.length || 4);
+      this.insert(
+        `${date} = {${eol}${this.indent}${unit}${statement}${eol}${this.indent}}`,
+        this.items.find((i) => DATE_RE.test(i.key ?? "") && dateOrder(i.key!) > dateOrder(date))
+      );
+    }
+  }
+}
+
 function dateOrder(date: string): number {
-  const [y, m, d] = date.split(".").map((p) => Number(p) || 0);
+  const [y, m, d] = date.split(".").map(Number);
   return y * 10000 + m * 100 + d;
 }
 
-function blockOf(stmt: Statement): BlockNode | null {
-  if (stmt.kind !== "assignment") return null;
-  const v = stmt.value;
-  if (v?.kind === "block") return v;
-  if (v?.kind === "tagged-block") return v.block;
-  return null;
-}
-
-/**
- * The source lines a statement occupies, with the comment lines directly above
- * it and any trailing comment on its own last line. Copying lines rather than
- * the statement's own span is what keeps a `# AKA: …` note attached to the key
- * it explains.
- */
-function statementLines(lines: string[], starts: number[], stmt: Statement): string[] {
-  const lineAt = (offset: number): number => {
-    let lo = 0;
-    let hi = starts.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >> 1;
-      if (starts[mid] <= offset) lo = mid;
-      else hi = mid - 1;
-    }
-    return lo;
-  };
-  let first = lineAt(stmt.range.start);
-  const last = lineAt(stmt.range.end);
-  while (first > 0 && lines[first - 1].trim().startsWith("#")) first--;
-  return lines.slice(first, last + 1);
-}
-
-interface Previous {
-  /** Verbatim lines of the statements the form does not own. */
-  plain: string[][];
-  /** Dated blocks kept as written, by their date. */
-  keptDates: Map<string, string[]>;
-  /** Spouse ids already married inside a KEPT dated block. */
-  keptSpouses: Set<string>;
-  /** Marriage date per spouse, read from the blocks that ARE regenerated: the
-   *  date is the one fact the form does not carry, and a rewrite must not
-   *  invent a new one. */
-  marriedAt: Map<string, string>;
-}
-
-/**
- * Split a previous character block into what the form regenerates and what is
- * copied. A dated block whose statements are all `birth`/`death`/`add_spouse`
- * is regenerated; a dated block carrying anything else (an effect, a nickname,
- * a death with a reason) is kept whole, because rewriting half of it would
- * change what the game does.
- */
-function readPrevious(previous: string): Previous {
-  const out: Previous = {
-    plain: [],
-    keptDates: new Map(),
-    keptSpouses: new Set(),
-    marriedAt: new Map(),
-  };
-  const { root } = parseScript(previous);
-  const lines = previous.split(/\r?\n/);
-  const starts: number[] = [0];
-  for (let i = 0; i < previous.length; i++) {
-    if (previous.charCodeAt(i) === 10) starts.push(i + 1);
+/** Update a birth/death without moving other events at that date. */
+function updateLifeEvent(
+  root: HistoryBlock,
+  key: "birth" | "death",
+  date: string | undefined,
+  reason?: string
+): void {
+  const dated = root.items.find((i) => i.block && DATE_RE.test(i.key ?? "") && root.child(i).find(key));
+  if (!dated) {
+    if (date)
+      root.addDated(date, `${key} = ${key === "death" && reason ? `{ death_reason = ${reason} }` : "yes"}`);
+    return;
   }
-  const block = root.statements.length === 1 ? blockOf(root.statements[0]) : null;
-  if (!block) return out;
-  for (const stmt of block.statements) {
-    if (stmt.kind !== "assignment") {
-      out.plain.push(statementLines(lines, starts, stmt));
-      continue;
-    }
-    const key = stmt.key.text;
-    if (DATE_RE.test(key)) {
-      const dated = blockOf(stmt);
-      const simple =
-        dated !== null &&
-        dated.statements.every((s) => s.kind === "assignment" && OWNED_DATED.has(s.key.text));
-      if (simple) {
-        for (const inner of dated.statements) {
-          if (inner.kind !== "assignment" || inner.key.text !== "add_spouse") continue;
-          if (inner.value?.kind === "scalar") out.marriedAt.set(inner.value.text, key);
+  const child = root.child(dated);
+  const event = child.items.find((i) => i.key === key)!;
+  let value = event.value;
+  if (key === "death" && reason !== undefined) {
+    if (event.block) {
+      const death = child.child(event);
+      const oldReason = death.find("death_reason");
+      if ((oldReason ? scalar(oldReason) : "") !== reason) {
+        if (reason) {
+          death.set("death_reason", reason);
+          value = `{${death.parsed.body}${death.parsed.tail}`;
+        } else {
+          const rest = death.parsed.body.replace(/#[^\r\n]*/g, "");
+          if (death.items.some((i) => i.key !== "death_reason") || rest !== death.parsed.body) {
+            throw new Error(
+              "This death block has other details or comments. Choose a reason, or edit the block in the source file before clearing it."
+            );
+          }
+          value = "yes";
         }
-        continue;
       }
-      out.keptDates.set(key, statementLines(lines, starts, stmt));
-      for (const inner of dated?.statements ?? []) {
-        if (inner.kind !== "assignment" || inner.key.text !== "add_spouse") continue;
-        if (inner.value?.kind === "scalar") out.keptSpouses.add(inner.value.text);
-      }
-      continue;
-    }
-    // A skill the reader could not turn into a number (a script value) never
-    // reached the form, so the form cannot write it back: keep the line.
-    const numericSkill =
-      !SKILL_KEYS.has(key) || (stmt.value?.kind === "scalar" && Number.isFinite(Number(stmt.value.text)));
-    if (numericSkill && OWNED_KEYS.has(key)) continue;
-    out.plain.push(statementLines(lines, starts, stmt));
+    } else if (reason) value = `{ death_reason = ${reason} }`;
   }
-  return out;
+  if (date === dated.key) {
+    if (value !== event.value) {
+      child.value(event, value);
+      root.putChild(dated, child);
+    }
+    return;
+  }
+  // A literal date in birth/death must move with the event's date.
+  if (date && DATE_RE.test(scalar(event) ?? ""))
+    value = readQuoted(event.value) !== null ? quote(date) : date;
+  child.remove(event);
+  if (child.items.length === 0 && !child.parsed.body.includes("#")) root.remove(dated);
+  else root.putChild(dated, child);
+  if (date) root.addDated(date, `${key} = ${value}`);
 }
 
-/**
- * The character's block. `previous` is the exact source of the block being
- * edited; without it a fresh block is written.
- */
-export function characterBlock(form: CharacterForm, previous?: string): GeneratedBlock {
-  const notes: string[] = [];
-  const prev = previous ? readPrevious(previous) : null;
-  const body: string[] = [];
-  body.push(`\tname = ${quote(form.name)}`);
-  // The game's own order: the dna sits right under the name it portrays.
-  if (form.dna) body.push(`\tdna = ${BARE_DNA.test(form.dna) ? form.dna : quote(form.dna)}`);
-  if (form.female) body.push(`\tfemale = yes`);
-  if (form.house) body.push(`\tdynasty_house = ${form.house}`);
-  else if (form.dynasty) body.push(`\tdynasty = ${form.dynasty}`);
-  for (const skill of DYNASTY_SKILLS) {
-    const value = form.skills?.[skill];
-    if (typeof value === "number") body.push(`\t${skill} = ${value}`);
+function updateTraits(root: HistoryBlock, traits: string[]): void {
+  const remaining = [...traits];
+  const remove: ScriptItem[] = [];
+  for (const item of root.items.filter((i) => i.key === "trait" && !i.block)) {
+    const at = remaining.indexOf(scalar(item)!);
+    if (at < 0) remove.push(item);
+    else remaining.splice(at, 1);
   }
-  if (form.culture) body.push(`\tculture = ${quote(form.culture)}`);
-  if (form.religion) body.push(`\treligion = ${quote(form.religion)}`);
-  if (form.father) body.push(`\tfather = ${form.father}`);
-  if (form.mother) body.push(`\tmother = ${form.mother}`);
-  for (const trait of form.traits) body.push(`\ttrait = ${trait}`);
-  for (const kept of prev?.plain ?? []) body.push(...kept);
+  for (const item of remove.reverse()) root.remove(item);
+  for (const trait of remaining) {
+    const items = root.items;
+    const last = items.indexOf(items.filter((i) => i.key === "trait").at(-1)!);
+    root.insert(
+      `trait = ${trait}`,
+      last >= 0 ? items[last + 1] : items.find((i) => DATE_RE.test(i.key ?? ""))
+    );
+  }
+}
 
-  const dated: Array<{ date: string; lines: string[] }> = [];
-  const keptDates = prev?.keptDates ?? new Map<string, string[]>();
-  for (const [date, lines] of keptDates) dated.push({ date, lines });
-  const simpleDated = (date: string, statement: string): void => {
-    if (keptDates.has(date)) {
-      notes.push(`${date} was kept as written, so ${statement} was not moved there.`);
-      return;
+function updateSpouses(root: HistoryBlock, form: CharacterForm): void {
+  const found = new Set<string>();
+  for (const item of root.items.slice().reverse()) {
+    if (item.key === "add_spouse" && !item.block) {
+      const spouse = scalar(item)!;
+      if (form.spouses.includes(spouse)) found.add(spouse);
+      else root.remove(item);
+    } else if (item.block && DATE_RE.test(item.key ?? "")) {
+      const child = root.child(item);
+      const original = child.text;
+      for (const spouse of child.items.filter((i) => i.key === "add_spouse" && !i.block).reverse()) {
+        const id = scalar(spouse)!;
+        if (form.spouses.includes(id)) found.add(id);
+        else child.remove(spouse);
+      }
+      if (child.text === original) continue;
+      if (child.items.length === 0 && !child.parsed.body.includes("#")) root.remove(item);
+      else root.putChild(item, child);
     }
-    dated.push({ date, lines: [`\t${date} = {`, `\t\t${statement}`, `\t}`] });
-  };
-  if (form.birth) simpleDated(form.birth, "birth = yes");
-  if (form.death) simpleDated(form.death, "death = yes");
-  // A marriage the previous block already dated keeps that date; a new one gets
-  // the form's, and failing that the character's own birth date.
-  const marriages = new Map<string, string[]>();
+  }
   for (const spouse of form.spouses) {
-    if (prev?.keptSpouses.has(spouse)) continue;
-    const date = prev?.marriedAt.get(spouse) ?? form.marriageDate ?? form.birth;
-    if (!date) {
-      notes.push(`${spouse} needs a marriage date before it can be written.`);
-      continue;
-    }
-    const list = marriages.get(date);
-    if (list) list.push(spouse);
-    else marriages.set(date, [spouse]);
+    if (found.has(spouse)) continue;
+    const date = form.marriageDate ?? form.birth;
+    if (!date) throw new Error(`${spouse} needs a marriage date before it can be written.`);
+    root.addDated(date, `add_spouse = ${spouse}`);
+    found.add(spouse);
   }
-  for (const [date, ids] of marriages) {
-    dated.push({
-      date,
-      lines: [`\t${date} = {`, ...ids.map((id) => `\t\tadd_spouse = ${id}`), `\t}`],
-    });
-  }
-  dated.sort((a, b) => dateOrder(a.date) - dateOrder(b.date));
-  for (const entry of dated) body.push(...entry.lines);
+}
 
-  return { text: `${form.id} = {\n${body.join("\n")}\n}\n`, notes };
+export function characterBlock(
+  form: CharacterForm,
+  previous?: string,
+  defaults: CharacterQuotes = DEFAULT_CHARACTER_QUOTES
+): GeneratedBlock {
+  const problem = characterProblem(form);
+  if (problem) throw new Error(problem);
+  if (!previous) return { text: newCharacter(form, defaults), notes: [] };
+  const before = characterForm(previous);
+  if (before.id !== form.id) throw new Error("The character id changed. Reload the character before saving.");
+  const root = new HistoryBlock(previous);
+  for (const key of ["name", "culture", "religion"] as const) {
+    const explicit = form.quotes?.[key];
+    if (!root.find(key) && form[key] === before[key] && explicit === undefined) continue;
+    root.set(key, form[key], explicit ?? (root.find(key) ? undefined : defaults[key]));
+  }
+  if (form.female !== before.female) root.set("female", form.female ? "yes" : "no");
+  for (const [key, value, was] of [
+    ["dynasty", form.dynasty, before.dynasty],
+    ["dynasty_house", form.house, before.house],
+    ["father", form.father, before.father],
+    ["mother", form.mother, before.mother],
+    ["dna", form.dna, before.dna],
+  ] as const) {
+    if (value !== was) root.set(key, value);
+  }
+  for (const skill of DYNASTY_SKILLS) {
+    if (form.skills?.[skill] !== before.skills?.[skill]) root.set(skill, form.skills?.[skill]?.toString());
+  }
+  updateTraits(root, form.traits);
+  updateLifeEvent(root, "birth", form.birth);
+  updateLifeEvent(root, "death", form.death, form.deathReason);
+  updateSpouses(root, form);
+  return { text: root.text, notes: [] };
+}
+
+function newCharacter(form: CharacterForm, defaults: CharacterQuotes): string {
+  const quoted = (key: keyof CharacterQuotes, value: string): string =>
+    (form.quotes?.[key] ?? defaults[key]) || !TOKEN.test(value) ? quote(value) : value;
+  const groups: string[][] = [
+    [
+      `name = ${quoted("name", form.name)}`,
+      ...(form.dna ? [`dna = ${TOKEN.test(form.dna) ? form.dna : quote(form.dna)}`] : []),
+      ...(form.female ? ["female = yes"] : []),
+    ],
+    [
+      form.house ? `dynasty_house = ${form.house}` : form.dynasty ? `dynasty = ${form.dynasty}` : "",
+      form.religion ? `religion = ${quoted("religion", form.religion)}` : "",
+      form.culture ? `culture = ${quoted("culture", form.culture)}` : "",
+    ],
+    [form.father ? `father = ${form.father}` : "", form.mother ? `mother = ${form.mother}` : ""],
+    DYNASTY_SKILLS.flatMap((s) => (form.skills?.[s] !== undefined ? [`${s} = ${form.skills[s]}`] : [])),
+    form.traits.map((t) => `trait = ${t}`),
+  ];
+  const dates = new Map<string, string[]>();
+  const add = (date: string, value: string): void => {
+    dates.set(date, [...(dates.get(date) ?? []), value]);
+  };
+  if (form.birth) add(form.birth, "birth = yes");
+  if (form.death)
+    add(form.death, form.deathReason ? `death = { death_reason = ${form.deathReason} }` : "death = yes");
+  for (const spouse of new Set(form.spouses)) {
+    const date = form.marriageDate ?? form.birth;
+    if (!date) throw new Error(`${spouse} needs a marriage date before it can be written.`);
+    add(date, `add_spouse = ${spouse}`);
+  }
+  for (const [date, statements] of [...dates].sort(([a], [b]) => dateOrder(a) - dateOrder(b))) {
+    groups.push([`${date} = {`, ...statements.map((s) => `\t${s}`), "}"]);
+  }
+  const body = groups
+    .map((g) => g.filter(Boolean))
+    .filter((g) => g.length)
+    .map((g) => g.map((s) => `\t${s}`).join("\n"))
+    .join("\n\n");
+  return `${form.id} = {\n${body}\n}\n`;
 }
 
 /** `<id> = { name = "dynn_X" culture = "y" }`. */

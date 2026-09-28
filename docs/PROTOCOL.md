@@ -248,6 +248,8 @@ searching. A profile whose schema has no `dynasty` kind answers
 `supported: false` with empty lists, which a client says out loud instead of
 drawing an empty tree.
 
+`DynastyCharacter.deathReason` is the optional scalar `death_reason` from the first dated `death = { ... }` block. Scalar deaths such as `death = yes` omit it. `name` is the source value without quotation marks and can be a localization key; quotes do not identify whether it is localized. Clients must preserve fields they do not model, including other death-block fields such as `killer`. This additive field requires no client capability.
+
 Answering costs one full read of the character corpus, because the link points
 from a character to its dynasty and never back. The server does that read once
 per index revision: measured on a vanilla CK3 install (71 142 characters in

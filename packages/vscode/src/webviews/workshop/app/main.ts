@@ -11,7 +11,7 @@ import { versionAtLeast, type ItemDetails, type WorkshopVisibility } from "../..
 import { bbcodeToHtml } from "../bbcode";
 import { markdownToBBCode } from "../../../steam/bbcodeMarkdown";
 import { iconEl } from "../../shared/icons";
-import { confirmAction, menu, type MenuItem } from "../../shared/overlay";
+import { closePopover, confirmAction, menu, type MenuItem } from "../../shared/overlay";
 import type {
   AppToHost,
   DlcChoice,
@@ -28,7 +28,11 @@ import { helpDialog } from "../../shared/help";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
-const send = (m: AppToHost): void => vscode.postMessage(m);
+const send = (m: AppToHost): void =>
+  vscode.postMessage({
+    ...m,
+    target: m.target ?? (info ? { root: info.root, legacyKey: info.legacyKey } : undefined),
+  });
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 
 installTips();
@@ -72,11 +76,12 @@ const collapsed = new Set<string>();
 /** The mod the current drafts belong to, and its languages already seen
  * (languages arriving from disk start collapsed; UI-added ones stay open). */
 let lastInfoActive: string | null = null;
+let listingGeneration = 0;
 const knownLangs = new Set<string>();
 /** What the changenote is taken from. The picked source IS what uploads. */
 type NoteSource = "changelog" | "release" | "commit" | "write";
-/** The source the user picked, per mod. Unpicked mods follow `defaultNoteSource`. */
-const noteSourceByMod = new Map<string, NoteSource>();
+/** The source picked for this listing. A different listing starts from its own default. */
+let pickedNoteSource: NoteSource | undefined;
 let noteSource: NoteSource = "write";
 
 const VISIBILITY_LABELS: Record<number, string> = {
@@ -164,11 +169,32 @@ function renderProgress(): void {
 }
 
 const hasErrors = (): boolean => !!info?.checks.some((c) => c.level === "error");
+const isLegacy = (): boolean => info?.legacyKey != null;
+const needsLegacyContent = (): boolean => isLegacy() && ["new", "ready"].includes(info?.legacyContent ?? "");
 
 function renderToolbar(): void {
   const modBtn = $<HTMLButtonElement>("mod");
   const label = mods.find((m) => m.path === active)?.label ?? "(no mod)";
   modBtn.querySelector("span.px-truncate")!.textContent = label;
+  modBtn.disabled = busy;
+  const listing = $<HTMLSelectElement>("listing");
+  listing.replaceChildren(new Option("Main item", ""));
+  for (const legacy of info?.legacyVersions ?? [])
+    listing.add(new Option(`Legacy ${legacy.supportedVersion}`, legacy.key));
+  listing.value = info?.legacyKey ?? "";
+  listing.disabled = busy || !info;
+  $<HTMLButtonElement>("createLegacy").disabled = busy || !info || info.descriptorMissing;
+  $("app").toggleAttribute("data-legacy", isLegacy());
+  const notice = $("legacyNotice");
+  notice.hidden = !isLegacy();
+  notice.textContent = !isLegacy()
+    ? ""
+    : info?.legacyContent === "creating"
+      ? `Legacy ${info?.supportedVersion}: Steam item creation has an unknown result. Check Steam before trying again.`
+      : needsLegacyContent()
+        ? `Legacy ${info?.supportedVersion}: the first upload sends the current project files. Later uploads can change Workshop information only.`
+        : `Legacy ${info?.supportedVersion}: Workshop information only. Use a separate project to update legacy mod files.`;
+  $("stopWaiting").hidden = !busy;
 
   // What Steam reported, not a verdict on the item: "live" read as if the
   // item were public, which it need not be.
@@ -181,7 +207,8 @@ function renderToolbar(): void {
   state.toggleAttribute("data-tip-wrap", tip !== "");
 
   $<HTMLButtonElement>("openPage").disabled = !info?.publishedId;
-  $<HTMLButtonElement>("upload").disabled = busy || !info || info.descriptorMissing || hasErrors();
+  $<HTMLButtonElement>("upload").disabled =
+    busy || !info || info.descriptorMissing || hasErrors() || info.legacyContent === "creating";
   $<HTMLButtonElement>("refresh").disabled = fetching || !info?.publishedId;
   $<HTMLButtonElement>("pull").disabled = busy || fetching || !info?.publishedId;
   $("busy").classList.toggle("on", fetching && !busy);
@@ -204,11 +231,45 @@ function renderItem(): void {
   if (document.activeElement !== version) version.value = info.version ?? "";
   const supported = $<HTMLInputElement>("supported");
   if (document.activeElement !== supported) supported.value = info.supportedVersion ?? "";
+  version.disabled = isLegacy();
+  supported.disabled = isLegacy();
+  version.setAttribute(
+    "data-tip",
+    isLegacy()
+      ? "The mod version saved when this legacy item was created."
+      : "Your mod's own version, from the descriptor."
+  );
+  supported.setAttribute(
+    "data-tip",
+    isLegacy()
+      ? "This legacy item is tied to this game version."
+      : "The game version the mod declares it works with."
+  );
+  title.setAttribute(
+    "data-tip",
+    isLegacy()
+      ? "The title of this legacy Workshop item."
+      : "The item's title, from the descriptor. Editing here writes it."
+  );
+  $("contentHint").textContent = isLegacy()
+    ? needsLegacyContent()
+      ? "Required for the first upload: the current project files, with this legacy game version."
+      : "Legacy mod files are locked. Use a separate project to upload new files."
+    : "Everything in the mod folder except the workshop folder and what .pxignore excludes.";
 
   const previewUrl = info.previewUri ?? live?.previewUrl ?? null;
   const img = $<HTMLImageElement>("preview");
   img.hidden = !previewUrl;
   $("previewEmpty").style.display = previewUrl ? "none" : "";
+  $("previewEmpty").textContent = isLegacy()
+    ? "No preview image. Choose an image for this legacy item."
+    : "No preview image. Add a thumbnail.png to the mod.";
+  $("changePreview").setAttribute(
+    "data-tip",
+    isLegacy()
+      ? "Pick a preview image for this legacy item."
+      : "Pick a new preview image, copied into the mod."
+  );
   if (previewUrl && img.src !== previewUrl) img.src = previewUrl;
   $("previewName").textContent = info.previewName ?? (previewUrl ? "current Workshop preview" : "");
   $("previewName").setAttribute(
@@ -225,7 +286,7 @@ function renderItem(): void {
   );
 
   const visBtn = $<HTMLButtonElement>("visibility");
-  const vis = pickedVisibility ?? live?.visibility ?? null;
+  const vis = pickedVisibility ?? info.visibility ?? live?.visibility ?? null;
   visBtn.querySelector("span")!.textContent =
     vis === null ? (info.publishedId ? "…" : "Private (new items start private)") : VISIBILITY_LABELS[vis];
   visBtn.disabled = !info.publishedId && vis === null;
@@ -272,7 +333,10 @@ function renderTags(current: string[]): void {
     chip.dataset.variant = "secondary";
     chip.append(document.createTextNode(t));
     const x = document.createElement("button");
-    x.setAttribute("data-tip", "Remove this tag (writes the descriptor)");
+    x.setAttribute(
+      "data-tip",
+      isLegacy() ? "Remove this tag from the legacy item" : "Remove this tag (writes the descriptor)"
+    );
     x.append(iconEl("x"));
     x.addEventListener("click", () => send({ type: "setTags", tags: current.filter((v) => v !== t) }));
     chip.append(x);
@@ -285,7 +349,10 @@ function renderTags(current: string[]): void {
   addBtn.dataset.variant = "ghost";
   addBtn.dataset.size = "sm";
   addBtn.append(iconEl("plus"), document.createTextNode(" tag"));
-  addBtn.setAttribute("data-tip", "Add a Workshop tag (writes the descriptor)");
+  addBtn.setAttribute(
+    "data-tip",
+    isLegacy() ? "Add a Workshop tag to the legacy item" : "Add a Workshop tag (writes the descriptor)"
+  );
   const customInput = (): void => {
     const input = document.createElement("input");
     input.className = "px-input";
@@ -343,7 +410,11 @@ function renderFilesRow(): void {
   const chip = document.createElement("span");
   chip.className = "px-badge";
   chip.dataset.variant = "outline";
-  if (!info.filesPresent) {
+  if (isLegacy()) {
+    chip.textContent = "legacy";
+    chip.setAttribute("data-tip", "This version's own Workshop information.");
+    box.textContent = info.workshopDir;
+  } else if (!info.filesPresent) {
     chip.textContent = "workshop.json";
     chip.setAttribute("data-tip", "No listing folder yet: drafts save to workshop.json in the mod.");
     box.textContent = `no folder at ${info.workshopDir}`;
@@ -584,6 +655,7 @@ function translationRow(lang: string): HTMLElement {
     (e) =>
       void (async () => {
         e.stopPropagation();
+        const generation = listingGeneration;
         if (hasText) {
           const go = await confirmAction({
             title: `Remove the ${langLabel(lang)} translation?`,
@@ -592,7 +664,7 @@ function translationRow(lang: string): HTMLElement {
             confirmLabel: "Remove",
             destructive: true,
           });
-          if (!go) return;
+          if (!go || generation !== listingGeneration) return;
         }
         delete draftTranslations[lang];
         collapsed.delete(lang);
@@ -760,6 +832,7 @@ function wireGalleryDrag(gallery: HTMLElement): void {
   for (const tile of tiles()) {
     tile.addEventListener("pointerdown", (down) => {
       if (down.button !== 0 || (down.target as HTMLElement).closest("button")) return;
+      const generation = listingGeneration;
       const start = { x: down.clientX, y: down.clientY };
       let ghost: HTMLElement | null = null;
       let offset = { x: 0, y: 0 };
@@ -793,6 +866,10 @@ function wireGalleryDrag(gallery: HTMLElement): void {
         }
       };
       const onMove = (e: PointerEvent): void => {
+        if (generation !== listingGeneration) {
+          onUp();
+          return;
+        }
         if (!ghost) {
           if (Math.hypot(e.clientX - start.x, e.clientY - start.y) < 4) return;
           const r = tile.getBoundingClientRect();
@@ -832,6 +909,7 @@ function wireGalleryDrag(gallery: HTMLElement): void {
         ghost.remove();
         tile.classList.remove("placeholder");
         for (const t of tiles()) t.classList.remove("slide");
+        if (generation !== listingGeneration) return;
         const names = tiles()
           .map((t) => t.dataset.name ?? "")
           .filter(Boolean);
@@ -1012,6 +1090,7 @@ interface UploadPart {
   on: boolean;
   /** Nothing to send, so the modal shows the row without a live switch. */
   disabled?: boolean;
+  locked?: boolean;
   what: string;
 }
 
@@ -1034,12 +1113,18 @@ function uploadParts(): UploadPart[] {
       key: "content",
       name: "Mod files",
       on: checked("incContent"),
-      what: "every file of the mod, replacing what subscribers have",
+      locked: isLegacy(),
+      what: isLegacy()
+        ? needsLegacyContent()
+          ? "required first upload of the current project files"
+          : "locked: use a separate project to update legacy files"
+        : "every file of the mod, replacing what subscribers have",
     },
     {
       key: "details",
       name: "Details",
       on: checked("incDetails"),
+      locked: needsLegacyContent(),
       what: "title, visibility, tags and the thumbnail",
     },
     {
@@ -1088,6 +1173,12 @@ function uploadParts(): UploadPart[] {
 }
 
 function renderPublish(): void {
+  const content = $<HTMLInputElement>("incContent");
+  content.disabled = isLegacy();
+  if (isLegacy()) content.checked = needsLegacyContent();
+  const details = $<HTMLInputElement>("incDetails");
+  details.disabled = needsLegacyContent();
+  if (needsLegacyContent()) details.checked = true;
   const langs = uploadableLanguages();
   const incLangs = $<HTMLInputElement>("incLangs");
   incLangs.disabled = !langs.length;
@@ -1179,10 +1270,19 @@ $("enableAllYes").addEventListener("click", () => {
 // ---------------------------------------------------------------------------
 
 function applyInfo(next: WorkshopModInfo | null): void {
-  const switched = active !== lastInfoActive;
-  lastInfoActive = active;
+  const identity = JSON.stringify([active, next?.legacyKey ?? null]);
+  const switched = identity !== lastInfoActive;
+  lastInfoActive = identity;
   info = next;
   if (switched) {
+    listingGeneration++;
+    closePopover();
+    clearTimeout(saveTimer);
+    saveTimer = undefined;
+    fetching = false;
+    busy = false;
+    progressStep = null;
+    renderProgress();
     live = null;
     liveTranslations = {};
     liveError = null;
@@ -1190,6 +1290,30 @@ function applyInfo(next: WorkshopModInfo | null): void {
     collapsed.clear();
     knownLangs.clear();
     langsOff.clear();
+    itemsPending.clear();
+    itemTitles.clear();
+    dlc = null;
+    dlcSource = "none";
+    dlcError = null;
+    dlcLoading = dlcAsked = dlcSteamAsked = false;
+    pickedNoteSource = undefined;
+    for (const id of [
+      "incContent",
+      "incDetails",
+      "incDescription",
+      "incPreviews",
+      "incRequirements",
+      "incLangs",
+      "incNote",
+    ])
+      $<HTMLInputElement>(id).checked = true;
+    $("enableAllConfirm").hidden = true;
+    $<HTMLButtonElement>("enableAll").disabled = false;
+    $<HTMLInputElement>("itemIdInput").value = "";
+    $<HTMLInputElement>("title").value = next?.name ?? "";
+    $<HTMLInputElement>("version").value = next?.version ?? "";
+    $<HTMLInputElement>("supported").value = next?.supportedVersion ?? "";
+    $<HTMLInputElement>("videos").value = next?.previews?.videos.join(", ") ?? "";
   }
   // A pending autosave means the disk is behind the editor: keep the drafts.
   const pendingEdits = !switched && saveTimer !== undefined;
@@ -1217,6 +1341,13 @@ function applyInfo(next: WorkshopModInfo | null): void {
 
 window.addEventListener("message", (e: MessageEvent<HostToApp>) => {
   const m = e.data;
+  if (
+    m.type !== "info" &&
+    m.type !== "init" &&
+    m.target &&
+    (m.target.root !== info?.root || m.target.legacyKey !== info?.legacyKey)
+  )
+    return;
   switch (m.type) {
     case "init":
       mods = m.mods;
@@ -1273,6 +1404,21 @@ window.addEventListener("message", (e: MessageEvent<HostToApp>) => {
 // Wiring
 // ---------------------------------------------------------------------------
 
+$("listing").addEventListener("change", () => {
+  const listing = $<HTMLSelectElement>("listing");
+  const key = listing.value || null;
+  // The host may reject a damaged or missing legacy directory. Keep the label
+  // on the item whose fields are visible until authoritative info arrives.
+  listing.value = info?.legacyKey ?? "";
+  flushSave();
+  send({ type: "selectListing", key });
+});
+$("createLegacy").addEventListener("click", () => {
+  flushSave();
+  send({ type: "createLegacy" });
+});
+$("stopWaiting").addEventListener("click", () => send({ type: "stopWaiting" }));
+
 $("mod").addEventListener("click", () => {
   menu(
     $("mod"),
@@ -1313,11 +1459,12 @@ $("visibility").addEventListener("click", () => {
     { value: "3", label: "Unlisted", description: "Anyone with the link; not in searches." },
     { value: "0", label: "Public", description: "Everyone; listed and searchable." },
   ];
-  const current = pickedVisibility ?? live?.visibility;
+  const current = pickedVisibility ?? info?.visibility ?? live?.visibility;
   menu($("visibility"), items, {
     value: current === undefined || current === null ? undefined : String(current),
     onPick: (v) => {
       pickedVisibility = Number(v) as WorkshopVisibility;
+      if (isLegacy()) send({ type: "setVisibility", value: pickedVisibility });
       renderItem();
     },
   });
@@ -1328,13 +1475,14 @@ $("pullDesc").addEventListener(
   () =>
     void (async () => {
       if (!live) return;
+      const generation = listingGeneration;
       if (draftDescription.trim() && draftDescription !== live.description) {
         const go = await confirmAction({
           title: "Replace the description draft?",
           description: "The local draft differs from what is on Steam and will be overwritten.",
           confirmLabel: "Replace",
         });
-        if (!go) return;
+        if (!go || generation !== listingGeneration) return;
       }
       draftDescription = live.description;
       queueSave();
@@ -1383,9 +1531,10 @@ $("upload").addEventListener(
   "click",
   () =>
     void (async () => {
-      if (!info || busy) return;
+      if (!info || busy || info.legacyContent === "creating" || hasErrors()) return;
+      const generation = listingGeneration;
       const picked = await uploadModal();
-      if (!picked) return;
+      if (!picked || generation !== listingGeneration) return;
       // Mirror the modal's last word back into the Publish switches.
       $<HTMLInputElement>("incContent").checked = picked.content;
       $<HTMLInputElement>("incDetails").checked = picked.details;
@@ -1459,7 +1608,7 @@ async function uploadModal(): Promise<UploadChoice | null> {
     const input = document.createElement("input");
     input.type = "checkbox";
     input.checked = part.on && !part.disabled;
-    input.disabled = !!part.disabled;
+    input.disabled = !!part.disabled || !!part.locked;
     input.addEventListener("change", paint);
     sw.append(input, document.createElement("span"));
     const lbl = document.createElement("span");
@@ -1507,7 +1656,7 @@ async function uploadModal(): Promise<UploadChoice | null> {
 
   body.append(head, rows, noteBox, warn);
 
-  const vis = pickedVisibility ?? live?.visibility ?? null;
+  const vis = pickedVisibility ?? info?.visibility ?? live?.visibility ?? null;
   const go = await confirmAction({
     title: isNew ? `Publish "${name}" to the Steam Workshop` : `Upload "${name}" to the Steam Workshop`,
     description: isNew
@@ -1579,7 +1728,7 @@ function changelogWhere(): string {
 }
 
 function renderNote(): void {
-  noteSource = (active ? noteSourceByMod.get(active) : undefined) ?? defaultNoteSource();
+  noteSource = pickedNoteSource ?? defaultNoteSource();
   for (const b of Array.from(document.querySelectorAll<HTMLButtonElement>("#noteSeg .px-toggle")))
     b.setAttribute("aria-pressed", String(b.dataset.src === noteSource));
   $("noteChangelog").hidden = noteSource !== "changelog";
@@ -1596,7 +1745,7 @@ function changelogLocationMenu(anchor: HTMLElement): void {
   if (!info) return;
   const items: MenuItem[] = [
     ...info.changelogCandidates
-      .filter((c) => !c.current)
+      .filter((c) => !isLegacy() && !c.current)
       .map<MenuItem>((c) => ({
         value: `use:${c.path}`,
         label: `Use this ${c.kind}`,
@@ -1647,7 +1796,8 @@ function renderChangelogNote(): void {
   const where = document.createElement("span");
   where.className = "hint px-muted px-xs";
   where.textContent = info.version ? `Version ${info.version} · ${note.source}` : note.source;
-  status.append(where, locationButton("Change…"));
+  status.append(where);
+  if (!isLegacy()) status.append(locationButton("Change…"));
 
   // The entry as it will read on Steam: resolveChangeNote already converted a
   // Markdown entry, so this is byte for byte what the upload sends.
@@ -1684,8 +1834,9 @@ function changelogEmptyState(): HTMLElement[] {
   row.className = "hintline";
   const version = info?.version;
   if (!version) {
-    line.textContent =
-      "The descriptor has no version, so no changelog entry can match. Set one in the Details card.";
+    line.textContent = isLegacy()
+      ? "This legacy item has no saved mod version. Use Write to enter a changenote."
+      : "The descriptor has no version, so no changelog entry can match. Set one in the Details card.";
     return [line];
   }
   const where = changelogWhere();
@@ -1693,22 +1844,18 @@ function changelogEmptyState(): HTMLElement[] {
   if (kind === null) {
     line.textContent = `No changelog at ${where} yet.`;
     row.append(actionButton("plus", "Create changelog", () => send({ type: "createChangelog" })));
-    if (info?.changelogCandidates.length) row.append(locationButton("Use an existing one"));
+    if (!isLegacy() && info?.changelogCandidates.length) row.append(locationButton("Use an existing one"));
     return [line, row];
   }
   if (kind === "folder") {
     line.textContent = `No entry for version ${version} in ${where}.`;
-    row.append(
-      actionButton("plus", `Create ${version}.md`, () => send({ type: "createChangelog" })),
-      locationButton("Use another")
-    );
+    row.append(actionButton("plus", `Create ${version}.md`, () => send({ type: "createChangelog" })));
+    if (!isLegacy()) row.append(locationButton("Use another"));
     return [line, row];
   }
   line.textContent = `${where} has no headline containing ${version}.`;
-  row.append(
-    actionButton("pencil", `Open ${where}`, () => send({ type: "createChangelog" })),
-    locationButton("Use another")
-  );
+  row.append(actionButton("pencil", `Open ${where}`, () => send({ type: "createChangelog" })));
+  if (!isLegacy()) row.append(locationButton("Use another"));
   return [line, row];
 }
 
@@ -1786,7 +1933,7 @@ function renderCommitNote(): void {
 
 for (const btn of Array.from(document.querySelectorAll<HTMLButtonElement>("#noteSeg .px-toggle"))) {
   btn.addEventListener("click", () => {
-    if (active) noteSourceByMod.set(active, btn.dataset.src as NoteSource);
+    pickedNoteSource = btn.dataset.src as NoteSource;
     renderNote();
     renderPublish();
   });
@@ -1797,6 +1944,7 @@ $("pull").addEventListener(
   () =>
     void (async () => {
       if (!info?.publishedId || busy || fetching) return;
+      const generation = listingGeneration;
       const wrap = document.createElement("div");
       wrap.className = "modal-body";
       const head = document.createElement("div");
@@ -1850,7 +1998,7 @@ $("pull").addEventListener(
         destructive: true,
         wide: true,
       });
-      if (!go) return;
+      if (!go || generation !== listingGeneration) return;
       const parts = Object.fromEntries(
         inputs.map(([id, input]) => [id, input.checked])
       ) as unknown as PullParts;
@@ -1867,6 +2015,8 @@ const commitField = (id: string, field: "title" | "version" | "supportedVersion"
     "change",
     () =>
       void (async () => {
+        if (isLegacy() && field !== "title") return;
+        const generation = listingGeneration;
         const current =
           field === "title" ? info?.name : field === "version" ? info?.version : info?.supportedVersion;
         const v = input.value.trim();
@@ -1886,6 +2036,7 @@ const commitField = (id: string, field: "title" | "version" | "supportedVersion"
             confirmLabel: "Set anyway",
             destructive: true,
           });
+          if (generation !== listingGeneration) return;
           if (!go) {
             input.value = current;
             return;

@@ -138,6 +138,9 @@ describe("DDS editor shared background", () => {
       level: 2,
       meta: expect.stringContaining("1×1"),
     });
+    expect(first.posted.at(-1)).toMatchObject({
+      meta: expect.stringContaining("Mipmaps: Yes (3 levels including base, declared)"),
+    });
     await first.receive({ type: "savePng" });
     expect(Buffer.from(exported!).readUInt32BE(16)).toBe(1);
     expect(exportPath).toBe("/mod/image.mip-2.png");

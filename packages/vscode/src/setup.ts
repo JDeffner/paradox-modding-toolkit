@@ -226,8 +226,7 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
   if (action === "Show details") deps.showOutput();
   else if (action === "Choose Game Folder") await selectGameFolder(deps);
   else if (action === "Download Validator") await downloadTigerCommand(deps, false);
-  else if (action === "Open Settings")
-    await vscode.commands.executeCommand("workbench.action.openSettings", "px.");
+  else if (action === "Open Settings") await vscode.commands.executeCommand("px.openSettings");
 }
 
 /** One-time nudge on first activation without a configured game path. Only in

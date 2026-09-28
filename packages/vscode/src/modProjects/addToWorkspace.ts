@@ -58,8 +58,7 @@ export async function addModToWorkspace(cfg: PxConfig, log: (message: string) =>
             "Set your mod projects folder before searching it.",
             "Open Setting"
           );
-          if (action)
-            await vscode.commands.executeCommand("workbench.action.openSettings", "px.modProjectsDir");
+          if (action) await vscode.commands.executeCommand("px.openSettings", "modProjectsDir");
           return;
         }
         locations = [{ folder: projects, label: "Mod projects" }];

@@ -49,7 +49,7 @@ import {
 } from "../../creators/save";
 import { resolveImage, type ImageRoot } from "../../creators/images";
 import type { LocLookup } from "../../locCommands";
-import { characterBlock, dynastyBlock, houseBlock, unquotableValue } from "./blocks";
+import { characterBlock, characterForm, dynastyBlock, houseBlock, unquotableValue } from "./blocks";
 import { dynastyTreeHtml } from "./html";
 import { WriteJournal } from "./journal";
 import { dnaPasteBlock, parseDnaPaste, scanBlocks, uniqueKey, type ScriptBlock } from "./scan";
@@ -139,6 +139,8 @@ export class DynastyTreePanel {
   private pending: string | undefined;
   /** The file the character being edited lives in; it decides the default target. */
   private draftFile: string | undefined;
+  private draftSource: { file: string; id: string; text: string } | undefined;
+  private sourceRequest = 0;
   /** The dynasty currently drawn, so a save can reload the same tree. */
   private current: string | undefined;
   /** The target the modder picked, which outranks the default until reset. */
@@ -302,18 +304,61 @@ export class DynastyTreePanel {
         // in decides the default again: an old pick must not follow it.
         this.chosen = null;
         this.draftFile = msg.file;
+        this.draftSource = undefined;
         this.postTarget();
+        {
+          const request = ++this.sourceRequest;
+          if (msg.character && msg.sourceFile) {
+            try {
+              const text = await this.previousBlock(msg.sourceFile, msg.character);
+              const form = characterForm(text);
+              if (request !== this.sourceRequest) return;
+              this.draftSource = { file: msg.sourceFile, id: msg.character, text };
+              this.post({ type: "characterSource", id: msg.character, file: msg.sourceFile, form });
+            } catch (err) {
+              if (request === this.sourceRequest)
+                this.post({ type: "characterSaveFailed", message: message(err) });
+            }
+          }
+        }
         return;
       case "changeTarget":
         await this.changeTarget();
         return;
       case "saveCharacter": {
-        if (this.refuseQuote(msg.form)) return;
-        const block = characterBlock(msg.form, await this.previousBlock(msg.file, msg.form.id));
-        for (const note of block.notes) this.post({ type: "toast", message: note });
-        // No question at save time: the target has been in the top bar since
-        // the form opened, and it is what the write uses.
-        await this.write(TARGETS.character, msg.form.id, block.text, msg.file, this.targetChoice());
+        try {
+          const source = this.draftSource;
+          if ((msg.file && !source) || (source && source.id !== msg.form.id)) {
+            throw new Error("Reload the character before saving. Its source is no longer available.");
+          }
+          if (source) await this.checkCharacterSource(source);
+          const choice = this.targetChoice();
+          const config = vscode.workspace.getConfiguration(
+            "px",
+            choice ? vscode.Uri.file(choice.modPath) : undefined
+          );
+          const block = characterBlock(msg.form, source?.text, {
+            name: config.get<boolean>("characterHistory.quoteNames", true),
+            culture: config.get<boolean>("characterHistory.quoteCultures", true),
+            religion: config.get<boolean>("characterHistory.quoteReligions", true),
+          });
+          const saved = await this.write(
+            TARGETS.character,
+            msg.form.id,
+            block.text,
+            msg.file,
+            choice,
+            source,
+            true
+          );
+          if (!saved)
+            this.post({
+              type: "characterSaveFailed",
+              message: "Character not saved. Check the error message and try again.",
+            });
+        } catch (err) {
+          this.post({ type: "characterSaveFailed", message: message(err) });
+        }
         return;
       }
       case "saveDynasty": {
@@ -407,6 +452,12 @@ export class DynastyTreePanel {
       }
     }
     await this.labelTraits(sets.trait);
+    try {
+      const reasons = await this.actions.fetchForm?.({ kind: "death_reason", modRoot: this.options.modRoot });
+      sets.deathReason = reasons?.existing.map((d) => ({ value: d.name, label: d.label })) ?? [];
+    } catch {
+      sets.deathReason = [];
+    }
     this.post({ type: "options", sets });
   }
 
@@ -935,28 +986,19 @@ export class DynastyTreePanel {
    * Read through the editor, so the text is the one on screen (unsaved edits
    * included) and the encoding is VS Code's, not an assumed UTF-8.
    */
-  private async previousBlock(file: string | undefined, name: string): Promise<string | undefined> {
-    if (!file) return undefined;
-    let text: string;
-    try {
-      text = (await vscode.workspace.openTextDocument(vscode.Uri.file(file))).getText();
-    } catch {
-      return undefined;
+  private async previousBlock(file: string, name: string): Promise<string> {
+    const text = (await vscode.workspace.openTextDocument(vscode.Uri.file(file))).getText();
+    const block = scanBlocks(text).get(name);
+    if (!block) throw new Error(`Could not find ${name} in its source file. Reload the tree before editing.`);
+    return block.text;
+  }
+
+  private async checkCharacterSource(source: { file: string; id: string; text: string }): Promise<void> {
+    if ((await this.previousBlock(source.file, source.id)) !== source.text) {
+      throw new Error(
+        "The character changed since this form opened. Reopen it to load the latest edits before saving."
+      );
     }
-    // The block runs from its key to the matching close brace; the writer only
-    // needs the text, and the tolerant parser inside blocks.ts does the rest.
-    const start = new RegExp(`^${escapeRegExp(name)}[ \\t]*=[ \\t]*\\{`, "m").exec(text);
-    if (!start) return undefined;
-    let depth = 0;
-    for (let i = start.index; i < text.length; i++) {
-      const ch = text[i];
-      if (ch === "{") depth++;
-      else if (ch === "}") {
-        depth--;
-        if (depth === 0) return text.slice(start.index, i + 1);
-      }
-    }
-    return undefined;
   }
 
   /**
@@ -973,13 +1015,18 @@ export class DynastyTreePanel {
     name: string,
     script: string,
     previousFile?: string,
-    choice?: SaveTargetChoice | null
+    choice?: SaveTargetChoice | null,
+    source?: { file: string; id: string; text: string },
+    character = false
   ): Promise<boolean> {
     const stage = this.options.meta.stageRoots?.[0];
     const folder = stage ? `${stage}/${target.folder}` : target.folder;
     const where = await this.saveTarget(folder, target.kind, previousFile, choice);
     if (!where) return false;
     const { abs, text } = where;
+    if (character && scanBlocks(text).has(name) && (!source || !samePath(source.file, abs))) {
+      throw new Error(`The target already contains ${name}. Open that character before editing it.`);
+    }
 
     let result: DefinitionEditResult;
     try {
@@ -1000,6 +1047,7 @@ export class DynastyTreePanel {
     // `reveal: false`: a panel that saves on every field change must not throw
     // an editor over the tree each time. The inspector says what was written
     // and offers the link instead.
+    if (source) await this.checkCharacterSource(source);
     if ((await applyDefinitionEdits(abs, text, result.edits, { reveal: false })) !== "saved") return false;
     await this.remember(abs, text);
 
