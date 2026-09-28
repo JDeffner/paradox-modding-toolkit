@@ -29,7 +29,8 @@ const repo = sources.repository;
 const install = "https://marketplace.visualstudio.com/items?itemName=JDeffner.px-toolkit";
 const ids = sources.importedPages.map((file) => basename(file, ".md"));
 const groups = groupsFor(ids);
-if (new Set(ids.map(routeFor)).size !== ids.length) throw new Error("Wiki page routes collide");
+if (ids.some((id) => !slug(id)) || new Set(ids.map(routeFor)).size !== ids.length)
+  throw new Error("Wiki page routes collide");
 const aliases = new Map(
   ids.flatMap((id) => [
     [slug(id), id],
@@ -81,7 +82,7 @@ async function page(
 }
 
 function sidebar(current) {
-  return `<aside class="docs-sidebar"><details class="handbook-menu" open><summary>Browse the handbook</summary><nav aria-label="Handbook">${groups.map((group) => `<section><h2>${group.title}</h2>${group.pages.map((id) => `<a href="${url(routeFor(id))}" ${current === id ? 'aria-current="page"' : ""}>${titleFor(id)}</a>`).join("")}</section>`).join("")}</nav></details></aside>`;
+  return `<aside class="docs-sidebar"><details class="handbook-menu" open><summary>Browse the handbook</summary><nav aria-label="Handbook">${groups.map((group) => `<section><h2>${group.title}</h2>${group.pages.map((id) => `<a href="${url(routeFor(id))}" ${current === id ? 'aria-current="page"' : ""}>${escape(titleFor(id))}</a>`).join("")}</section>`).join("")}</nav></details></aside>`;
 }
 
 for (const id of ids) {
@@ -133,12 +134,12 @@ for (const id of ids) {
   });
   const toc = headings.filter((h) => h.depth === 2);
   const versionNote = `Published ${sources.stableVersion}; the wiki also documents preview features. Check version labels.`;
-  const sourceLink = `<a href="${repo}/wiki/${id === "Home" ? "" : id}">Original wiki page ↗</a>`;
+  const sourceLink = `<a href="${repo}/wiki/${id === "Home" ? "" : encodeURIComponent(id)}">Original wiki page ↗</a>`;
   await page(
     routeFor(id),
     titleFor(id),
     descriptionFor(id),
-    `<main id="main" class="docs-shell">${sidebar(id)}<div class="doc-main"><div class="doc-breadcrumb"><a href="${url("docs/")}">Handbook</a><span>/</span><span>${titleFor(id)}</span></div><article class="prose"><h1>${titleFor(id)}</h1><p class="doc-lede">${descriptionFor(id)}</p><div class="version-note"><span class="tag">Beta handbook</span><span>${versionNote}</span></div>${html}</article><div class="doc-end"><p>Found something missing or out of date?</p><a href="${repo}/issues/new">Suggest a correction ↗</a>${sourceLink}</div></div><aside class="doc-toc"><a class="search-shortcut" href="${url("docs/")}#search">Search the handbook <kbd>/</kbd></a>${toc.length ? `<p>On this page</p><nav aria-label="On this page">${toc.map((h) => `<a href="#${h.anchor}">${h.text}</a>`).join("")}</nav>` : ""}</aside></main>`,
+    `<main id="main" class="docs-shell">${sidebar(id)}<div class="doc-main"><div class="doc-breadcrumb"><a href="${url("docs/")}">Handbook</a><span>/</span><span>${escape(titleFor(id))}</span></div><article class="prose"><h1>${escape(titleFor(id))}</h1><p class="doc-lede">${escape(descriptionFor(id))}</p><div class="version-note"><span class="tag">Beta handbook</span><span>${versionNote}</span></div>${html}</article><div class="doc-end"><p>Found something missing or out of date?</p><a href="${repo}/issues/new">Suggest a correction ↗</a>${sourceLink}</div></div><aside class="doc-toc"><a class="search-shortcut" href="${url("docs/")}#search">Search the handbook <kbd>/</kbd></a>${toc.length ? `<p>On this page</p><nav aria-label="On this page">${toc.map((h) => `<a href="#${h.anchor}">${escape(h.text)}</a>`).join("")}</nav>` : ""}</aside></main>`,
     { active: id === "Credits" ? "credits" : "docs", className: "documentation" }
   );
 }
@@ -154,7 +155,7 @@ await page(
   "docs/",
   "The modder’s handbook",
   "The complete Paradox Modding Toolkit handbook: setup, editing, visual tools, publishing and language server integration.",
-  `<main id="main" class="docs-index"><div class="page-heading"><span class="section-label">Documentation</span><h1>The toolkit<br>handbook.</h1><p>Set up your workspace, learn a workflow or look up a setting. All ${ids.length} guides are searchable.</p></div><div id="search" class="search-box"><label for="docs-search">Search all ${ids.length} guides</label><div class="search-input"><span aria-hidden="true">⌕</span><input id="docs-search" type="search" placeholder="Try “mipmaps”, “localization” or “setup”" autocomplete="off" aria-describedby="search-status"><kbd>/</kbd></div><p id="search-status" role="status">Search titles and the full text of every guide.</p><div id="search-results"></div></div><div class="handbook-notice"><span class="tag">Read first</span><p>These guides cover ${sources.stableVersion} and marked ${sources.previewVersion} additions. Adapted from the project wiki, which is largely AI-written and has limited human review. <a href="${url("docs/home/")}">About these docs</a>.</p></div><div class="docs-directory">${groups.map((g) => `<section><h2>${g.title}</h2><div>${g.pages.map((id) => `<a href="${url(routeFor(id))}"><span>${titleFor(id)}</span><span aria-hidden="true">↗</span></a>`).join("")}</div></section>`).join("")}</div></main>`,
+  `<main id="main" class="docs-index"><div class="page-heading"><span class="section-label">Documentation</span><h1>The toolkit<br>handbook.</h1><p>Set up your workspace, learn a workflow or look up a setting. All ${ids.length} guides are searchable.</p></div><div id="search" class="search-box"><label for="docs-search">Search all ${ids.length} guides</label><div class="search-input"><span aria-hidden="true">⌕</span><input id="docs-search" type="search" placeholder="Try “mipmaps”, “localization” or “setup”" autocomplete="off" aria-describedby="search-status"><kbd>/</kbd></div><p id="search-status" role="status">Search titles and the full text of every guide.</p><div id="search-results"></div></div><div class="handbook-notice"><span class="tag">Read first</span><p>These guides cover ${sources.stableVersion} and marked ${sources.previewVersion} additions. Adapted from the project wiki, which is largely AI-written and has limited human review. <a href="${url("docs/home/")}">About these docs</a>.</p></div><div class="docs-directory">${groups.map((g) => `<section><h2>${g.title}</h2><div>${g.pages.map((id) => `<a href="${url(routeFor(id))}"><span>${escape(titleFor(id))}</span><span aria-hidden="true">↗</span></a>`).join("")}</div></section>`).join("")}</div></main>`,
   { active: "docs" }
 );
 await page(
