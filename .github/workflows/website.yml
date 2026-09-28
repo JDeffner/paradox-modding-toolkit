@@ -1,0 +1,63 @@
+name: Toolkit website
+
+on:
+  push:
+    branches: [main]
+    paths: ["website/**", ".github/workflows/website.yml"]
+  pull_request:
+    paths: ["website/**", ".github/workflows/website.yml"]
+  workflow_dispatch:
+  gollum:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: toolkit-website-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: website/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Import the published wiki
+        run: pnpm sync:wiki
+      - name: Build static site
+        run: pnpm build
+        env:
+          # Switch these repository variables to / and the custom-domain
+          # origin when its Pages setting and DNS are ready.
+          SITE_BASE: ${{ vars.WEBSITE_BASE || '/paradox-modding-toolkit/' }}
+          SITE_ORIGIN: ${{ vars.WEBSITE_ORIGIN || 'https://jdeffner.github.io' }}
+      - run: pnpm check
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: website/dist
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

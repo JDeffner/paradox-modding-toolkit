@@ -19,6 +19,7 @@ export default tseslint.config(
       // finding is reported once per worktree.
       ".claude/**",
       ".local/**",
+      "website/.cache/**",
       ".vscode-test/**",
       "packages/vscode/data/**",
       "packages/server/data/**",

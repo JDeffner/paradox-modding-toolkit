@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/JDeffner/paradox-modding-toolkit",
+  "contentRevision": "699788b28fb5c8b736e4fc6f01b01b193353e1c7",
+  "contentBranch": "chore/prerelease-0.5.2",
+  "stableVersion": "0.5.0",
+  "previewVersion": "0.5.2",
+  "canonicalPages": {
+    "Embedding.md": "docs/EMBEDDING.md",
+    "Protocol-Reference.md": "docs/PROTOCOL.md"
+  }
+}
