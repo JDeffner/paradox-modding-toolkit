@@ -1,5 +1,13 @@
 # Third-party notices
 
+## Website-only dependencies and fonts
+
+The standalone website in `website/` uses Source Sans 3 by Adobe, Archivo by Omnibus-Type and IBM Plex Mono by IBM under the SIL Open Font License 1.1. Their complete license files are included in `website/public/assets/fonts/Source-Sans-OFL.txt`, `website/public/assets/fonts/Archivo-OFL.txt` and `website/public/assets/fonts/IBM-Plex-OFL.txt`. These font files ship with the website, not the extension.
+
+The website build uses [Marked](https://github.com/markedjs/marked), MIT, with its license in `website/public/assets/licenses/Marked-LICENSE.txt`. Browser tests use [Playwright](https://github.com/microsoft/playwright), Apache-2.0, as a development dependency. Neither library is included in the deployed website's JavaScript.
+
+Website documentation is adapted from the project's public GitHub wiki at the revision recorded in each deployment's `build.json`. Screenshots and recordings show the toolkit with game and mod content. That content retains its authors' rights; standalone game textures are not redistributed. The website does not use Paradox Interactive's logo and does not imply endorsement.
+
 Paradox Modding Toolkit is GPL-3.0-or-later (see `LICENSE`). It additionally contains
 material derived from the projects below (MIT, ISC and CC BY 4.0), and one
 release artifact bundles an unmodified third-party binary. License texts are

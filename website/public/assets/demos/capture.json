@@ -1,0 +1,35 @@
+{
+  "capturedOn": "2026-09-28",
+  "toolkitVersion": "0.5.2 preview",
+  "sourceRevision": "699788b28fb5c8b736e4fc6f01b01b193353e1c7",
+  "editorVersion": "VS Code 1.91.0",
+  "environment": "Isolated Extension Development Host using the compiled preview bundle, with a scratch copy of the Cultivation mod. No source edits were saved.",
+  "mod": "Cultivation: The Path to Immortality",
+  "capture": "Actual editor frames recorded through Chromium DevTools, encoded as H.264 MP4 at 24 fps. No audio, simulated editor content or composited UI.",
+  "clips": [
+    {
+      "file": "event-graph.mp4",
+      "poster": "event-graph.jpg",
+      "durationSeconds": 22.375,
+      "width": 1600,
+      "height": 1000,
+      "description": "Follow an event chain, switch between localized titles and raw identifiers, inspect a connected event, and fit the graph."
+    },
+    {
+      "file": "gui-editor.mp4",
+      "poster": "gui-editor.jpg",
+      "durationSeconds": 25.208333,
+      "width": 1600,
+      "height": 1000,
+      "description": "Select widgets in the tree, inspect properties, zoom the canvas, and toggle layout outlines."
+    },
+    {
+      "file": "dds-viewer.mp4",
+      "poster": "dds-viewer.jpg",
+      "durationSeconds": 25.416667,
+      "width": 1600,
+      "height": 1000,
+      "description": "Inspect texture metadata, zoom the preview, choose a stored mip level, and compare pixelated rendering."
+    }
+  ]
+}
