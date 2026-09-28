@@ -49,6 +49,7 @@ export const titles = {
   "Outside-VS-Code": "Other editors & LSP",
 };
 export const descriptions = {
+  Home: "Where the guides come from, which versions they cover, and how to contribute.",
   "Getting-Started": "Install the extension, connect your game and make your first edit.",
   "VS-Code-Setup-Guide": "A visual guide to VS Code, from installation to your first Git checkpoint.",
   "Supported-Games": "Compare support for Crusader Kings III, Victoria 3 and Europa Universalis V.",
