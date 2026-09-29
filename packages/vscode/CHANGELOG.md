@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Link the website footer to the operator's Impressum and privacy information.
+
 - Add an independently deployable toolkit website with a product tour, searchable handbook, release notes, visual identity, credits and recorded workflows. Keep published and preview features clearly labelled.
 
 ## 0.5.0 (beta) - editor improvements
