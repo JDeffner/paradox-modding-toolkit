@@ -92,15 +92,14 @@ test("page dates follow each file's committed history, including renamed pages",
   await writeFile(join(wiki, "Home.md"), "# Home\n\nNew introduction.\n");
   commit("2026-09-15T12:00:00Z");
   const manifest = await importWiki(wiki, output);
-  assert.deepEqual(manifest.pageHistory["Guide.md"], {
-    revision: originalRevision,
-    updatedAt: "2026-08-01T12:00:00+00:00",
-  });
-  assert.equal(manifest.pageHistory["Home.md"].updatedAt, "2026-09-15T12:00:00+00:00");
+  assert.equal(manifest.pageHistory["Guide.md"].revision, originalRevision);
+  // Git versions serialize UTC as either Z or +00:00; the instant must match.
+  assert.equal(Date.parse(manifest.pageHistory["Guide.md"].updatedAt), Date.parse("2026-08-01T12:00:00Z"));
+  assert.equal(Date.parse(manifest.pageHistory["Home.md"].updatedAt), Date.parse("2026-09-15T12:00:00Z"));
   await rename(join(wiki, "Guide.md"), join(wiki, "Renamed.md"));
   commit("2026-09-20T12:00:00Z");
   const renamed = await importWiki(wiki, output);
-  assert.equal(renamed.pageHistory["Renamed.md"].updatedAt, "2026-09-20T12:00:00+00:00");
+  assert.equal(Date.parse(renamed.pageHistory["Renamed.md"].updatedAt), Date.parse("2026-09-20T12:00:00Z"));
   assert.equal(renamed.pageHistory["Guide.md"], undefined);
 });
 
