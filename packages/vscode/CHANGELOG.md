@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Lead the website with completion, the Coat of Arms Designer and Steam Workshop publishing. Add a larger wordmark, scroll-responsive navigation, image overlays and wiki page update dates with revision-history links. Reserve link arrows for external destinations.
+
 - Add an independently deployable toolkit website with a product tour, searchable handbook, release notes, visual identity, credits and recorded workflows. Keep published and preview features clearly labelled.
 
 ## 0.5.0 (beta) - editor improvements

@@ -11,6 +11,10 @@ const git = (cwd, args, encoding = "utf8") =>
 // Read committed blobs, not a possibly dirty working tree. A failed import leaves
 // the previous cache intact, but still fails the build instead of publishing it.
 export async function importWiki(checkout, destination) {
+  if (git(checkout, ["rev-parse", "--is-shallow-repository"]).trim() === "true")
+    throw new Error(
+      "Wiki history is incomplete. Run git fetch --unshallow in the wiki checkout, then retry."
+    );
   const wikiRevision = git(checkout, ["rev-parse", "HEAD"]).trim();
   const entries = git(checkout, ["ls-tree", "-rz", "--full-tree", wikiRevision])
     .split("\0")
@@ -35,6 +39,24 @@ export async function importWiki(checkout, destination) {
     wikiRevision,
     importedPages: pages.map(({ path }) => path).sort(),
     excludedPages,
+    pageHistory: Object.fromEntries(
+      pages.map(({ path }) => {
+        const [revision, updatedAt] = git(checkout, [
+          "log",
+          "-1",
+          "--follow",
+          "--format=%H%n%cI",
+          wikiRevision,
+          "--",
+          path,
+        ])
+          .trim()
+          .split("\n");
+        if (!revision || !Number.isFinite(Date.parse(updatedAt)))
+          throw new Error(`Wiki history missing for ${path}`);
+        return [path, { revision, updatedAt }];
+      })
+    ),
   };
   const parent = dirname(resolve(destination));
   await mkdir(parent, { recursive: true });
@@ -77,7 +99,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     if (!checkout) {
       const { repository } = JSON.parse(await readFile(join(root, "sources.json"), "utf8"));
       temporary = await mkdtemp(join(cache, "wiki-checkout-"));
-      execFileSync("git", ["clone", "--depth", "1", `${repository}.wiki.git`, temporary], {
+      execFileSync("git", ["clone", "--no-checkout", `${repository}.wiki.git`, temporary], {
         stdio: "inherit",
       });
       checkout = temporary;

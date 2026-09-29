@@ -1,20 +1,62 @@
-/* global document, window, HTMLElement, IntersectionObserver */
+/* global document, window, HTMLElement, ResizeObserver */
 const menu = document.querySelector(".menu-toggle");
 const mainNav = document.querySelector(".main-nav");
+const header = document.querySelector(".site-header");
+const closeMenu = () => {
+  menu?.setAttribute("aria-expanded", "false");
+  mainNav?.classList.remove("is-open");
+};
 menu?.addEventListener("click", () => {
   const open = menu.getAttribute("aria-expanded") !== "true";
   menu.setAttribute("aria-expanded", String(open));
   mainNav?.classList.toggle("is-open", open);
 });
+mainNav?.addEventListener("click", (event) => {
+  if (event.target.closest("a")) closeMenu();
+});
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && menu?.getAttribute("aria-expanded") === "true") {
-    menu.setAttribute("aria-expanded", "false");
-    mainNav?.classList.remove("is-open");
+    closeMenu();
     menu.focus();
   }
 });
 
-const fieldIndex = document.querySelector(".field-index details");
+// Keep the page still while the header leaves on downward scroll and returns on upward scroll.
+if (header) {
+  let lastY = Math.max(0, window.scrollY);
+  let direction = 0;
+  let distance = 0;
+  new ResizeObserver(() => {
+    document.documentElement.style.setProperty("--header-height", `${header.offsetHeight}px`);
+  }).observe(header);
+  header.addEventListener("focusin", () => header.classList.remove("is-hidden"));
+  window.addEventListener(
+    "scroll",
+    () => {
+      const y = Math.max(
+        0,
+        Math.min(window.scrollY, document.documentElement.scrollHeight - window.innerHeight)
+      );
+      const delta = y - lastY;
+      lastY = y;
+      if (!delta || document.querySelector(".image-viewer[open]")) return;
+      const nextDirection = Math.sign(delta);
+      distance = nextDirection === direction ? distance + Math.abs(delta) : Math.abs(delta);
+      direction = nextDirection;
+      if (
+        y < header.offsetHeight ||
+        menu?.getAttribute("aria-expanded") === "true" ||
+        header.querySelector(":focus-visible")
+      ) {
+        header.classList.remove("is-hidden");
+      } else if (distance >= 12) {
+        header.classList.toggle("is-hidden", direction > 0);
+      }
+    },
+    { passive: true }
+  );
+}
+
 function responsiveIndex(details, query) {
   if (!details) return;
   const compact = window.matchMedia(query);
@@ -24,25 +66,64 @@ function responsiveIndex(details, query) {
   update();
   compact.addEventListener("change", update);
 }
-responsiveIndex(fieldIndex, "(max-width: 980px)");
-const chapterLinks = [...document.querySelectorAll(".field-index nav a")];
-if (chapterLinks.length) {
-  // The guide index answers the scroll without moving the reading surface.
-  const chapterObserver = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        for (const link of chapterLinks) {
-          if (link.hash === `#${entry.target.id}`) link.setAttribute("aria-current", "location");
-          else link.removeAttribute("aria-current");
-        }
+
+const imageLinks = document.querySelectorAll("[data-enlarge]");
+if (imageLinks.length) {
+  const viewer = document.createElement("dialog");
+  viewer.className = "image-viewer";
+  viewer.setAttribute("aria-label", "Image preview");
+  viewer.innerHTML = `<div class="image-toolbar"><p id="image-caption"></p><button type="button" class="image-zoom" aria-pressed="false">Actual size</button><button type="button" class="image-close" autofocus>Close <span aria-hidden="true">×</span></button></div><div class="image-stage" tabindex="0" aria-label="Image, scroll to inspect at actual size"><img alt=""><p class="image-error" role="status" hidden>This image could not load. Close the preview and try again.</p></div>`;
+  document.body.append(viewer);
+  const image = viewer.querySelector("img");
+  const caption = viewer.querySelector("#image-caption");
+  const zoom = viewer.querySelector(".image-zoom");
+  const stage = viewer.querySelector(".image-stage");
+  const error = viewer.querySelector(".image-error");
+  let trigger;
+  zoom.addEventListener("click", () => {
+    const enlarged = viewer.classList.toggle("is-zoomed");
+    zoom.setAttribute("aria-pressed", String(enlarged));
+    zoom.textContent = enlarged ? "Fit to window" : "Actual size";
+    stage.scrollTo(0, 0);
+  });
+  viewer.querySelector(".image-close").addEventListener("click", () => viewer.close());
+  viewer.addEventListener("click", (event) => {
+    if (event.target === viewer) viewer.close();
+  });
+  viewer.addEventListener("close", () => {
+    document.documentElement.classList.remove("image-open");
+    trigger?.focus({ preventScroll: true });
+  });
+  image.addEventListener("error", () => {
+    image.hidden = true;
+    error.hidden = false;
+    zoom.disabled = true;
+  });
+  for (const link of imageLinks) {
+    link.setAttribute("role", "button");
+    link.setAttribute("aria-haspopup", "dialog");
+    link.addEventListener("keydown", (event) => {
+      if (event.key === " ") {
+        event.preventDefault();
+        link.click();
       }
-    },
-    { rootMargin: "-10% 0px -65% 0px" }
-  );
-  for (const link of chapterLinks) {
-    const chapter = document.querySelector(link.hash);
-    if (chapter) chapterObserver.observe(chapter);
+    });
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      trigger = link;
+      image.hidden = false;
+      error.hidden = true;
+      zoom.disabled = false;
+      image.alt = link.querySelector("img").alt;
+      caption.textContent = image.alt;
+      image.src = link.href;
+      viewer.classList.remove("is-zoomed");
+      zoom.setAttribute("aria-pressed", "false");
+      zoom.textContent = "Actual size";
+      viewer.showModal();
+      document.documentElement.classList.add("image-open");
+      stage.scrollTo(0, 0);
+    });
   }
 }
 
@@ -106,7 +187,14 @@ async function search() {
 }
 field?.addEventListener("input", search);
 document.addEventListener("keydown", (event) => {
-  if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+  if (
+    event.key !== "/" ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey ||
+    document.querySelector(".image-viewer[open]")
+  )
+    return;
   if (
     event.target instanceof HTMLElement &&
     (event.target.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName))

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, writeFile, rm, rename } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { importWiki } from "./import-content.mjs";
 import { groupsFor } from "./catalog.mjs";
 
@@ -16,16 +17,22 @@ async function fixture(t) {
   await mkdir(wiki);
   const git = (...args) => execFileSync("git", ["-C", wiki, ...args], { encoding: "utf8" }).trim();
   git("init", "-q");
-  const commit = () => {
+  const commit = (date) => {
     git("add", ".");
-    git(
-      "-c",
-      "user.name=Joël Deffner",
-      "-c",
-      "user.email=134447802+JDeffner@users.noreply.github.com",
-      "commit",
-      "-qm",
-      "Wiki fixture"
+    execFileSync(
+      "git",
+      [
+        "-C",
+        wiki,
+        "-c",
+        "user.name=Joël Deffner",
+        "-c",
+        "user.email=134447802+JDeffner@users.noreply.github.com",
+        "commit",
+        "-qm",
+        "Wiki fixture",
+      ],
+      { env: { ...process.env, ...(date ? { GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } : {}) } }
     );
   };
   await writeFile(join(wiki, "Home.md"), "# Home\n\nThe wiki introduction.\n");
@@ -75,4 +82,31 @@ test("an invalid wiki fails without replacing the last successful import", async
   commit();
   await assert.rejects(importWiki(wiki, output), /Wiki has no Home.md/);
   assert.equal(await readFile(join(output, "manifest.json"), "utf8"), before);
+});
+
+test("page dates follow each file's committed history, including renamed pages", async (t) => {
+  const { wiki, output, git, commit } = await fixture(t);
+  await writeFile(join(wiki, "Guide.md"), "# Guide\n\nOriginal guide.\n");
+  commit("2026-08-01T12:00:00Z");
+  const originalRevision = git("rev-parse", "HEAD");
+  await writeFile(join(wiki, "Home.md"), "# Home\n\nNew introduction.\n");
+  commit("2026-09-15T12:00:00Z");
+  const manifest = await importWiki(wiki, output);
+  assert.equal(manifest.pageHistory["Guide.md"].revision, originalRevision);
+  // Git versions serialize UTC as either Z or +00:00; the instant must match.
+  assert.equal(Date.parse(manifest.pageHistory["Guide.md"].updatedAt), Date.parse("2026-08-01T12:00:00Z"));
+  assert.equal(Date.parse(manifest.pageHistory["Home.md"].updatedAt), Date.parse("2026-09-15T12:00:00Z"));
+  await rename(join(wiki, "Guide.md"), join(wiki, "Renamed.md"));
+  commit("2026-09-20T12:00:00Z");
+  const renamed = await importWiki(wiki, output);
+  assert.equal(Date.parse(renamed.pageHistory["Renamed.md"].updatedAt), Date.parse("2026-09-20T12:00:00Z"));
+  assert.equal(renamed.pageHistory["Guide.md"], undefined);
+});
+
+test("a shallow checkout cannot assign snapshot dates to unchanged pages", async (t) => {
+  const { wiki, output, commit } = await fixture(t);
+  commit();
+  const shallow = `${output}-shallow`;
+  execFileSync("git", ["clone", "--quiet", "--depth", "1", pathToFileURL(wiki).href, shallow]);
+  await assert.rejects(importWiki(shallow, output), /history is incomplete/);
 });
