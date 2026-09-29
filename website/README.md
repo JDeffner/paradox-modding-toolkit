@@ -13,7 +13,7 @@ pnpm check
 pnpm preview
 ```
 
-Open `http://127.0.0.1:4321`. For browser checks, run `pnpm exec playwright install chromium`, then `pnpm test`. The tests cover navigation, the task index, search and its failure state, mobile overflow, all handbook images, video playback and seeking, and the missing-page route. `pnpm check` checks local links, fragments, image dimensions and page headings.
+Open `http://127.0.0.1:4321`. For browser checks, run `pnpm exec playwright install chromium`, then `pnpm test`. The tests cover scroll-responsive navigation, external-link arrows, page dates and history links, image overlays with keyboard controls, search and its failure state, mobile overflow, all handbook images, video playback and seeking, and the missing-page route. `pnpm check` checks local links, fragments, image dimensions and page headings.
 
 ## Content
 
@@ -21,7 +21,9 @@ The GitHub wiki is the publication source for all shared handbook text and docum
 
 `docs/EMBEDDING.md` and `docs/PROTOCOL.md` remain canonical for those contracts. Publish their wiki mirrors from the intended release or explicitly requested revision first; the website reads the wiki mirrors along with the other guides. It never silently substitutes unreleased repository text. The initial website's preview additions for settings, DDS mipmaps, creators, nested CK3 references and legacy Workshop listings are published to the wiki so there is one shared copy.
 
-For an existing wiki checkout, run `pnpm sync:wiki <wiki-checkout>` from `website/`. Only committed files are imported; commit a local wiki draft before testing it. A successful import replaces the previous cache, including removed pages and images. Failed imports exit with an error. There is no automatic fallback to old documentation in CI. Local `pnpm build` can use the last imported cache offline.
+For an existing wiki checkout, run `pnpm sync:wiki <wiki-checkout>` from `website/`. Only committed files are imported; commit a local wiki draft before testing it. The checkout must have full Git history. Run `git fetch --unshallow` in a shallow checkout before importing. Each article displays the date of its last file change, not the website build date or current toolkit version. Its history link opens that page's GitHub wiki revisions, where readers can inspect past versions and compare changes. The cache records each page's commit and timestamp in `pageHistory`.
+
+A successful import replaces the previous cache, including removed pages and images. Failed imports exit with an error. There is no automatic fallback to old documentation in CI. Local `pnpm build` can use the last imported cache offline.
 
 New pages enter the generated search index and the "More guides" navigation group automatically. Add them to `scripts/catalog.mjs` for a more specific group and description. Removed pages disappear from navigation; remaining broken links fail validation instead of replacing the last good deployment. Website-only credits live in `fragments/credits.md`. The homepage, release presentation, identity and recordings remain website source. Do not put shared documentation corrections in a website fragment or generated cache.
 
@@ -49,8 +51,10 @@ All navigation, images, search results and canonical URLs use the selected base.
 
 `DESIGN.md` records the visual direction and sources. `/brand/` presents the public identity. The existing logo supplies charcoal, ivory and gold; Source Sans 3, Archivo and IBM Plex Mono are self-hosted with their SIL Open Font License files. The credits page preserves the toolkit's upstream acknowledgements and adds website dependencies.
 
-The chosen identity is an ivory field guide, with humanist reading type, a persistent task index and paired source/result views. Source Sans 3 carries headings and prose; Archivo is reserved for the wordmark. `node scripts/social-card.mjs` regenerates the social preview from the same local font and logo. It requires the development dependencies and Playwright Chromium.
+The chosen identity is an ivory field guide, with humanist reading type and paired source/result views. The homepage has no side index or repeated product eyebrow. Source Sans 3 carries headings and prose; Archivo is reserved for the wordmark. Diagonal arrows mark external destinations only. The header hides while scrolling down and returns while scrolling up or receiving keyboard focus. Images open in an overlay with fit and actual-size views, Escape and close controls, and focus return. Without JavaScript, the image links still open the source image. `node scripts/social-card.mjs` regenerates the social preview from the same local font and logo. It requires the development dependencies and Playwright Chromium.
 
-Three recordings cover the Event Graph, GUI editor and DDS mip inspection. The homepage features the Event Graph recording; `/demos/` offers all three for review and download. They were captured from the compiled 0.5.2 preview in an isolated VS Code 1.91 Extension Development Host. No source edits were saved.
+The homepage leads with completion, then the Coat of Arms Designer and Steam Workshop publishing. Event Graph and GUI Editor have smaller supporting sections. The completion image is a pinned copy of the wiki capture, framed with CSS; its overlay opens the original image. The coat of arms and Workshop screenshots come from the imported wiki images.
+
+Three recordings cover the Event Graph, GUI editor and DDS mip inspection. The homepage links to `/demos/`, which offers all three for review and download. They were captured from the compiled 0.5.2 preview in an isolated VS Code 1.91 Extension Development Host. No source edits were saved.
 
 Recordings live in `public/assets/demos/` with an accompanying capture manifest. They use playback controls and written equivalents. Screenshots retain the source wiki's filenames and provenance. No extracted game asset is distributed separately. Keep original capture sessions, temporary workspaces and alternate takes under the repository's ignored `.local/` folders.
