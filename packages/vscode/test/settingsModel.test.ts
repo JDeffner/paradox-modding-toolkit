@@ -17,10 +17,13 @@ const catalog = settingsCatalog(
 const schema = (key: string) => catalog.find((r) => r.key === key)!.schema;
 
 describe("toolkit settings", () => {
-  it("exposes every registered setting with its registered default and help", () => {
+  it("exposes editable settings and keeps the internal path registry behind its scoped controls", () => {
     expect(catalog.length).toBe(
-      Object.keys(Object.assign({}, ...manifest.contributes.configuration.map((s) => s.properties))).length
+      Object.keys(Object.assign({}, ...manifest.contributes.configuration.map((s) => s.properties))).filter(
+        (key) => key !== "px.machinePaths"
+      ).length
     );
+    expect(catalog.some((row) => row.key === "machinePaths")).toBe(false);
     expect(catalog.every((r) => r.label !== r.key && r.schema.markdownDescription)).toBe(true);
     for (const row of catalog)
       expect(() => validateSetting(row.key, row.schema, row.schema.default)).not.toThrow();
@@ -37,11 +40,18 @@ describe("toolkit settings", () => {
       source: "User",
       explicit: true,
       override: "Overridden by folder: true",
+      effectiveValue: true,
+      effectiveSource: "Folder",
+      resetLabel: "Remove personal default",
+      resetValue: true,
     });
     expect(scopedValue(values, "workspace", false)).toMatchObject({
       value: false,
       source: "Workspace",
       stamp: "false",
+      effectiveValue: true,
+      effectiveSource: "Folder",
+      resetValue: true,
     });
     expect(scopedValue(values, "folder:test", false)).toMatchObject({
       value: true,

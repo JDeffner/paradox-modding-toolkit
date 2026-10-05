@@ -501,6 +501,8 @@ export interface EventRefInfo {
 export interface EventDetail {
   id: string;
   file: string;
+  /** Identity of the decoded source used for these coordinates. Older servers omit it. */
+  sourceHash?: string;
   line: number;
   /** Line of the event's closing brace (option-scaffold insertion point). */
   endLine: number;

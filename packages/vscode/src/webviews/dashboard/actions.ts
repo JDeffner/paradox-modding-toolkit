@@ -49,7 +49,7 @@ export interface ActionGroup {
 }
 
 /** The discoverable tool catalogue, gated by the active profile. */
-export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[] {
+export function actionGroups(meta: GameMeta, gameProblems: number, experimental = false): ActionGroup[] {
   const groups: ActionGroup[] = [
     {
       label: "Workspace Mods",
@@ -71,6 +71,32 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
     {
       label: "View",
       items: [
+        ...(experimental
+          ? [
+              {
+                label: "Compatch Workspace",
+                command: "px.openCompatch",
+                icon: "listTree",
+                tip: "Compare game versions and review updates to your mod. Experimental feature.",
+              } satisfies ActionItem,
+              {
+                label: "Mod Compatibility",
+                command: "px.openMigrations",
+                icon: "listTree",
+                tip: "Follow versioned compatibility notes and apply reusable migrations. Experimental feature.",
+              } satisfies ActionItem,
+              ...(meta.compatchComposition
+                ? [
+                    {
+                      label: "Compatibility Patch",
+                      command: "px.openCompatibilityPatch",
+                      icon: "layers",
+                      tip: "Maintain a patch for an ordered set of mods. Experimental feature.",
+                    } satisfies ActionItem,
+                  ]
+                : []),
+            ]
+          : []),
         {
           label: "Event Graph",
           command: "px.showEventGraph",
@@ -285,10 +311,11 @@ export function actionGroups(meta: GameMeta, gameProblems: number): ActionGroup[
 export function visibleActionGroups(
   meta: GameMeta,
   gameProblems: number,
-  hidden: readonly string[]
+  hidden: readonly string[],
+  experimental = false
 ): ActionGroup[] {
   const skip = new Set(hidden);
-  return actionGroups(meta, gameProblems)
+  return actionGroups(meta, gameProblems, experimental)
     .map((g) => ({ ...g, items: g.items.filter((it) => !skip.has(it.command)) }))
     .filter((g) => g.items.length > 0);
 }

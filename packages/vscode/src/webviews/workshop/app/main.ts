@@ -25,6 +25,8 @@ import type {
 } from "../messages";
 import { installTips } from "../../shared/tips";
 import { helpDialog } from "../../shared/help";
+import { preparePreviewImage } from "./previewImage";
+import { closeLegacyForm, legacyForm } from "./legacyForm";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -171,19 +173,38 @@ function renderProgress(): void {
 const hasErrors = (): boolean => !!info?.checks.some((c) => c.level === "error");
 const isLegacy = (): boolean => info?.legacyKey != null;
 const needsLegacyContent = (): boolean => isLegacy() && ["new", "ready"].includes(info?.legacyContent ?? "");
+const legacyFiles = (): string =>
+  info?.legacyArchive ? `saved files from ${info.legacyArchive}` : "current project files";
 
 function renderToolbar(): void {
   const modBtn = $<HTMLButtonElement>("mod");
   const label = mods.find((m) => m.path === active)?.label ?? "(no mod)";
   modBtn.querySelector("span.px-truncate")!.textContent = label;
   modBtn.disabled = busy;
-  const listing = $<HTMLSelectElement>("listing");
-  listing.replaceChildren(new Option("Main item", ""));
-  for (const legacy of info?.legacyVersions ?? [])
-    listing.add(new Option(`Legacy ${legacy.supportedVersion}`, legacy.key));
+  const listing = $<HTMLButtonElement>("listing");
+  const hasVersions = (info?.legacyVersions.length ?? 0) > 0;
+  listing.hidden = !hasVersions;
   listing.value = info?.legacyKey ?? "";
+  listing.querySelector("span")!.textContent = isLegacy()
+    ? `Legacy ${info?.supportedVersion}`
+    : "Live version";
   listing.disabled = busy || !info;
-  $<HTMLButtonElement>("createLegacy").disabled = busy || !info || info.descriptorMissing;
+  const create = $<HTMLButtonElement>("createLegacy");
+  create.hidden = hasVersions;
+  create.disabled = busy || !info || info.descriptorMissing;
+  $("detailsHeading").textContent = isLegacy() ? "Legacy listing" : "Details";
+  $("publishHeading").textContent = isLegacy() ? `Legacy ${info?.supportedVersion} upload` : "Publish";
+  $("filesHeading").textContent = isLegacy() ? "Legacy mod files" : "Mod files";
+  $("uploadLabel").textContent = isLegacy() ? `Upload legacy ${info?.supportedVersion}` : "Upload";
+  $("upload").dataset.tip = isLegacy()
+    ? `Upload the selected parts to the legacy ${info?.supportedVersion} item. The live item stays unchanged.`
+    : "Upload what is checked under Publish";
+  $("openPage").dataset.tip = isLegacy()
+    ? `Open legacy ${info?.supportedVersion} on Steam`
+    : "Open the live Workshop item on Steam";
+  $("pull").dataset.tip = isLegacy()
+    ? `Download listing information from legacy ${info?.supportedVersion}`
+    : "Download the live listing from Steam into the workshop folder as files.";
   $("app").toggleAttribute("data-legacy", isLegacy());
   const notice = $("legacyNotice");
   notice.hidden = !isLegacy();
@@ -192,7 +213,7 @@ function renderToolbar(): void {
     : info?.legacyContent === "creating"
       ? `Legacy ${info?.supportedVersion}: Steam item creation has an unknown result. Check Steam before trying again.`
       : needsLegacyContent()
-        ? `Legacy ${info?.supportedVersion}: the first upload sends the current project files. Later uploads can change Workshop information only.`
+        ? `Legacy ${info?.supportedVersion}: the first upload sends the ${legacyFiles()}. Later uploads can change Workshop information only.`
         : `Legacy ${info?.supportedVersion}: Workshop information only. Use a separate project to update legacy mod files.`;
   $("stopWaiting").hidden = !busy;
 
@@ -219,8 +240,9 @@ function renderItem(): void {
   for (const id of ["itemSection", "modFilesSection", "noteSection"])
     $(id).style.display = info && !info.descriptorMissing ? "" : "none";
   if (!info || info.descriptorMissing) return;
-  $("modRoot").textContent = info.root;
-  $("modRoot").setAttribute("data-tip", info.root);
+  const contentRoot = info.legacyArchive ? `${info.workshopDir}/content` : info.root;
+  $("modRoot").textContent = contentRoot;
+  $("modRoot").setAttribute("data-tip", contentRoot);
 
   const title = $<HTMLInputElement>("title");
   if (document.activeElement !== title) {
@@ -253,7 +275,7 @@ function renderItem(): void {
   );
   $("contentHint").textContent = isLegacy()
     ? needsLegacyContent()
-      ? "Required for the first upload: the current project files, with this legacy game version."
+      ? `Required for the first upload: the ${legacyFiles()}, with this legacy game version.`
       : "Legacy mod files are locked. Use a separate project to upload new files."
     : "Everything in the mod folder except the workshop folder and what .pxignore excludes.";
 
@@ -789,9 +811,10 @@ function renderPreviews(): void {
   const n = info.previews.images.length + info.previews.videos.length;
   hint.textContent =
     n === 0
-      ? "The previews folder is empty: the next details upload removes every extra preview on Steam."
+      ? "The previews folder is empty: uploading previews removes every extra preview on Steam."
       : `${info.previews.images.length} image(s) and ${info.previews.videos.length} video(s). ` +
-        `The next details upload replaces the item's gallery${liveCount ? ` (${liveCount} on Steam now)` : ""}.`;
+        `Uploading previews replaces the item's gallery${liveCount ? ` (${liveCount} on Steam now)` : ""}. ` +
+        "Large images prompt you to create smaller copies. Originals and copies are kept.";
   // Videos lead, the way Steam orders the gallery on the item page.
   for (const id of info.previews.videos) gallery.append(liveTile(1, id, ""));
   for (const img of info.previews.images) {
@@ -1116,7 +1139,7 @@ function uploadParts(): UploadPart[] {
       locked: isLegacy(),
       what: isLegacy()
         ? needsLegacyContent()
-          ? "required first upload of the current project files"
+          ? `required first upload of the ${legacyFiles()}`
           : "locked: use a separate project to update legacy files"
         : "every file of the mod, replacing what subscribers have",
     },
@@ -1276,6 +1299,7 @@ function applyInfo(next: WorkshopModInfo | null): void {
   info = next;
   if (switched) {
     listingGeneration++;
+    closeLegacyForm();
     closePopover();
     clearTimeout(saveTimer);
     saveTimer = undefined;
@@ -1349,6 +1373,17 @@ window.addEventListener("message", (e: MessageEvent<HostToApp>) => {
   )
     return;
   switch (m.type) {
+    case "preparePreview":
+      void preparePreviewImage(m.dataUri, m.maxBytes).then(
+        (image) => send({ type: "previewPrepared", id: m.id, image }),
+        (error: unknown) =>
+          send({
+            type: "previewPrepared",
+            id: m.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+      );
+      return;
     case "init":
       mods = m.mods;
       active = m.active;
@@ -1404,18 +1439,63 @@ window.addEventListener("message", (e: MessageEvent<HostToApp>) => {
 // Wiring
 // ---------------------------------------------------------------------------
 
-$("listing").addEventListener("change", () => {
-  const listing = $<HTMLSelectElement>("listing");
-  const key = listing.value || null;
-  // The host may reject a damaged or missing legacy directory. Keep the label
-  // on the item whose fields are visible until authoritative info arrives.
-  listing.value = info?.legacyKey ?? "";
+async function createLegacy(): Promise<void> {
+  if (!info || busy || info.descriptorMissing) return;
+  const target = { root: info.root, legacyKey: info.legacyKey };
+  const generation = listingGeneration;
+  const seed = /^\d+\.\d+/.exec(info.supportedVersion ?? "")?.[0];
+  const selection = await legacyForm(
+    seed ? `${seed}.*` : "",
+    info.legacyVersions.map((item) => item.key),
+    () =>
+      new Promise((resolve, reject) => {
+        const request = crypto.randomUUID();
+        const receive = (event: MessageEvent<HostToApp>) => {
+          if (event.data.type !== "legacyZipPicked" || event.data.request !== request) return;
+          window.removeEventListener("message", receive);
+          if (event.data.error) reject(new Error(event.data.error));
+          else resolve(event.data.archive);
+        };
+        window.addEventListener("message", receive);
+        send({ type: "pickLegacyZip", request, target });
+      })
+  );
+  if (selection === null || generation !== listingGeneration || busy) return;
   flushSave();
-  send({ type: "selectListing", key });
+  send({ type: "createLegacy", ...selection, target });
+}
+$("listing").addEventListener("click", () => {
+  if (!info || busy) return;
+  menu(
+    $("listing"),
+    [
+      { value: "", label: "Live version", description: "The main Workshop item" },
+      ...info.legacyVersions.map((legacy) => ({
+        value: legacy.key,
+        label: `Legacy ${legacy.supportedVersion}`,
+      })),
+      {
+        value: ":create",
+        label: "Create new legacy version...",
+        description: "Create local listing files for another game version",
+      },
+    ],
+    {
+      value: info.legacyKey ?? "",
+      width: 280,
+      onPick: (key) => {
+        if (key === ":create") {
+          void createLegacy();
+          return;
+        }
+        flushSave();
+        send({ type: "selectListing", key: key || null });
+      },
+    }
+  );
 });
 $("createLegacy").addEventListener("click", () => {
-  flushSave();
-  send({ type: "createLegacy" });
+  void createLegacy();
 });
 $("stopWaiting").addEventListener("click", () => send({ type: "stopWaiting" }));
 
@@ -1658,12 +1738,24 @@ async function uploadModal(): Promise<UploadChoice | null> {
 
   const vis = pickedVisibility ?? info?.visibility ?? live?.visibility ?? null;
   const go = await confirmAction({
-    title: isNew ? `Publish "${name}" to the Steam Workshop` : `Upload "${name}" to the Steam Workshop`,
-    description: isNew
-      ? "A new item. It starts private until you change its visibility."
-      : `Item #${info.publishedId}${vis !== null ? ` \u00b7 ${VISIBILITY_LABELS[vis]}` : ""}`,
+    title: isLegacy()
+      ? `${isNew ? "Publish" : "Upload"} legacy ${info.supportedVersion}: "${name}"`
+      : isNew
+        ? `Publish "${name}" to the Steam Workshop`
+        : `Upload "${name}" to the Steam Workshop`,
+    description: isLegacy()
+      ? `Legacy ${info.supportedVersion}. ${isNew ? "A separate item, private on its first upload." : `Item #${info.publishedId}.`} The live Workshop item stays unchanged.`
+      : isNew
+        ? "A new item. It starts private until you change its visibility."
+        : `Item #${info.publishedId}${vis !== null ? ` \u00b7 ${VISIBILITY_LABELS[vis]}` : ""}`,
     content: body,
-    confirmLabel: isNew ? "Publish" : "Upload",
+    confirmLabel: isLegacy()
+      ? isNew
+        ? "Publish legacy version"
+        : "Upload legacy version"
+      : isNew
+        ? "Publish"
+        : "Upload",
     wide: true,
   });
   if (!go) return null;
@@ -2206,7 +2298,7 @@ const HELP: Parameters<typeof helpDialog>[0] = {
         },
         {
           lead: "Accepted images",
-          text: "are .png, .jpg, .jpeg and .gif files. Each must be under 1 MB (1,048,576 bytes): Steam rejects larger ones, so the upload skips them and says how many it skipped.",
+          text: "are .png, .jpg, .jpeg and .gif files. For PNG and JPEG images over Steam's size limit, upload asks whether to make smaller copies. Originals stay unchanged, and copies remain inside the mod in .px-toolkit/workshop-upload-previews/, in a separate folder per upload. Copies keep their dimensions where possible; transparency stays intact. GIFs must already be under 1 MB to preserve animation. Cancelling the prompt or a preparation failure stops the upload.",
         },
         {
           lead: "Order",

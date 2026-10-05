@@ -2,9 +2,9 @@
  * The wire between the Wiki host (panel.ts) and its app (app/main.ts). The
  * host reads the article files, knows the active game and can build the mod
  * report; the app filters, renders and asks for a command to run. Articles
- * arrive once, in full, so search costs no round trip. The mod report is the
- * one page fetched on demand: it reads the live index, so it is built when
- * the page opens, not when the panel does.
+ * arrive in full, so search costs no round trip. Launch-options articles
+ * refresh from the installed game files. The mod report is fetched on demand
+ * from the live index when its page opens.
  */
 import type { IconName } from "../shared/icons";
 
@@ -77,6 +77,11 @@ export type HostToApp =
       select: string | null;
     }
   | { type: "select"; id: string }
+  | { type: "launchOptions"; articles: WikiArticle[] }
   | { type: "modReport"; markdown: string };
 
-export type AppToHost = { type: "ready" } | { type: "run"; command: string } | { type: "modReport" };
+export type AppToHost =
+  | { type: "ready" }
+  | { type: "run"; command: string }
+  | { type: "refreshLaunchOptions" }
+  | { type: "modReport" };

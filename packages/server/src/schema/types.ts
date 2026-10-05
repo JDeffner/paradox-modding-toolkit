@@ -109,6 +109,8 @@ export interface SchemaEntry {
   ext?: string;
   /** Name extraction mode, default "top-level-key". */
   extraction?: NameExtraction;
+  /** A direct scalar field identifies an alternate top-level database kind. */
+  kindByField?: { field: string; kind: string; otherwise: string };
   /** Additional named blocks inside each top-level definition, at an exact wrapper path. */
   nestedDefinitions?: {
     kind: string;
@@ -166,7 +168,16 @@ export interface SchemaEntry {
 }
 
 export function definitionKinds(entry: SchemaEntry): string[] {
-  return entry.nestedDefinitions ? [entry.kind, entry.nestedDefinitions.kind] : [entry.kind];
+  return [
+    ...new Set(
+      [
+        entry.kind,
+        entry.nestedDefinitions?.kind,
+        entry.kindByField?.kind,
+        entry.kindByField?.otherwise,
+      ].filter((kind): kind is string => !!kind)
+    ),
+  ];
 }
 
 export interface AssetField {

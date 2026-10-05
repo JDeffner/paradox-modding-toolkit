@@ -1,5 +1,53 @@
 # Changelog
 
+## Unreleased
+
+- Recognize Crozier's standalone laws and law groups in indexing, navigation and semantic colors while retaining older nested law definitions. Check installed GUI and texture corpora against their actual files and DDS headers instead of older game-patch counts.
+
+- Preserve unsaved text, comments, operators and neighboring statements in Event Graph saves. Reject stale forms, read-only sources, duplicate events and malformed destinations. Report failed edits or saves, keep queued options in order, and retry incomplete localization without overwriting keys already saved.
+- Give new game-update Compatch sessions a separate Result folder. Preserve original inputs and existing Result edits, copy the complete mod, and retain recovery checks for legacy in-place sessions.
+
+- Add standalone pxtk preparation commands for scaffolds, localization, formatting, game logs and images. The editor and CLI use the same profile scaffold renderer.
+
+- Add the separate `pxtk` CLI, local MCP tools, and a portable skill/plugin for research and validation without VS Code. Share game discovery and Tiger configuration/process handling with the editor.
+- Report malformed Tiger output and process failures as validation failures. Bound validation time and output, and stop a run when a declared dependency descriptor is missing instead of silently dropping it.
+
+- Fix saving personal Workshop changelog defaults and show the shared mod override and reset fallback correctly.
+- Hide migration cancellation once journaled Apply or Restore writes begin, and finish recovery and route bookkeeping. When Restore needs to remove an unchanged generated file that is open, explain that it must first be closed.
+- Keep all Toolkit Settings in one searchable catalogue, with labels for each setting's save destination and active source. Choose a mod context without hiding settings, edit destinations per row, and preserve drafts across contexts and late replies. Save drafts for the same storage file together without invalidating one another. Question-mark help uses hover and keyboard tooltips; **Details** opens longer explanations.
+- Use the selected mod's private coat-of-arms library path in the designer and its library picker.
+
+- Add experimental **Compatibility Patch** for ordered mod sets. Save contribution, field and manual decisions with the patch, reopen affected choices after source changes, and keep local folders in User settings. Review generated files, preserve independent output edits with three-way updates, and restore journaled writes. Unsupported work remains explicit. The feature is off by default.
+- Keep localization ownership stable when Windows editor URIs and disk paths use different drive-letter casing.
+
+- Store shared authoring rules in each mod's version-1 `project.json` and personal paths in User `px.machinePaths`, with separate game, workspace and folder bindings. Keep native editor preferences and import old scoped calendars into `calendar.json`. Upgrade older storage on trusted startup or with **Upgrade Toolkit Settings**, preserving legacy files and removing old settings only after verification. Report conflicts and failures.
+
+- Load several compatibility contributions or whole folders, review discovered files and trust selected JavaScript once per batch. Failed imports preserve the previous library. Start recipe authoring with a working example that edits files across a folder and its subfolders.
+
+- Make definitions, variables, scope chains, conditions and actions easier to distinguish in script. Use bold declarations and built-in theme colors related to the tooltip glyph families, preserve user color overrides, and distinguish data objects and functions inside GUI and localization expressions.
+
+- Add Wiki > Launch Options, read directly from CK3's installed `_commandline_options.info`. Refresh the page when the source or game path changes, and show when the source is unavailable.
+
+- Add Create, Edit and Override Localization actions for keys. Follow related entries, source files and established mod layouts, including replace folders, while preserving unsaved text and rejecting stale edits. Configure per-mod language, file templates and entry styles with Configure Localization Defaults.
+- Add vanilla Explorer actions to copy a file into the focused mod at its game-relative path, or create only a selected folder path and its parents. Existing files stay intact and can be opened or compared.
+- Route creators and scaffolds through the shared localization writer. Preserve unsaved sources and unrelated content in translation exports and calendar generation.
+
+
+- Keep upload-ready gallery images in the selected Workshop folder's `previews/` directory. Move full-size originals to `preview-originals/`, preserve order and reuse the smaller files on later uploads.
+- Include Steam's compatibility-version tags in the upload picker, using per-game tag lists harvested from Steam.
+
+- Refresh the preinstalled CK3 script documentation and GUI data types for version 1.20.0.2 (Crozier), using dumps generated with no mods enabled.
+
+- Create a legacy Workshop version from a local ZIP archive. Save its mod files and mod version separately from the live project, show the archive source in upload confirmations, and reject damaged or unsafe archives before creating an item.
+
+- Add Compatch behind **Experimental features**, off by default. Hide its commands and views until enabled; disabling it blocks actions and stops target validation while retaining files and saved sessions.
+- Add experimental Mod Compatibility with explicit game-version routes, compatibility notes and migration recipes. Include all contributions per transition, pause for human decisions or manual work, and save per-entry progress. Load data-only JSON notes or explicitly trusted local JavaScript, review exact diffs, apply one step at a time and restore in reverse order. Reject stale inputs and mismatched editor encoding. Route completion is not a compatibility certificate.
+- Add CK3 1.19.0.6 to 1.20.0.2 and 1.20.0.3 recipes for faith and rite conversion and portrait/clothing mask mip levels. Choose independent faiths, rite parents, holy-site roles and reference intent; unsupported cases remain blocked. Match mask requirements from compatible target consumers or choose an explicit custom policy. Review DDS dimensions, format and stored levels before applying. Target gameplay remains unverified; no Crozier-compatible Tiger validator is available.
+- Use grouped, searchable migration choices and the toolkit's shared menus, buttons and layout. Show the current scan stage, allow cancellation during file capture, and process selected mask batches without marking the remaining work complete.
+- Update bundled CK3 documentation for Crozier and index standalone faiths, rites and tenets, retaining support for older nested faiths.
+- Use shared themed menus for Settings and Workshop version selection. Create legacy listings from an inline game-version form, then switch between the live item and saved legacy items beside Upload. Legacy views use the active theme's accent and explicit legacy upload labels.
+- Preserve oversized Workshop gallery images by asking to create smaller local copies before upload. Keep originals and stop submission if conversion fails.
+
 ## 0.5.2 (pre-release)
 
 - Show the total Workspace Mods count and make the bounded list easier to scroll with a mouse or keyboard. Keep all workspace mods reachable without expanding the section for longer lists.

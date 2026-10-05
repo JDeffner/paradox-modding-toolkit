@@ -20,6 +20,9 @@ import {
 } from "@px-lsp/protocol/descriptorMod";
 import { METADATA_REL_PATH, scaffoldMetadata } from "@px-lsp/protocol/descriptorMetadata";
 import { metaFor } from "./meta";
+import { getProjectSetting } from "@px-lsp/protocol/projectSettings";
+import { assertProjectWriteAllowed, projectRoot, projectSettingsState } from "./projectSettings";
+import { configForTarget } from "./commandTargets";
 
 const MOD_SELECTOR: vscode.DocumentSelector = { language: "paradox-mod", scheme: "file" };
 const SEVERITY = {
@@ -251,9 +254,17 @@ export function registerDescriptorMod(
   log: (msg: string) => void
 ): DescriptorModFeature {
   const diagnostics = vscode.languages.createDiagnosticCollection("px-descriptor");
-  let missingNotified = false;
-  let watcher: vscode.FileSystemWatcher | null = null;
-  let watchedRoot: string | null = null;
+  const missingNotified = new Set<string>();
+  const settingsErrors = new Map<string, string>();
+  const watched = new Map<string, { gameId: string; watcher: vscode.FileSystemWatcher }>();
+  let checkedDescriptors = new Set<string>();
+  const settingsError = (root: string, error: unknown) => {
+    const message = "Could not read mod settings for " + root + ": " + String(error);
+    if (settingsErrors.get(root) === message) return;
+    settingsErrors.set(root, message);
+    log(message);
+    void vscode.window.showErrorMessage(message);
+  };
 
   const validateText = (uri: vscode.Uri, text: string) => {
     const issues = validateDescriptor(text, { isDescriptorFile: isDescriptorFile(uri.fsPath) });
@@ -289,30 +300,64 @@ export function registerDescriptorMod(
 
   const refresh = () => {
     const cfg = getConfig();
-    const modPath = cfg.enableForWorkspace ? cfg.modPath : null;
-
-    // (Re)wire the descriptor watcher when the mod root changes.
-    if (watchedRoot !== modPath) {
-      watcher?.dispose();
-      watcher = null;
-      watchedRoot = modPath;
-      if (modPath) {
-        watcher = vscode.workspace.createFileSystemWatcher(
-          new vscode.RelativePattern(vscode.Uri.file(modPath), "*.mod")
+    const roots = new Set<string>();
+    if (cfg.enableForWorkspace) {
+      for (const root of [cfg.modPath, ...cfg.workspaceMods]) {
+        if (!root || looksLikeGameDir(root)) continue;
+        try {
+          roots.add(projectRoot({ ...cfg, modPath: root }));
+        } catch (error) {
+          if (!String(error).includes("read-only")) settingsError(root, error);
+        }
+      }
+    }
+    for (const [root, entry] of watched) {
+      if (roots.has(root) && entry.gameId === cfg.gameId) continue;
+      entry.watcher.dispose();
+      watched.delete(root);
+      settingsErrors.delete(root);
+    }
+    const currentDescriptors = new Set<string>();
+    for (const modPath of roots) {
+      const descriptorPath = path.join(modPath, ...descriptorRelPath(cfg.gameId));
+      currentDescriptors.add(descriptorPath);
+      if (!watched.has(modPath)) {
+        const meta = metaFor(cfg.gameId);
+        const patterns = [
+          "*.mod",
+          descriptorRelPath(cfg.gameId).join("/"),
+          meta.configDirName + "/project.json",
+        ];
+        if (meta.legacyConfigDirName) patterns.push(meta.legacyConfigDirName + "/project.json");
+        const watcher = vscode.workspace.createFileSystemWatcher(
+          new vscode.RelativePattern(vscode.Uri.file(modPath), "{" + [...new Set(patterns)].join(",") + "}")
         );
         watcher.onDidCreate(() => refresh());
         watcher.onDidDelete(() => refresh());
         watcher.onDidChange((uri) => {
-          try {
-            validateText(uri, fs.readFileSync(uri.fsPath, "utf8"));
-          } catch {
-            diagnostics.delete(uri);
+          if (uri.fsPath.toLowerCase().endsWith(".mod")) {
+            const open = vscode.workspace.textDocuments.find((doc) => doc.uri.fsPath === uri.fsPath);
+            try {
+              validateText(uri, open?.getText() ?? fs.readFileSync(uri.fsPath, "utf8"));
+            } catch {
+              diagnostics.delete(uri);
+            }
           }
+          refresh();
         });
+        watched.set(modPath, { gameId: cfg.gameId, watcher });
       }
+      refreshMod(cfg, modPath);
     }
+    for (const file of checkedDescriptors) {
+      if (currentDescriptors.has(file)) continue;
+      diagnostics.delete(vscode.Uri.file(file));
+      missingNotified.delete(file);
+    }
+    checkedDescriptors = currentDescriptors;
+  };
 
-    if (!modPath) return;
+  const refreshMod = (cfg: PxConfig, modPath: string) => {
     // Each game wants exactly one of the two descriptor conventions, and a mod
     // without the one its game reads does not load at all.
     const isMetadata = metaFor(cfg.gameId).descriptor === "metadata";
@@ -327,12 +372,16 @@ export function registerDescriptorMod(
     }
 
     if (fs.existsSync(descriptorPath)) {
-      missingNotified = false;
+      missingNotified.delete(descriptorPath);
+      settingsErrors.delete(modPath);
       // Only the .mod format has structural checks of ours; metadata.json is
       // JSON, validated by VS Code's own JSON support against the contributed
       // schema. Validate from disk unless the file is open (open docs validate
       // live).
-      if (isMetadata) return;
+      if (isMetadata) {
+        diagnostics.delete(descriptorUri);
+        return;
+      }
       const open = vscode.workspace.textDocuments.find((d) => d.uri.fsPath === descriptorPath);
       if (!open) {
         try {
@@ -344,10 +393,29 @@ export function registerDescriptorMod(
       return;
     }
 
-    if (!cfg.requireDescriptor || !looksLikeModContent(modPath)) {
+    let requireDescriptor: boolean;
+    try {
+      const own = getProjectSetting(
+        projectSettingsState({ ...cfg, modPath }).settings,
+        "diagnostics.requireDescriptor"
+      );
+      requireDescriptor =
+        (own ??
+          vscode.workspace
+            .getConfiguration("px", vscode.Uri.file(modPath))
+            .get("diagnostics.requireDescriptor")) === true;
+      settingsErrors.delete(modPath);
+    } catch (error) {
+      diagnostics.delete(descriptorUri);
+      missingNotified.delete(descriptorPath);
+      settingsError(modPath, error);
+      return;
+    }
+    if (!requireDescriptor || !looksLikeModContent(modPath)) {
       // Opt-in check (px.diagnostics.requireDescriptor), and only for folders
       // that clearly hold mod content: otherwise stay silent.
       diagnostics.delete(descriptorUri);
+      missingNotified.delete(descriptorPath);
       return;
     }
 
@@ -362,24 +430,25 @@ export function registerDescriptorMod(
     d.source = "px-descriptor";
     d.code = "descriptor-missing";
     diagnostics.set(descriptorUri, [d]);
-    if (!missingNotified) {
-      missingNotified = true;
+    if (!missingNotified.has(descriptorPath)) {
+      missingNotified.add(descriptorPath);
       void vscode.window
         .showErrorMessage(`Paradox Modding Toolkit: this mod has no ${name} (${modPath}).`, `Create ${name}`)
         .then((choice) => {
-          if (choice) void vscode.commands.executeCommand("px.createDescriptor");
+          if (choice) void vscode.commands.executeCommand("px.createDescriptor", vscode.Uri.file(modPath));
         });
     }
   };
 
-  const createDescriptor = async () => {
-    const cfg = getConfig();
+  const createDescriptor = async (arg?: unknown) => {
+    const cfg = configForTarget(getConfig(), arg);
     if (!cfg.modPath) {
       void vscode.window.showWarningMessage(
         "Paradox Modding Toolkit: open the folder that should become the mod as a workspace folder first."
       );
       return;
     }
+    assertProjectWriteAllowed(cfg);
     const file = createDescriptorFile(cfg.modPath, cfg.gameId, cfg.gamePath, log);
     refresh();
     const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
@@ -395,8 +464,14 @@ export function registerDescriptorMod(
     ),
     vscode.languages.registerHoverProvider(MOD_SELECTOR, new DescriptorHoverProvider()),
     vscode.commands.registerCommand("px.createDescriptor", createDescriptor),
-    vscode.workspace.onDidOpenTextDocument(validateDoc),
-    vscode.workspace.onDidChangeTextDocument((e) => validateDoc(e.document))
+    vscode.workspace.onDidOpenTextDocument((doc) => {
+      validateDoc(doc);
+      if (path.basename(doc.uri.fsPath) === "project.json") refresh();
+    }),
+    vscode.workspace.onDidChangeTextDocument((e) => {
+      validateDoc(e.document);
+      if (path.basename(e.document.uri.fsPath) === "project.json") refresh();
+    })
   );
   for (const doc of vscode.workspace.textDocuments) validateDoc(doc);
   refresh();
@@ -404,7 +479,7 @@ export function registerDescriptorMod(
   return {
     refresh,
     dispose() {
-      watcher?.dispose();
+      for (const entry of watched.values()) entry.watcher.dispose();
       diagnostics.dispose();
     },
   };

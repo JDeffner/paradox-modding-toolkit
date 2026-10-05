@@ -596,15 +596,15 @@ function structureKeyCard(
 ): CardInput | null {
   const { result, lineIndex } = getParse(document);
   const offset = lineIndex.offsetAt(position);
-  const ctx = structureContextAt(result, offset, entry.kind, getSchema().structures);
+  const ctx = structureContextAt(result, offset, entry, getSchema().structures);
   if (!ctx) return null;
   const spec = ctx.keys.get(word);
   if (!spec) return null;
-  const source = getSchema().structures.source(entry.kind) ?? entry.kind;
+  const source = getSchema().structures.source(ctx.kind) ?? ctx.kind;
   const where = ctx.block ? `in \`${ctx.block}\`` : "";
   const card: CardInput = {
     kind: "structure_key",
-    badgeLabel: `${entry.kind.replace(/_/g, " ")} key`,
+    badgeLabel: `${ctx.kind.replace(/_/g, " ")} key`,
     name: word,
   };
   if (where) card.headTail = where;
@@ -627,7 +627,7 @@ function enumValueCard(
   if (!last || last.kind !== "assignment" || last.key.quoted) return null;
   if (last.value?.kind !== "scalar" || last.value.quoted) return null;
   if (offset < last.value.range.start || offset > last.value.range.end) return null;
-  const ctx = structureContextAt(result, offset, entry.kind, getSchema().structures);
+  const ctx = structureContextAt(result, offset, entry, getSchema().structures);
   const spec = ctx?.keys.get(last.key.text);
   if (!spec?.values?.startsWith("enum:")) return null;
   const members = spec.values.slice(5).split("|");

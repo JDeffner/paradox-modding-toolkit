@@ -20,9 +20,22 @@ export interface LocKeyRef {
 
 export function findLocKeyRefs(lineText: string): LocKeyRef[] {
   const refs: LocKeyRef[] = [];
+  const code = new Set<number>();
+  let quoted = false;
+  for (let i = 0; i < lineText.length; i++) {
+    const character = lineText[i];
+    if (!quoted && character === "#") break;
+    if (!quoted) code.add(i);
+    if (character === '"') quoted = !quoted;
+    else if (quoted && character === "\\") i++;
+  }
   PROP_VALUE.lastIndex = 0;
   let m: RegExpExecArray | null;
   while ((m = PROP_VALUE.exec(lineText)) !== null) {
+    if (!code.has(m.index)) continue;
+    // A prefix of a dynamic expression is not a literal localization key.
+    const next = lineText[m.index + m[0].length];
+    if (next !== undefined && !/[\s{}#]/.test(next)) continue;
     const strictness = isLocProperty(m[1]);
     if (!strictness) continue;
     const end = m.index + m[0].length - (m[2] === '"' ? 1 : 0);

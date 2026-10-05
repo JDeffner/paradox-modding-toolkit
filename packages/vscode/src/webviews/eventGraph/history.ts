@@ -27,7 +27,7 @@ export type PendingEdit =
       file?: string;
       line?: number;
     }
-  | { kind: "addOption"; id: string; file: string; endLine: number; count: number }
+  | { kind: "addOption"; id: string; file: string; endLine: number; count: number; sourceHash?: string }
   | {
       /** A whole new event: scaffold block plus its localization keys. */
       kind: "createEvent";
@@ -44,6 +44,8 @@ export type PendingEdit =
     }
   | {
       kind: "setField";
+      /** Source identity from the detail that produced this form. */
+      sourceHash?: string;
       id: string;
       file: string;
       key: string;

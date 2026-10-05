@@ -53,6 +53,38 @@ describe("targetLocPath", () => {
       "localization/german/replace/foo_l_german.yml"
     );
   });
+
+  it("writes a translation mod below the game's load stage", () => {
+    const result = build(
+      [{ relPath: "main_menu/localization/english/sub/big_l_english.yml", content: SRC }],
+      {
+        stageRoot: "main_menu",
+      }
+    );
+    expect(result.files.find((file) => file.relPath.endsWith("big_l_german.yml"))?.relPath).toBe(
+      "main_menu/localization/german/replace/sub/big_l_german.yml"
+    );
+    expect(result.files.find((file) => file.relPath === "TRANSLATE.md")?.content).toContain(
+      "`main_menu/localization/german/replace/`"
+    );
+  });
+
+  it("keeps source stages separate when their localization filenames match", () => {
+    const result = build(
+      [
+        { relPath: "main_menu/localization/english/shared_l_english.yml", content: SRC },
+        { relPath: "in_game/localization/english/shared_l_english.yml", content: SRC },
+      ],
+      { stageRoot: "in_game", stageRoots: ["in_game", "main_menu"] }
+    );
+    expect(result.locFiles).toBe(2);
+    expect(result.files.map((file) => file.relPath)).toContain(
+      "main_menu/localization/german/replace/shared_l_german.yml"
+    );
+    expect(result.files.map((file) => file.relPath)).toContain(
+      "in_game/localization/german/replace/shared_l_german.yml"
+    );
+  });
 });
 
 describe("buildTranslationMod", () => {
@@ -100,6 +132,44 @@ describe("buildTranslationMod", () => {
     expect(md).toContain("l_german:");
     expect(md).toContain("Output ONLY the file content");
     expect(md).toContain("from english to german");
+  });
+
+  it("merges unique keys from plain and replace files with the same basename", () => {
+    const files = [
+      {
+        relPath: "localization/english/shared_l_english.yml",
+        content: 'l_english:\n shared:0 "Same"\n plain:0 "Plain source"\n',
+      },
+      {
+        relPath: "localization/replace/english/shared_l_english.yml",
+        content: 'l_english:\n shared:0 "Same"\n override:0 "Replace source"\n',
+      },
+    ];
+    const result = build(files);
+    const file = result.files.find(
+      (item) => item.relPath === "localization/german/replace/shared_l_german.yml"
+    )!;
+    expect(result.locFiles).toBe(1);
+    expect(result.entries).toBe(3);
+    expect(file.content).toContain('plain:0 "" # english: Plain source');
+    expect(file.content).toContain('override:0 "" # english: Replace source');
+    expect(file.content.match(/^ shared:/gm)).toHaveLength(1);
+    expect(build([...files].reverse())).toEqual(result);
+  });
+
+  it("reports conflicting values in collapsed source files instead of discarding one", () => {
+    expect(() =>
+      build([
+        {
+          relPath: "localization/english/shared_l_english.yml",
+          content: 'l_english:\n shared:0 "Plain source"\n',
+        },
+        {
+          relPath: "localization/replace/english/shared_l_english.yml",
+          content: 'l_english:\n shared:0 "Replace source"\n',
+        },
+      ])
+    ).toThrow("Conflicting source localization for shared");
   });
 });
 

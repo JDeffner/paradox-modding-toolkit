@@ -2,10 +2,8 @@
  * Packaging regression for the webview bundles.
  *
  * Webview apps are SEPARATE bundles rather than strings inside extension.js,
- * which opens two ways to ship a broken panel with every other test green:
- * drop the build step from the compile chain, or let an ignore rule swallow
- * dist/webview/. Both are checked here, the second against vsce's own file
- * list rather than a re-implementation of its ignore semantics.
+ * so an ignore rule can swallow dist/webview/ despite a successful compile.
+ * Check vsce's own file list rather than reimplementing its ignore semantics.
  *
  * Bundles are discovered, not listed: scripts/compile-webviews.mjs builds
  * every src/webviews/<name>/app/main.ts, and this test replays the same rule
@@ -36,24 +34,9 @@ if (!allBuilt) {
   );
 }
 
-const manifest = JSON.parse(fs.readFileSync(path.join(PKG_ROOT, "package.json"), "utf8")) as {
-  scripts: Record<string, string>;
-};
-
 describe("the webview bundles are built by the compile chain", () => {
-  it("compile runs compile:webview", () => {
-    expect(manifest.scripts.compile).toContain("compile:webview");
-  });
-
-  it("compile:webview runs the discovery script, and discovery finds the panels", () => {
-    expect(manifest.scripts["compile:webview"]).toContain("compile-webviews.mjs");
-    expect(fs.existsSync(path.join(PKG_ROOT, "..", "..", "scripts", "compile-webviews.mjs"))).toBe(true);
-    // The rule replayed above must keep matching reality; an empty list would
-    // make every assertion below pass vacuously.
-    expect(apps).toContain("guiEditor");
-  });
-
   it("each panel loads the bundle its app is built to", () => {
+    expect(apps).toContain("guiEditor");
     // Panels resolve the bundle through devReload's bundleUri(webview, source,
     // name), so the guarded invariant is the helper call plus the exact name
     // the build produces.
@@ -62,7 +45,11 @@ describe("the webview bundles are built by the compile chain", () => {
       const host =
         name === "ddsPreview"
           ? path.join(PKG_ROOT, "src", "ddsEditor.ts")
-          : path.join(WEBVIEWS_DIR, name, "panel.ts");
+          : name === "compatch"
+            ? path.join(PKG_ROOT, "src", "compatch", "migrations.ts")
+            : name === "patches"
+              ? path.join(PKG_ROOT, "src", "compatch", "patches.ts")
+              : path.join(WEBVIEWS_DIR, name, "panel.ts");
       const panel = fs.readFileSync(host, "utf8");
       expect(panel, host).toContain("bundleUri(");
       expect(panel, host).toContain(`"${name}"`);

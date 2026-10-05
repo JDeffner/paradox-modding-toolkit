@@ -412,7 +412,7 @@ export class CompletionFeature {
     if (listRef !== null) return finalize(listRef, typedWord, limit);
 
     // Structure keys of the current block (§B2), ranked above everything else.
-    const structureItems = entry?.kind ? this.structureItems(result, offset, entry.kind, allowSnippet) : [];
+    const structureItems = entry ? this.structureItems(result, offset, entry, allowSnippet) : [];
 
     const { context } = detectContextFromParse(result, offset, entry?.kind);
     // Script-value math blocks (ai_chance, ai_will_do, weight…): fixed math keys
@@ -590,10 +590,10 @@ export class CompletionFeature {
   private structureItems(
     result: ParseResult,
     offset: number,
-    kind: string,
+    entry: SchemaEntry,
     allowSnippet: boolean
   ): CompletionItem[] {
-    const ctx = structureContextAt(result, offset, kind, this.getSchema().structures);
+    const ctx = structureContextAt(result, offset, entry, this.getSchema().structures);
     if (!ctx) return [];
     // Curated keys keep their deliberate list order AHEAD of harvested ones:
     // harvested .info freqs count usage at any depth of the folder, so a raw
@@ -772,7 +772,7 @@ export class CompletionFeature {
 
     // Structure-key value spec: bool → yes/no, enum → its members.
     if (entry?.kind) {
-      const ctx = structureContextAt(result, offset, entry.kind, schema.structures);
+      const ctx = structureContextAt(result, offset, entry, schema.structures);
       const spec = ctx?.keys.get(key);
       if (spec?.values === "bool") return boolItems();
       if (spec?.values?.startsWith("enum:")) {

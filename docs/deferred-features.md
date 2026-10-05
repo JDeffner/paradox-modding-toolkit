@@ -2,9 +2,23 @@
 
 Features and experiments that are not ready to expose. Each entry identifies the current implementation boundary and the work needed before release.
 
-## Compatch (planned for 0.6.0)
+## Compatch
 
-Compatch is not included in 0.5.0. Its implementation remains on a separate development branch and needs its own real-mod verification before release.
+Compatch is available in the 0.5.2 development branch when `px.experimentalFeatures` is enabled. It remains experimental. A clean text merge does not establish gameplay compatibility; validate against the target installation and test the mod in game.
+
+### Compatibility Patch
+
+The experimental maintained-patch workbench supports ordered source mods, conditional saved decisions, a bounded CK3 semantic set, manual-work records, three-way output maintenance and journal recovery. It does not establish complete playset compatibility. Ordinary cross-file duplicates without verified precedence, first-in-wins replacement constraints, `replace_path` effects, additive histories, nested databases and GUI semantics still need explicit rules or manual work. Binary assets remain an inventory for external review. Source refresh rereads the selected inputs; persistent incremental indexing is not implemented. No Crozier-compatible validator is available.
+
+### Mod Compatibility
+
+The experimental panel supports exact-build routes, all contributions on each chosen transition, entry dependencies, manual notes, detector questions, saved per-entry progress, frozen previews, guarded per-step apply and reverse-order journal recovery. It loads data-only JSON compatibility notes or explicitly trusted JavaScript contributions. The public SDK includes fixture and idempotence helpers. Route gaps and alternatives remain visible; the planner does not infer missing conversions or coverage. Recipes can use a manual resolution after inspection when automatic changes cannot complete the work. Saved progress is checked against completed inputs and route, catalog and artifact identities; future-only input or reference changes preserve prior completion. Manual reports do not establish target-game verification.
+
+CK3 has faith/rite and portrait/clothing mask recipes from `1.19.0.6` to the explicit targets `1.20.0.2` and `1.20.0.3`. The latter is checked against installed schemas and target texture requirements, with gameplay still unverified. Supported conversions request human decisions and preserve source content. Unsupported references, conflicting history, missing dependencies and unsupported texture resources remain blockers. The source build comes from an archived-folder label. Target structure comes from installed documentation; gameplay behavior is unverified. Victoria 3 and EU5 have no built-ins.
+
+No Crozier-compatible Tiger validator is available. Target-game validation, save-game conversion, automatic resolution of unsupported reference intent and dependency load-order composition remain unavailable. Synthetic sequence tests verify workflow mechanics only. An inspection, preview, manual report or completed route does not establish compatibility. Test a scratch mod in game. See the [author guide](../packages/server/migrations/README.md).
+
+A complete game-version update can also change parameterized trigger/effect contracts and their callers, GUI types and datafunctions, localization expression contexts, dated ownership and tenet policies, and asset or shader references. Existing static-ID and portrait-mask recipes cover only their declared cases. These broader changes require target-document evidence, explicit unresolved call sites and consumer-specific recipes or advisories. Text composition cannot infer the author's intended behavior for them.
 
 ## GUI editor: Interact mode (hidden 2026-08-24)
 

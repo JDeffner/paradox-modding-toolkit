@@ -1721,6 +1721,130 @@
         "peakRssMb": 3727,
         "rssSamples": 137
       }
+    },
+    {
+      "version": "0.5.2",
+      "recordedAt": "2026-10-01",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "working tree dist/server.js (0.5.2 release candidate)",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor",
+        "totalMemGb": 32,
+        "node": "v24.18.1"
+      },
+      "results": {
+        "timeToIndexedMs": 11215,
+        "definitions": 516170,
+        "completionCold": 280,
+        "completionWarm": 10,
+        "semanticTokens": 1,
+        "hover": 9,
+        "documentSymbol": 1,
+        "completionAfterSave": 177,
+        "tokensAfterSave": 1,
+        "heapMb": 299,
+        "rssAtBuildMb": 755,
+        "internedIdentifiers": 594086,
+        "peakRssMb": 829,
+        "rssSamples": 24
+      },
+      "gameVersion": "1.20.0.2",
+      "corpus": "Cultivation multi-root workspace: five mods, Agent Courier excluded",
+      "note": "Two sequential runs after heavy agent checks completed. Probe: minimal completion, English localization, scope hints off, no script_docs logs, graphics indexing on; a synthetic scratch mod receives the save. OS file cache and desktop background load were not controlled. This is a release measurement, not a paired speed comparison with older game data, corpus or Node versions."
+    },
+    {
+      "version": "0.5.2",
+      "recordedAt": "2026-10-01",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "working tree dist/server.js (0.5.2 release candidate)",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor",
+        "totalMemGb": 32,
+        "node": "v24.18.1"
+      },
+      "results": {
+        "timeToIndexedMs": 8004,
+        "definitions": 516170,
+        "completionCold": 172,
+        "completionWarm": 7,
+        "semanticTokens": 1,
+        "hover": 7,
+        "documentSymbol": 1,
+        "completionAfterSave": 125,
+        "tokensAfterSave": 1,
+        "heapMb": 299,
+        "rssAtBuildMb": 716,
+        "internedIdentifiers": 594086,
+        "peakRssMb": 810,
+        "rssSamples": 20
+      },
+      "gameVersion": "1.20.0.2",
+      "corpus": "Cultivation multi-root workspace: five mods, Agent Courier excluded",
+      "note": "Two sequential runs after heavy agent checks completed. Probe: minimal completion, English localization, scope hints off, no script_docs logs, graphics indexing on; a synthetic scratch mod receives the save. OS file cache and desktop background load were not controlled. This is a release measurement, not a paired speed comparison with older game data, corpus or Node versions."
+    },
+    {
+      "version": "before-original-dirty-source",
+      "recordedAt": "2026-10-04",
+      "workspace": "real-ck3.code-workspace",
+      "roots": 2,
+      "build": "original editor source snapshot 3b0c551e, before integration fixes",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor",
+        "totalMemGb": 32,
+        "node": "v24.18.1"
+      },
+      "results": {
+        "timeToIndexedMs": 34137,
+        "definitions": 955231,
+        "completionCold": 685,
+        "completionWarm": 18,
+        "semanticTokens": 3,
+        "hover": 3,
+        "documentSymbol": 1,
+        "completionAfterSave": 589,
+        "tokensAfterSave": 1,
+        "heapMb": 938,
+        "rssAtBuildMb": 2510,
+        "internedIdentifiers": 999146,
+        "peakRssMb": 2757,
+        "rssSamples": 83
+      },
+      "gameVersion": "1.20.0.3",
+      "corpus": "Installed CK3 plus AGOT mod corpus, two-root workspace",
+      "note": "Single before/after samples on the same corpus and Node version. OS cache and desktop load were not controlled. Ranking over 1,400 positions and regenerated frequencies stayed identical; timing and memory differences are observations, not isolated causal measurements. A synthetic scratch file receives the save."
+    },
+    {
+      "version": "integration-upcoming-final",
+      "recordedAt": "2026-10-04",
+      "workspace": "real-ck3.code-workspace",
+      "roots": 2,
+      "build": "integration/upcoming, final server build before local integration commit",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor",
+        "totalMemGb": 32,
+        "node": "v24.18.1"
+      },
+      "results": {
+        "timeToIndexedMs": 28655,
+        "definitions": 954511,
+        "completionCold": 853,
+        "completionWarm": 24,
+        "semanticTokens": 2,
+        "hover": 8,
+        "documentSymbol": 1,
+        "completionAfterSave": 681,
+        "tokensAfterSave": 1,
+        "heapMb": 944,
+        "rssAtBuildMb": 2779,
+        "internedIdentifiers": 999188,
+        "peakRssMb": 3134,
+        "rssSamples": 69
+      },
+      "gameVersion": "1.20.0.3",
+      "corpus": "Installed CK3 plus AGOT mod corpus, two-root workspace",
+      "note": "Single before/after samples on the same corpus and Node version. OS cache and desktop load were not controlled. Ranking over 1,400 positions and regenerated frequencies stayed identical; timing and memory differences are observations, not isolated causal measurements. A synthetic scratch file receives the save."
     }
   ]
 }

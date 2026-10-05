@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Paradox Modding Toolkit project settings",
+  "description": "Shared mod rules. Keep editor preferences in VS Code settings and personal paths in User px.machinePaths.",
+  "type": "object",
+  "required": ["version"],
+  "additionalProperties": true,
+  "properties": {
+    "version": { "type": "integer", "const": 1, "default": 1 },
+    "gameId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "examples": ["ck3", "vic3", "eu5"],
+      "description": "Game this mod targets. Omit to use detection or the client preference."
+    },
+    "authoring": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "characterHistory": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "quoteNames": { "type": "boolean", "description": "Quote generated character names." },
+            "quoteCultures": { "type": "boolean", "description": "Quote generated culture identifiers." },
+            "quoteReligions": { "type": "boolean", "description": "Quote generated religion identifiers." }
+          }
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "ignore": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Diagnostic codes ignored for this mod. An empty list overrides personal defaults."
+        },
+        "ignorePatterns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Diagnostic suppression patterns for this mod."
+        },
+        "requireDescriptor": {
+          "type": "boolean",
+          "description": "Report a missing game descriptor in this mod."
+        }
+      }
+    },
+    "publishing": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "changelog": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Changelog path relative to the Workshop listing directory. Absolute paths and parent traversal belong in personal settings.",
+          "pattern": "^[^<>:\"|?*\\u0000-\\u001f]+$"
+        }
+      }
+    }
+  }
+}

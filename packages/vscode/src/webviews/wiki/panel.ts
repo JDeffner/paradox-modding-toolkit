@@ -28,6 +28,7 @@ import { creditsPage } from "../credits/credits";
 import { GAME_METAS } from "../../gameDetect";
 import { MODDING_TOOLS, moddingToolsPage } from "./moddingTools";
 import { moddingGuidesPage } from "./moddingGuides";
+import { LAUNCH_OPTIONS_ARTICLE, readLaunchOptions } from "./launchOptions";
 import { wikiHtml } from "./html";
 import type { AppToHost, HostToApp, WikiArticle, WikiHubEntry } from "./messages";
 import { makeNonce } from "../nonce";
@@ -41,6 +42,8 @@ export const IMAGE_GUIDELINES_ARTICLE = "image-guidelines";
 export interface WikiDeps {
   /** The mod report as markdown, for the focused mod. */
   modReport: () => Promise<string>;
+  /** Resolved game data directory, using the current settings or install detection. */
+  gamePath: (meta: GameMeta) => string | null;
 }
 
 export class WikiPanel {
@@ -54,6 +57,8 @@ export class WikiPanel {
   private select: string | null;
   private disposables: vscode.Disposable[] = [];
   private disposed = false;
+  private ready = false;
+  private launchWatchers = new Map<string, vscode.FileSystemWatcher>();
 
   private constructor(
     context: vscode.ExtensionContext,
@@ -95,6 +100,13 @@ export class WikiPanel {
       this.disposables
     );
     this.panel.onDidDispose(() => this.dispose(), undefined, this.disposables);
+    this.panel.onDidChangeViewState(
+      () => {
+        if (this.panel.visible) this.refreshLaunchOptions();
+      },
+      undefined,
+      this.disposables
+    );
   }
 
   /** Opens the hub, at `select` when a page id is given. */
@@ -108,16 +120,55 @@ export class WikiPanel {
     if (existing) {
       existing.deps = deps;
       existing.panel.reveal(vscode.ViewColumn.Active);
+      existing.refreshLaunchOptions();
       if (select) existing.post({ type: "select", id: select });
       return;
     }
     WikiPanel.instance = new WikiPanel(context, meta, deps, select);
   }
 
+  /** Called after the extension resolves changed game paths or workspace folders. */
+  static refresh(): void {
+    WikiPanel.instance?.refreshLaunchOptions();
+  }
+
+  private launchArticles(): WikiArticle[] {
+    const sources = new Set<string>();
+    const articles = Object.values(GAME_METAS).map((meta) => {
+      const dir = meta.launchOptionsFile ? this.deps.gamePath(meta) : null;
+      if (dir && meta.launchOptionsFile) sources.add(path.join(dir, meta.launchOptionsFile));
+      return readLaunchOptions(meta, dir);
+    });
+    for (const [source, watcher] of this.launchWatchers) {
+      if (sources.has(source)) continue;
+      watcher.dispose();
+      this.launchWatchers.delete(source);
+    }
+    for (const source of sources) {
+      if (this.launchWatchers.has(source)) continue;
+      const watcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(path.dirname(source), path.basename(source))
+      );
+      const refresh = () => this.refreshLaunchOptions();
+      watcher.onDidChange(refresh);
+      watcher.onDidCreate(refresh);
+      watcher.onDidDelete(refresh);
+      this.launchWatchers.set(source, watcher);
+    }
+    return articles;
+  }
+
+  private refreshLaunchOptions(): void {
+    if (this.disposed || !this.ready) return;
+    this.post({ type: "launchOptions", articles: this.launchArticles() });
+  }
+
   private dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     WikiPanel.instance = undefined;
+    for (const watcher of this.launchWatchers.values()) watcher.dispose();
+    this.launchWatchers.clear();
     for (const d of this.disposables.splice(0)) d.dispose();
     this.panel.dispose();
   }
@@ -130,15 +181,19 @@ export class WikiPanel {
   private async onMessage(msg: AppToHost): Promise<void> {
     switch (msg.type) {
       case "ready":
+        this.ready = true;
         this.post({
           type: "content",
           hub: hub(),
-          articles: readArticles(this.context),
+          articles: [...readArticles(this.context), ...this.launchArticles()],
           games: Object.values(GAME_METAS).map((m) => ({ id: m.id, name: m.name })),
           game: this.game,
           select: this.select,
         });
         this.select = null;
+        break;
+      case "refreshLaunchOptions":
+        this.refreshLaunchOptions();
         break;
       case "run":
         await vscode.commands.executeCommand(msg.command);
@@ -165,6 +220,12 @@ function hub(): WikiHubEntry[] {
       icon: "bookOpen",
       tip: "Search every trigger, effect and datafunction, with real examples out of the game's files.",
       target: { command: "px.showExamplesWiki" },
+    },
+    {
+      label: "Launch Options",
+      icon: "play",
+      tip: "Launch flags and descriptions read from the installed game's documentation, updated when the file changes.",
+      target: { page: LAUNCH_OPTIONS_ARTICLE },
     },
     {
       label: "Image Guidelines",

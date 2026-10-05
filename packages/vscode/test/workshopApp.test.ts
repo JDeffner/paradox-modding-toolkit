@@ -3,6 +3,7 @@ import { JSDOM } from "jsdom";
 import { buildSync } from "esbuild";
 import * as path from "node:path";
 import { workshopHtml } from "../src/webviews/workshop/html";
+import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
 import type { AppToHost, HostToApp, WorkshopModInfo } from "../src/webviews/workshop/messages";
 
 const bundle = buildSync({
@@ -83,6 +84,16 @@ function boot(initial = listing()) {
     dom.window.document.getElementById(id) as T;
   const check = (id: string) => element<HTMLInputElement>(id);
   const change = (id: string, value: string) => {
+    if (id === "listing") {
+      element(id).click();
+      const label = value ? `Legacy ${value}.*` : "Live version";
+      const option = [...dom.window.document.querySelectorAll<HTMLElement>('[role="option"]')].find((item) =>
+        item.textContent?.startsWith(label)
+      );
+      expect(option).toBeTruthy();
+      option!.click();
+      return;
+    }
     check(id).value = value;
     check(id).dispatchEvent(new dom.window.Event("change"));
   };
@@ -100,12 +111,25 @@ const legacy = (state: WorkshopModInfo["legacyContent"] = "published") =>
     workshopDir: "/mod/workshop/legacy_version/1.19",
   });
 
-it("offers main and saved legacy items, with creation and messages bound to the visible item", () => {
+it("finds and selects a compatibility version from the tag menu without dropping categories", () => {
+  const t = boot(
+    listing({ tags: ["Gameplay"], knownTags: ck3Meta.workshopTagGroups!.flatMap((group) => group.tags) })
+  );
+  t.document.querySelector<HTMLButtonElement>("#tagAdd button")!.click();
+  const option = [...t.document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+    (entry) => entry.textContent === "1.20 'Crozier'"
+  );
+  expect(option).toBeTruthy();
+  expect(t.document.querySelector(".px-menu input")).toBeTruthy();
+  option!.click();
+  expect(t.messages.at(-1)).toMatchObject({ type: "setTags", tags: ["Gameplay", "1.20 'Crozier'"] });
+});
+
+it("offers live and legacy versions in the shared menu and binds messages to the visible item", () => {
   const t = boot();
-  expect(t.element("listing").textContent).toContain("Main item");
-  expect(t.element("listing").textContent).toContain("Legacy 1.19.*");
-  t.element("createLegacy").click();
-  expect(t.messages.at(-1)).toEqual({ type: "createLegacy", target: { root: "/mod", legacyKey: null } });
+  expect(t.element("listing").textContent).toContain("Live version");
+  expect(t.element("createLegacy").hidden).toBe(true);
+  expect(t.document.querySelector("select")).toBeNull();
   t.change("listing", "1.19");
   expect(t.messages.at(-1)).toEqual({
     type: "selectListing",
@@ -116,6 +140,7 @@ it("offers main and saved legacy items, with creation and messages bound to the 
   expect(t.element("app").hasAttribute("data-legacy")).toBe(true);
   expect(t.element("legacyNotice").textContent).toContain("Legacy 1.19.*");
   expect(t.element("legacyNotice").textContent).toContain("separate project");
+  expect(t.element("uploadLabel").textContent).toBe("Upload legacy 1.19.*");
   expect(t.check("title").value).toBe("Legacy title");
   t.change("title", "Renamed legacy");
   expect(t.messages.at(-1)).toEqual({
@@ -124,6 +149,94 @@ it("offers main and saved legacy items, with creation and messages bound to the 
     value: "Renamed legacy",
     target: { root: "/mod", legacyKey: "1.19" },
   });
+});
+
+it("creates only after confirming a valid version in an inline form, then switches to the host's listing", async () => {
+  const t = boot(listing({ legacyVersions: [] }));
+  expect(t.element("listing").hidden).toBe(true);
+  expect(t.element("createLegacy").hidden).toBe(false);
+  expect(t.element("mod").nextElementSibling?.id).toBe("openPage");
+  expect(t.element("versionControls").nextElementSibling?.id).toBe("upload");
+  t.element("createLegacy").click();
+  const dialog = t.document.querySelector<HTMLFormElement>(".legacy-form")!;
+  expect(dialog.parentElement?.id).toBe("page");
+  expect(dialog.hasAttribute("aria-modal")).toBe(false);
+  expect(t.element("app").inert).not.toBe(true);
+  expect(dialog.textContent).toContain("Nothing is uploaded yet");
+  expect(t.messages.some((message) => message.type === "createLegacy")).toBe(false);
+  const input = t.check("legacy-game-version");
+  expect(t.document.activeElement).toBe(input);
+  input.value = "../../invalid";
+  dialog.dispatchEvent(new dom.window.Event("submit", { cancelable: true }));
+  expect(input.getAttribute("aria-invalid")).toBe("true");
+  expect(t.messages.some((message) => message.type === "createLegacy")).toBe(false);
+  input.value = "1.19";
+  dialog.dispatchEvent(new dom.window.Event("submit", { cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(t.messages.at(-1)).toEqual({
+    type: "createLegacy",
+    version: "1.19.*",
+    target: { root: "/mod", legacyKey: null },
+  });
+  t.info(legacy("new"));
+  expect(t.element("createLegacy").hidden).toBe(true);
+  expect(t.element("listing").hidden).toBe(false);
+  expect(t.element("listing").textContent).toContain("Legacy 1.19.*");
+});
+
+it("selects a ZIP inside the form and labels the saved source in upload confirmation", async () => {
+  const t = boot(listing({ legacyVersions: [] }));
+  t.element("createLegacy").click();
+  t.element("legacy-source-zip").click();
+  const dialog = t.document.querySelector<HTMLFormElement>(".legacy-form")!;
+  const confirm = dialog.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+  expect(confirm.disabled).toBe(true);
+  t.element("legacy-choose-zip").click();
+  const request = t.messages.at(-1)!;
+  expect(request.type).toBe("pickLegacyZip");
+  if (request.type !== "pickLegacyZip") throw new Error("Expected picker");
+  t.post({
+    type: "legacyZipPicked",
+    request: request.request,
+    archive: { id: "zip-token", name: "older-mod.zip" },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(t.element("legacy-zip-name").textContent).toBe("older-mod.zip");
+  expect(confirm.disabled).toBe(false);
+  t.check("legacy-game-version").value = "1.19";
+  dialog.dispatchEvent(new dom.window.Event("submit", { cancelable: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(t.messages.at(-1)).toEqual({
+    type: "createLegacy",
+    version: "1.19.*",
+    archive: "zip-token",
+    target: { root: "/mod", legacyKey: null },
+  });
+  t.info({ ...legacy("new"), legacyArchive: "older-mod.zip", version: "1.0" });
+  expect(t.element("legacyNotice").textContent).toContain("saved files from older-mod.zip");
+  expect(t.element("contentHint").textContent).toContain("saved files from older-mod.zip");
+  t.element("upload").click();
+  expect(t.document.querySelector(".px-confirmation")?.textContent).toContain(
+    "saved files from older-mod.zip"
+  );
+});
+
+it("offers creation inside the version menu, rejects duplicates and cancels without writing", async () => {
+  const t = boot();
+  t.element("listing").click();
+  const create = [...t.document.querySelectorAll<HTMLElement>('[role="option"]')].find((item) =>
+    item.textContent?.startsWith("Create new legacy version")
+  )!;
+  create.click();
+  const dialog = t.document.querySelector<HTMLFormElement>(".legacy-form")!;
+  t.check("legacy-game-version").value = "1.19";
+  dialog.dispatchEvent(new dom.window.Event("submit", { cancelable: true }));
+  expect(t.element("legacy-version-error").textContent).toContain("already exists");
+  dialog.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(t.messages.some((message) => message.type === "createLegacy")).toBe(false);
+  expect(t.document.querySelector(".legacy-form")).toBeNull();
+  expect(t.element("app").inert).not.toBe(true);
 });
 
 it.each(["new", "ready", "published", "submitted", "creating"] as const)(
@@ -145,6 +258,10 @@ it.each(["new", "ready", "published", "submitted", "creating"] as const)(
       expect(t.document.querySelector(".px-confirmation")).toBeNull();
       return;
     }
+    expect(t.document.querySelector(".px-dialog-title")?.textContent).toContain("legacy 1.19.*");
+    expect(t.document.querySelector(".px-dialog-actions button:last-child")?.textContent).toContain(
+      "legacy version"
+    );
     const content = t.document.querySelector<HTMLInputElement>('[data-part="content"] input')!;
     expect(content.disabled).toBe(true);
     expect(content.checked).toBe(required);
@@ -287,4 +404,17 @@ it("cancels an old gallery gesture when the listing changes", () => {
   t.document.dispatchEvent(new dom.window.MouseEvent("pointerup"));
   expect(t.messages.filter((m) => m.type === "reorderPreviews")).toHaveLength(0);
   expect(t.document.querySelector(".tile[data-name]")?.getAttribute("data-name")).toBe("legacy.png");
+});
+
+it("keeps the toolbar usable and closes creation when the active listing changes", async () => {
+  const t = boot(listing());
+  t.element("createLegacy").click();
+  t.element("createLegacy").click();
+  expect(t.document.querySelectorAll(".legacy-form")).toHaveLength(1);
+  t.element("upload").focus();
+  expect(t.document.activeElement).toBe(t.element("upload"));
+  t.info(legacy("new"));
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  expect(t.document.querySelector(".legacy-form")).toBeNull();
+  expect(t.messages.some((message) => message.type === "createLegacy")).toBe(false);
 });

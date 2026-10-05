@@ -62,9 +62,7 @@ localization (`*_l_<lang>.yml`, UTF-8 with BOM).
   `_l_<lang>.yml` filename; script `.txt` = UTF-8 with BOM; event files
   START with their `namespace =` line.
 - **Writers preserve user work.** Use the current editor document when it has unsaved edits; do not overwrite it from a stale disk snapshot. Before applying a preview or merge, check that its source documents and files still match. Reject stale results and require a fresh preview. Preserve unrelated content and keep vanilla and reference inputs read-only. Report write failures as failures.
-- **`localization/replace/` only overrides vanilla keys.** New keys go to
-  the mod loc file holding their siblings (`writeLocSmart` /
-  `upsertNewModLoc` in `packages/vscode/src/locCommands.ts`).
+- **Localization follows the mod.** Existing owned entries stay in place. New keys follow explicit author defaults, meaningful siblings and source files, including established `replace` layouts. Fresh mods use ordinary localization folders; new overrides require a `replace` folder. All writers share `localizationPolicy` through `prepareLocalizationWrite` / `writeLocSmart`. Generated files require their source workflow.
 - **Override rules:** script databases are last-in-wins, `gui/` and
   `localization/replace` are first-in-wins.
 - **No `vscode` imports** in `packages/server` or `packages/protocol`
@@ -138,7 +136,11 @@ Env overrides: `PX_<GAMEID>_GAME_PATH`, `_LOGS_PATH`, `_MOD_PATH`,
 `_MOD_CORPUS`, `_TIGER_PATH`. Loader: `scripts/devPaths.ts`. Corpus-gated
 tests skip when a path is unset. The shipped extension reads none of this.
 
-Compatch tooling is deferred and has no current test runner or supported `devPath` keys. Do not configure `compatchBasePath` or `compatchTargetPath` as working setup options. Add configuration and a documented real-data exercise together when a consumer exists.
+For real-data compatch tests, set `games.<gameId>.compatchBasePath` and `games.<gameId>.compatchTargetPath`. Both point to game-data folders containing `common/`, `events/`, etc., not the installation root. Environment overrides are `PX_<GAMEID>_COMPATCH_BASE_PATH` and `PX_<GAMEID>_COMPATCH_TARGET_PATH`; read them through `devPath` / `requireDevPath` in `scripts/devPaths.ts`. Each developer chooses their own installations. Keep personal paths in the ignored file.
+
+The default CK3 exercise uses the current installed vanilla data as the base and a saved 1.18 version as the target. This deliberately tests a downgrade. "Base" means the vanilla version the test mod was built against; "target" means the version it must work with. Do not swap them based on version order. Use a scratch mod based on the configured base, keep both game sources read-only, and record their actual versions with the test results because Steam updates change the current installation. This exercise does not replace forward-update coverage or target-version validation. If either path is unset, skip corpus-gated tests with a reason; an explicitly requested real-data run must report the missing setting.
+
+Set `PX_COMPATCH_LARGE_MOD` to a scratch copy under `.local/testing/`, then run `pnpm exec vitest run packages/vscode/test/compatchView.test.ts -t "opens a large real mod"`. The test reads the configured base and target paths and checks the scan, paged commands and selected comparison without writing to the sources.
 
 The base game files are THE source of truth for script syntax. Grep the game
 folder or the `_*.info` docs; never guess names.
@@ -248,6 +250,7 @@ Keep local test projects and compatch fixtures in the ignored `.local/testing/` 
 
 | Script | Output | What it does |
 |---|---|---|
+| `build-workshop-tags.ts [--game]` | `data/<id>/workshopTags.json` | Public tag groups and exact upload strings from the game's Steam Workshop configuration |
 | `build-asset-vocabulary.ts [--game]` | `data/<id>/assetVocabulary.json` | Context-specific graphics properties and usage counts from vanilla `.asset` files; no binaries |
 | `build-structures-json.ts` | `data/ck3/structures.json` | Harvests every `_*.info` doc (CK3-only) |
 | `build-gui-schema.ts [--game]` | `data/<id>/guiSchema.json` | Widget types + property counts from vanilla `gui/` |

@@ -137,3 +137,12 @@ it.each([ck3Meta, vic3Meta, eu5Meta])(
     expect(new Set(ids).size).toBe(ids.length);
   }
 );
+
+it.each([ck3Meta, vic3Meta, eu5Meta])(
+  "hides Compatch unless experimental features are enabled ($id)",
+  (meta) => {
+    expect(commands(actionGroups(meta, 0))).not.toContain("px.openCompatch");
+    expect(commands(actionGroups(meta, 0, true))).toContain("px.openCompatch");
+    expect(commands(visibleActionGroups(meta, 0, [], false))).not.toContain("px.openCompatch");
+  }
+);

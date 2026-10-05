@@ -98,9 +98,12 @@
     "saved-scope": {
       "comment": "scope:x / var:x / flag:x references — the mod's own runtime state",
       "name": "variable.other.saved-scope.paradox",
-      "match": "\\b(?:(scope:)|(?:var|local_var|global_var|flag|event_target|define|list|title|character|province|culture|faith|dynasty|house|religion|trait|vassal_contract|struggle|epidemic):)[A-Za-z0-9_.\\-]+\\b",
+      "match": "\\b(?:(scope:)|((?:var|local_var|global_var|flag|event_target|define|list|title|character|province|culture|faith|dynasty|house|religion|trait|vassal_contract|struggle|epidemic):))([A-Za-z0-9_\\-]+)((?:\\.[A-Za-z0-9_\\-]+)*)\\b",
       "captures": {
-        "1": { "name": "keyword.control.saved-scope.paradox" }
+        "1": { "name": "keyword.control.saved-scope.paradox" },
+        "2": { "name": "keyword.control.reference.paradox" },
+        "3": { "name": "variable.other.reference.paradox" },
+        "4": { "name": "variable.language.scope.paradox" }
       }
     },
     "scope-ref": {

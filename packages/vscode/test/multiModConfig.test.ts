@@ -13,13 +13,29 @@ vi.mock("vscode", () => ({
     static file(file: string) {
       return new this(file);
     }
+    toString() {
+      return `test://workspace/${encodeURIComponent(this.fsPath)}`;
+    }
   },
   window: {},
   workspace: {
-    get workspaceFolders() {
-      return host.folders.map((fsPath) => ({ uri: { fsPath, scheme: "file" } }));
+    getWorkspaceFolder: (resource: { fsPath: string }) => {
+      const folder = host.folders.find(
+        (root) => resource.fsPath === root || resource.fsPath.startsWith(root + path.sep)
+      );
+      return folder
+        ? { uri: { fsPath: folder, toString: () => `test://workspace/${encodeURIComponent(folder)}` } }
+        : undefined;
     },
-    getConfiguration: () => ({ get: (key: string) => host.settings[key] }),
+    get workspaceFolders() {
+      return host.folders.map((fsPath) => ({
+        uri: { fsPath, scheme: "file", toString: () => `test://workspace/${encodeURIComponent(fsPath)}` },
+      }));
+    },
+    getConfiguration: () => ({
+      get: (key: string) => host.settings[key],
+      inspect: (key: string) => ({ globalValue: host.settings[key] }),
+    }),
   },
 }));
 vi.mock("../src/steamDetect", () => ({ findGameFolder: () => null }));
@@ -51,6 +67,58 @@ afterEach(() => {
 });
 
 describe("multi-mod workspace capacity", () => {
+  it("honors the primary folder's personal paths in the no-argument config entry point", () => {
+    const { root, mods } = fixture();
+    host.folders = mods;
+    const primaryUri = vscode.Uri.file(mods[0]).toString();
+    const otherUri = vscode.Uri.file(mods[1]).toString();
+    host.settings.machinePaths = {
+      version: 1,
+      folders: {
+        [primaryUri]: { ck3: { gamePath: root, logsPath: mods[0], tigerPath: mods[0] } },
+        [otherUri]: { ck3: { gamePath: mods[1], logsPath: mods[1], tigerPath: mods[1] } },
+      },
+    };
+    const result = readConfig();
+    expect([result.gamePath, result.logsPath, result.tigerPath]).toEqual([root, mods[0], mods[0]]);
+    const other = readConfig(vscode.Uri.file(mods[1]));
+    expect([other.gamePath, other.logsPath, other.tigerPath]).toEqual([mods[1], mods[1], mods[1]]);
+  });
+
+  it("reads game and validation rules from the primary project, with game-specific personal paths", () => {
+    const { root, mods } = fixture();
+    host.folders = mods;
+    const settingsDir = path.join(mods[0], ".px-toolkit");
+    fs.mkdirSync(settingsDir);
+    fs.writeFileSync(
+      path.join(settingsDir, "project.json"),
+      JSON.stringify({ version: 1, gameId: "vic3", validation: { ignore: [], requireDescriptor: true } })
+    );
+    host.settings["diagnostics.ignore"] = ["legacy-ignore"];
+    host.settings.machinePaths = {
+      version: 1,
+      defaults: { ck3: { logsPath: "missing-path" }, vic3: { logsPath: root } },
+    };
+    const result = readConfig();
+    expect(result.gameId).toBe("vic3");
+    expect(result.logsPath).toBe(root);
+    expect(result.diagnosticsIgnore).toEqual([]);
+    expect(result.requireDescriptor).toBe(true);
+    expect(result.warnings).toContain("Project game (vic3) overrides the personal game setting (ck3).");
+  });
+
+  it("reports invalid portable and personal settings and retains legacy path behavior", () => {
+    const { root, mods } = fixture();
+    host.folders = mods;
+    fs.mkdirSync(path.join(mods[0], ".px-toolkit"));
+    fs.writeFileSync(path.join(mods[0], ".px-toolkit/project.json"), '{"version":2}');
+    host.settings.machinePaths = { version: 2 };
+    const result = readConfig();
+    expect(result.logsPath).toBe(root);
+    expect(result.warnings.some((warning) => warning.startsWith("Project settings:"))).toBe(true);
+    expect(result.warnings.some((warning) => warning.includes("unsupported version"))).toBe(true);
+  });
+
   it.each(["individual roots", "container"])(
     "keeps all 12 mods from %s in discovery and indexing configuration",
     (layout) => {

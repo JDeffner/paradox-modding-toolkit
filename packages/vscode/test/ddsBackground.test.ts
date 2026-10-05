@@ -39,7 +39,9 @@ describe("DDS editor shared background", () => {
       ConfigurationTarget: { Global: 1, Workspace: 2 },
       workspace: {
         workspaceFolders: [{ uri: URI.file("/mod") }],
+        getWorkspaceFolder: () => ({ uri: URI.file("/mod") }),
         getConfiguration: () => ({
+          inspect: () => undefined,
           get: (key: string, fallback?: unknown) =>
             key === "texturePreview.background" ? background : fallback,
           update: async (key: string, value: unknown, target: number) => {

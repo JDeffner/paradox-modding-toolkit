@@ -96,10 +96,20 @@ const mask =
     "gfx/portraits/accessory_variations/textures/patterns/byzantine/byzantine_silk_trim_03_masks.dds"
   );
 describe.skipIf(!mask || !existsSync(mask))("installed CK3 portrait pattern", () => {
-  it("reads all ten vanilla levels and reproduces the vanilla layout", () => {
+  it("reads every stored vanilla level and reproduces the vanilla layout", () => {
     const vanilla = readFileSync(mask!);
     const levels = ddsMipLevels(vanilla);
-    expect(levels.map((mip) => mip.width)).toEqual([512, 256, 128, 64, 32, 16, 8, 4, 2, 1]);
+    // The file has ten levels in older installs and two in CK3 1.20.0.3.
+    // The DDS header specifies the stored count; a full chain is not mandatory.
+    const count = vanilla.readUInt32LE(28);
+    expect(vanilla.subarray(84, 88).toString("ascii")).toBe("DXT5");
+    expect(vanilla.readUInt32LE(12)).toBe(512);
+    expect(vanilla.readUInt32LE(16)).toBe(512);
+    expect(count).toBeGreaterThan(1);
+    expect(count).toBeLessThanOrEqual(10);
+    expect(levels.map((mip) => [mip.width, mip.height])).toEqual(
+      Array.from({ length: count }, (_, level) => [Math.max(1, 512 >> level), Math.max(1, 512 >> level)])
+    );
     for (const mip of levels)
       expect(decodeDds(vanilla, mip.level).pixels.length).toBe(mip.width * mip.height * 4);
     const base = decodeDds(vanilla);

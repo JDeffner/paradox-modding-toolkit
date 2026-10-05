@@ -16,7 +16,15 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { encodeDds } from "../src/dds";
-import type { CompletionList, Location, TextDocumentEdit, WorkspaceEdit } from "vscode-languageserver/node";
+import type {
+  CodeAction,
+  CompletionList,
+  Location,
+  TextDocumentEdit,
+  TextEdit,
+  WorkspaceEdit,
+} from "vscode-languageserver/node";
+import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   createMessageConnection,
   IPCMessageReader,
@@ -494,6 +502,49 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       }
     }
   );
+
+  it.each([
+    ["faith", "faith = faith:", "faith_details = { religion = smoke_religion }"],
+    ["rite", "set_character_rite = rite:", "faith = smoke_faith"],
+    ["tenet", "has_tenet = ", "visible = yes"],
+  ])("indexes Crozier %s definitions over IPC, including unsaved updates", async (kind, field, body) => {
+    const name = `px_crozier_${kind}`;
+    const uri = toUri(path.join(modDir, "common/religion", `${kind}_types`, "px_crozier.txt"));
+    const useUri = toUri(path.join(modDir, "events", `px_crozier_${kind}.txt`));
+    const prefix = `namespace = crozier\ncrozier.1 = { immediate = { ${field}`;
+    const position = { line: 1, character: prefix.split("\n")[1].length };
+    try {
+      await conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri, version: 1, languageId: "paradox-ck3", text: `${name} = { ${body} }` },
+      });
+      await conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri: useUri, version: 1, languageId: "paradox-ck3", text: `${prefix}${name} } }` },
+      });
+      const complete = () =>
+        conn.sendRequest<CompletionList>("textDocument/completion", {
+          textDocument: { uri: useUri },
+          position,
+        });
+      expect((await complete()).items.map((item) => item.label)).toContain(name);
+      const locations = await conn.sendRequest<Location[]>("textDocument/definition", {
+        textDocument: { uri: useUri },
+        position: { ...position, character: position.character + 2 },
+      });
+      expect(locations.map((location) => decodeURIComponent(location.uri).toLowerCase())).toEqual([
+        decodeURIComponent(uri).toLowerCase(),
+      ]);
+      await conn.sendNotification("textDocument/didChange", {
+        textDocument: { uri, version: 2 },
+        contentChanges: [{ text: `${name}_changed = { ${body} }` }],
+      });
+      const updated = (await complete()).items.map((item) => item.label);
+      expect(updated).toContain(`${name}_changed`);
+      expect(updated).not.toContain(name);
+    } finally {
+      for (const opened of [uri, useUri])
+        await conn.sendNotification("textDocument/didClose", { textDocument: { uri: opened } });
+    }
+  });
 
   it("separates same-name kinds and refreshes unsaved script definitions and references", async () => {
     const files: string[] = [];
@@ -1202,11 +1253,56 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(refs.some((r) => r.uri.includes("parent_events.txt"))).toBe(true);
   });
 
-  it("semantic tokens cover the document", async () => {
-    const tokens = (await conn.sendRequest("textDocument/semanticTokens/full", {
-      textDocument: { uri: eventsUri },
-    })) as { data: number[] };
-    expect(tokens.data.length).toBeGreaterThan(0);
+  it("semantic tokens expose script roles and embedded GUI/localization expressions", async () => {
+    const legend = (
+      initResult as {
+        capabilities: {
+          semanticTokensProvider: { legend: { tokenTypes: string[]; tokenModifiers: string[] } };
+        };
+      }
+    ).capabilities.semanticTokensProvider.legend;
+    expect(legend.tokenModifiers).toEqual(
+      expect.arrayContaining(["declaration", "pxEffect", "pxTrigger", "pxScope"])
+    );
+    const read = async (uri: string, text: string) => {
+      const tokens = (await conn.sendRequest("textDocument/semanticTokens/full", {
+        textDocument: { uri },
+      })) as { data: number[] };
+      let line = 0,
+        character = 0;
+      const decoded: { text: string; type: string; modifiers: string[] }[] = [];
+      for (let i = 0; i < tokens.data.length; i += 5) {
+        line += tokens.data[i];
+        character = tokens.data[i] === 0 ? character + tokens.data[i + 1] : tokens.data[i + 1];
+        decoded.push({
+          text: text.split("\n")[line].slice(character, character + tokens.data[i + 2]),
+          type: legend.tokenTypes[tokens.data[i + 3]],
+          modifiers: legend.tokenModifiers.filter((_, bit) => tokens.data[i + 4] & (1 << bit)),
+        });
+      }
+      return decoded;
+    };
+    const script = await read(eventsUri, EVENTS_TXT);
+    expect(script).toContainEqual({ text: "smoke.1", type: "event", modifiers: ["declaration", "px"] });
+    expect(script).toContainEqual({ text: "my_smoke_effect", type: "macro", modifiers: ["px", "pxEffect"] });
+    for (const languageId of ["paradox-gui", "paradox-loc"]) {
+      const text =
+        languageId === "paradox-gui"
+          ? 'widget = { text = "[Character.GetName]" }\n'
+          : '\uFEFFl_english:\n smoke_tokens:0 "[Character.GetName]"\n';
+      const uri = `file:///semantic-${languageId}.${languageId === "paradox-gui" ? "gui" : "yml"}`;
+      await conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri, languageId, version: 1, text },
+      });
+      const spans = await read(uri, text);
+      expect(spans).toContainEqual({ text: "Character", type: "type", modifiers: ["defaultLibrary", "px"] });
+      expect(spans).toContainEqual({
+        text: "GetName",
+        type: "function",
+        modifiers: ["defaultLibrary", "px"],
+      });
+      await conn.sendNotification("textDocument/didClose", { textDocument: { uri } });
+    }
   });
 
   it("documentColor + colorPresentation round-trip over the wire (issue #11)", async () => {
@@ -1238,12 +1334,15 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
   it("paradox/eventDetail answers with loc, options and refs", async () => {
     const detail = (await conn.sendRequest("paradox/eventDetail", { id: "smoke.1" })) as {
       id: string;
+      sourceHash?: string;
       title?: { key: string; text?: string };
       options: Array<{ name?: { key: string } }>;
       refs: Array<{ kind: string; name: string }>;
       endLine: number;
     } | null;
     expect(detail).not.toBeNull();
+    expect(typeof detail!.sourceHash).toBe("string");
+    expect(detail!.sourceHash).not.toBe("");
     expect(detail!.title?.key).toBe("smoke.1.t");
     expect(detail!.title?.text).toBe("Smoke");
     expect(detail!.options).toHaveLength(1);
@@ -2064,6 +2163,76 @@ describe.skipIf(!hasServer)("LSP smoke: client capability object", () => {
         entry.variants.every((variant) => variant.preview.startsWith("**Insertion preview**"))
       )
     ).toBe(true);
+  });
+
+  it("bare localization actions use current buffers, per-mod defaults and versioned edits over the wire", async () => {
+    const uri = toUri(path.join(modDir, "events", "adaptive_loc.txt"));
+    const targetUri = toUri(path.join(modDir, "localization", "german", "adaptive_l_german.yml"));
+    const configUri = toUri(path.join(modDir, ".px-toolkit", "localization.json"));
+    const text =
+      '\uFEFFl_german:\r\n # unsaved comment\r\n adaptive_decision_desc:8 "unsaved value" # keep\r\n unrelated:2 "keep"\r\n';
+    const target = TextDocument.create(targetUri, "paradox-localization", 12, text);
+    const range = { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } };
+    await conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri,
+        languageId: "paradox",
+        version: 1,
+        text: "namespace = adaptive\nadaptive.1 = { title = adaptive_decision_title }\n",
+      },
+    });
+    await conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri: targetUri, languageId: target.languageId, version: target.version, text },
+    });
+    await conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri: configUri,
+        languageId: "json",
+        version: 1,
+        text: JSON.stringify({
+          language: "german",
+          newKeyFile: "localization/german/adaptive_l_german.yml",
+          entryVersion: "preserve",
+        }),
+      },
+    });
+    const request = (key: string) =>
+      conn.sendRequest<CodeAction[]>("textDocument/codeAction", {
+        textDocument: { uri },
+        range,
+        context: {
+          diagnostics: [
+            { range, message: "Missing localization", code: "missing-required-loc", data: { key } },
+          ],
+        },
+      });
+    try {
+      const [action] = await request("adaptive_decision_title");
+      expect(action.command).toBeUndefined();
+      expect(action.disabled).toBeUndefined();
+      expect(action.edit!.documentChanges).toHaveLength(1);
+      const change = action.edit!.documentChanges![0] as TextDocumentEdit;
+      expect(change.textDocument).toEqual({ uri: targetUri, version: 12 });
+      const updated = TextDocument.applyEdits(target, change.edits as TextEdit[]);
+      expect(updated).toContain(' adaptive_decision_title:8 ""\r\n');
+      expect(updated).toContain(' adaptive_decision_desc:8 "unsaved value" # keep\r\n');
+      expect(updated).toContain(' unrelated:2 "keep"\r\n');
+      expect(updated).toContain("# unsaved comment");
+      expect(fs.existsSync(path.join(modDir, "localization", "german", "adaptive_l_german.yml"))).toBe(false);
+      expect(await request("adaptive_decision_desc")).toEqual([]);
+
+      await conn.sendNotification("textDocument/didChange", {
+        textDocument: { uri: configUri, version: 2 },
+        contentChanges: [{ text: "invalid defaults" }],
+      });
+      const [disabled] = await request("adaptive_decision_title");
+      expect(disabled.disabled).toBeDefined();
+      expect(disabled.edit).toBeUndefined();
+    } finally {
+      for (const closeUri of [uri, targetUri, configUri]) {
+        await conn.sendNotification("textDocument/didClose", { textDocument: { uri: closeUri } });
+      }
+    }
   });
 
   it("textDocument/formatting honors the client's indentation options", async () => {

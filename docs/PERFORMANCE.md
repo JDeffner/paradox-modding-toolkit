@@ -329,6 +329,20 @@ What the rows say:
 
 Warm completion, hover and semantic tokens remain much cheaper than the first completion after an index change.
 
+### 0.5.2 release measurement (2026-10-01)
+
+Two sequential runs of the 0.5.2 candidate on `cultivation.code-workspace` indexed 516,170 definitions and 594,086 shared identifiers. Both used CK3 1.20.0.2, a Ryzen 7 5800X, 32 GB RAM and Node 24.18.1. The source roots were the game and five workspace mods: Cultivation Mod, Custom Name Lists, Gesta, Hide Decisions and Mod Testing. Agent Courier remained excluded. The save probe used a separate synthetic mod; the real source roots stayed read-only.
+
+| version | time to indexed | completion, cold | completion, after save | completion, warm | heap after index | peak RSS |
+|---|---|---|---|---|---|---|
+| 0.5.2, median of two runs | 9.61 s | 226 ms | 151 ms | 8.5 ms | 299 MB | 819.5 MB |
+
+The unchanged benchmark driver used minimal completion, English localization, scope hints off, no `script_docs` logs and graphics asset indexing on. It reads workspace roots and exclusions, but it does not load every personal editor preference. The real workspace selected names completion; these request timings used the driver's minimal mode.
+
+Indexing took 11,215 ms and 8,004 ms in the two runs. Heavy agent checks had finished before both measurements; OS file cache and desktop background load were not controlled. Older Cultivation rows used earlier game data and Node versions, while the earlier 0.5.2 pre-release row used AGOT on another machine. These results do not establish a speed change against those rows.
+
+The two raw `0.5.2` rows are in `packages/server/test/perf/history.json`. Local results and server logs are in `.local/artifacts/perf-0.5.2/run1` and `run2`. Readback confirmed that the workspace file, game launcher version file and measured server bundle retained their recorded hashes.
+
 ### Adding a row
 
 After `pnpm run compile`, from the repo root:

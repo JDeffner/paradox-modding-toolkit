@@ -9,6 +9,8 @@
  * (steam/workshop.ts).
  */
 import { makeNonce } from "../nonce";
+import { preparePreviewImages, PREVIEW_ORIGINALS_DIR } from "../../steam/previewImages";
+import { importLegacyZip, stageLegacyArchive, type LegacyZip } from "../../steam/legacyZip";
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
@@ -21,7 +23,6 @@ import {
 } from "@px-lsp/protocol/workshopMeta";
 import { LOC_LANGUAGES } from "@px-lsp/protocol/translationCore";
 import {
-  LAUNCHER_TAGS,
   parseDescriptor,
   readDescriptorBlock,
   upsertDescriptorBlock,
@@ -66,6 +67,7 @@ import {
   LEGAL_AGREEMENT_URL,
   makeStagingDir,
   persistPublishedId,
+  prepareWorkshopDirectory,
   PREVIEW_MAX_BYTES,
   readPublishInfo,
   runBridge,
@@ -88,7 +90,10 @@ import {
 } from "../../steam/legacyWorkshop";
 import type { PublishInfo } from "../../steam/workshop";
 import { bbcodeToMarkdown, markdownToBBCode } from "../../steam/bbcodeMarkdown";
-import { gameDocsSubdir } from "../../config";
+import { gameDocsSubdir, readConfig } from "../../config";
+import { readMachineSetting, writeMachineSetting } from "../../machineSettings";
+import { readProjectAuthoringSettings } from "../../projectConfigFile";
+import { inspectProjectSetting, saveProjectSetting } from "../../projectSettings";
 import { tabIcon } from "../tabIcons";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
 import { decodeDds, downscale, encodePng } from "@px-lsp/server/dds";
@@ -101,6 +106,7 @@ import type {
   ProgressJob,
   PullParts,
   WorkshopModInfo,
+  EncodedPreview,
 } from "./messages";
 
 export interface WorkshopPanelOptions {
@@ -137,11 +143,17 @@ export class WorkshopPanel {
   private options: WorkshopPanelOptions;
   private active: string | null;
   private legacyKey: string | null = null;
+  private legacyZip:
+    { id: string; file: string; root: string; legacyKey: string | null; stamp: string } | undefined;
   private messages = Promise.resolve();
   private uploadAbort: AbortController | undefined;
   private disposables: vscode.Disposable[] = [];
   private disposed = false;
   private uploading = false;
+  private previewWaiters = new Map<
+    string,
+    { resolve: (image: EncodedPreview) => void; reject: (error: Error) => void }
+  >();
   /** Folders the webview may load files from; grows when one turns up outside them. */
   private resourceRoots: vscode.Uri[];
   /** Titles of required items looked up on Steam, so a re-render never re-asks. */
@@ -196,8 +208,20 @@ export class WorkshopPanel {
     this.disposables.push(watchBundle(source, "workshop", this.panel, render));
     this.panel.webview.onDidReceiveMessage(
       (message: AppToHost) => {
+        if (message.type === "previewPrepared") {
+          if (!this.matchesTarget(message)) return;
+          const waiter = this.previewWaiters.get(message.id);
+          if (!waiter) return;
+          this.previewWaiters.delete(message.id);
+          if (message.image) waiter.resolve(message.image);
+          else waiter.reject(new Error(message.error));
+          return;
+        }
         if (message.type === "stopWaiting") {
           this.uploadAbort?.abort();
+          for (const waiter of this.previewWaiters.values())
+            waiter.reject(new Error("Image preparation cancelled. Nothing was uploaded."));
+          this.previewWaiters.clear();
           return;
         }
         if (message.type === "refresh") {
@@ -298,42 +322,29 @@ export class WorkshopPanel {
       );
   }
 
-  private changelogNote(root: string, version: string | null) {
-    return resolveChangeNote(
-      this.listingDirectory(root),
-      this.legacyKey
-        ? DEFAULT_CHANGELOG
-        : vscode.workspace.getConfiguration("px").get<string>("workshop.changelog"),
-      version
+  private changelogSource(root: string): string {
+    if (this.legacyKey) return DEFAULT_CHANGELOG;
+    return (
+      readProjectAuthoringSettings(root, this.options.meta, this.options.meta.id)?.publishing?.changelog ??
+      readMachineSetting<string>("workshop.changelog", this.options.meta.id, vscode.Uri.file(root)) ??
+      DEFAULT_CHANGELOG
     );
   }
 
-  private async createLegacy(): Promise<void> {
+  private changelogNote(root: string, version: string | null) {
+    return resolveChangeNote(this.listingDirectory(root), this.changelogSource(root), version);
+  }
+
+  private async createLegacy(input: string, archive?: LegacyZip): Promise<void> {
     if (!this.active || this.uploading) return;
     const root = this.active;
     const target = this.target();
     const info = this.publishInfo(root, true);
     if (!info) throw new Error("Create a mod descriptor before creating a legacy version.");
-    const seed = info.supportedVersion ?? detectGameVersion(this.options.gamePath) ?? "";
-    const value = /^\d+\.\d+/.exec(seed)?.[0];
-    const input = await vscode.window.showInputBox({
-      title: "Create legacy Workshop version",
-      prompt:
-        "Game version. Two components cover all patches, for example 1.19.*. An exact patch version is optional.",
-      value: value ? `${value}.*` : "",
-      validateInput: (v) => {
-        try {
-          legacyVersion(v);
-          return null;
-        } catch (e) {
-          return String((e as Error).message);
-        }
-      },
-    });
-    if (input === undefined) return;
+    legacyVersion(input);
     if (!this.matchesTarget({ target }))
       throw new Error("The selected item changed. Create the legacy version from the current item.");
-    // Re-read after the prompt, so current editor edits are the copied source.
+    // The current editor documents are the copied source.
     const current = this.publishInfo(root, true)!;
     const mainDir = workshopDirFor(root, this.options.meta);
     const destination = legacyDirectory(mainDir, legacyVersion(input).key);
@@ -429,7 +440,8 @@ export class WorkshopPanel {
         this.endProgress("download");
       }
     }
-    const key = createLegacyVersion(mainDir, input, current, readSource);
+    if (this.disposed || !this.matchesTarget({ target })) return;
+    const key = createLegacyVersion(mainDir, input, current, readSource, archive);
     if (requirements) writeDependencies(destination, requirements);
     if (gallery) {
       const previewsDir = path.join(destination, PREVIEWS_DIR);
@@ -449,7 +461,7 @@ export class WorkshopPanel {
     this.watchListing();
     await this.postInfo();
     this.notify(
-      `Created legacy ${legacyVersion(input).supportedVersion}. Its first upload uses this project's current mod files. Later uploads can change Workshop information only.`
+      `Created legacy ${legacyVersion(input).supportedVersion}. Its first upload uses ${archive ? `saved files from ${archive.name}` : "this project's current mod files"}. Later uploads can change Workshop information only.`
     );
   }
 
@@ -494,13 +506,7 @@ export class WorkshopPanel {
 
   /** Where the changenote lookup points: px.workshop.changelog, resolved. */
   private changelogPath(root: string): string {
-    return path.resolve(
-      this.listingDirectory(root),
-      (this.legacyKey
-        ? DEFAULT_CHANGELOG
-        : (vscode.workspace.getConfiguration("px").get<string>("workshop.changelog") ?? "")
-      ).trim() || DEFAULT_CHANGELOG
-    );
+    return path.resolve(this.listingDirectory(root), this.changelogSource(root).trim() || DEFAULT_CHANGELOG);
   }
 
   static show(context: vscode.ExtensionContext, options: WorkshopPanelOptions): void {
@@ -527,6 +533,8 @@ export class WorkshopPanel {
     if (this.disposed) return;
     this.disposed = true;
     this.uploadAbort?.abort();
+    for (const waiter of this.previewWaiters.values()) waiter.reject(new Error("Workshop panel closed."));
+    this.previewWaiters.clear();
     WorkshopPanel.instance = undefined;
     clearTimeout(this.listingReload);
     for (const w of this.listingWatchers.splice(0)) w.dispose();
@@ -536,6 +544,28 @@ export class WorkshopPanel {
 
   private post(message: HostToApp): void {
     if (!this.disposed) void this.panel.webview.postMessage({ target: this.target(), ...message });
+  }
+
+  private encodePreview(dataUri: string): Promise<EncodedPreview> {
+    if (this.disposed) return Promise.reject(new Error("Workshop panel closed."));
+    const id = makeNonce();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.previewWaiters.delete(id);
+        reject(new Error("Image preparation timed out. Reopen the Workshop panel and try again."));
+      }, 30_000);
+      this.previewWaiters.set(id, {
+        resolve: (image) => {
+          clearTimeout(timer);
+          resolve(image);
+        },
+        reject: (error) => {
+          clearTimeout(timer);
+          reject(error);
+        },
+      });
+      this.post({ type: "preparePreview", id, dataUri, maxBytes: PREVIEW_MAX_BYTES });
+    });
   }
 
   /**
@@ -661,12 +691,13 @@ export class WorkshopPanel {
       legacyKey: this.legacyKey,
       legacyVersions: legacyVersions(workshopDirFor(root, meta)),
       legacyContent: this.legacyKey ? readLegacyItem(workshopDir).legacy.content : null,
+      legacyArchive: this.legacyKey ? (readLegacyItem(workshopDir).legacy.archive ?? null) : null,
       visibility: (readItemJson(workshopDir)?.visibility as WorkshopModInfo["visibility"]) ?? null,
       gameName: meta.name,
       descriptorMissing: info === null,
       name: info?.name ?? null,
       tags: info?.tags ?? [],
-      knownTags: meta.descriptor === "mod" ? [...LAUNCHER_TAGS] : [],
+      knownTags: meta.workshopTagGroups?.flatMap((group) => group.tags) ?? [],
       publishedId: info?.publishedId ?? null,
       description: info?.description ?? "",
       translations: info?.translations ?? {},
@@ -682,7 +713,9 @@ export class WorkshopPanel {
           ? changelogPath
           : changelogRel.replace(/\\/g, "/"),
       workshopDirCustom:
-        (vscode.workspace.getConfiguration("px").get<string>("workshop.dir") ?? "").trim() !== "",
+        (
+          readMachineSetting<string>("workshop.dir", this.options.meta.id, vscode.Uri.file(root)) ?? ""
+        ).trim() !== "",
       changelogKind: changelogKindOf(changelogPath),
       changelogCandidates: changelogCandidates(root, workshopDir, changelogPath),
       version: info?.version ?? null,
@@ -770,6 +803,7 @@ export class WorkshopPanel {
     if (!this.active) return;
     const target = this.target();
     try {
+      await prepareWorkshopDirectory(this.active, this.options.meta);
       const info = await this.buildInfo(this.active);
       if (this.matchesTarget({ target })) this.post({ type: "info", active: this.active, info });
     } catch (e) {
@@ -786,6 +820,7 @@ export class WorkshopPanel {
       return;
     }
     if (this.uploading && message.type !== "ready") return;
+    if (root) await prepareWorkshopDirectory(root, meta);
     switch (message.type) {
       case "ready":
         await this.postInit();
@@ -809,9 +844,79 @@ export class WorkshopPanel {
         this.watchListing();
         await this.postInfo();
         return;
-      case "createLegacy":
-        await this.createLegacy();
+      case "pickLegacyZip": {
+        if (!root) return;
+        try {
+          const selected = await vscode.window.showOpenDialog({
+            title: "Choose legacy mod files",
+            openLabel: "Use ZIP",
+            canSelectFiles: true,
+            canSelectFolders: false,
+            canSelectMany: false,
+            filters: { "ZIP archives": ["zip"] },
+          });
+          const file = selected?.[0]?.fsPath;
+          if (file && !this.disposed && this.matchesTarget(message)) {
+            const stat = fs.statSync(file);
+            if (!stat.isFile()) throw new Error("Choose a ZIP file.");
+            const id = makeNonce();
+            this.legacyZip = {
+              id,
+              file,
+              root,
+              legacyKey: this.legacyKey,
+              stamp: `${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}`,
+            };
+            this.post({
+              type: "legacyZipPicked",
+              request: message.request,
+              archive: { id, name: path.basename(file) },
+            });
+          } else this.post({ type: "legacyZipPicked", request: message.request, archive: null });
+        } catch (error) {
+          this.post({
+            type: "legacyZipPicked",
+            request: message.request,
+            archive: null,
+            error: friendlyError(error, meta),
+          });
+        }
         return;
+      }
+      case "createLegacy": {
+        this.post({ type: "uploadState", busy: true });
+        let archive: LegacyZip | undefined;
+        try {
+          legacyVersion(message.version);
+          if (message.archive !== undefined) {
+            const selected = this.legacyZip;
+            if (
+              !selected ||
+              selected.id !== message.archive ||
+              selected.root !== root ||
+              selected.legacyKey !== this.legacyKey
+            )
+              throw new Error("Choose the legacy ZIP again before creating this version.");
+            const stat = fs.statSync(selected.file);
+            if (`${stat.size}:${stat.mtimeMs}:${stat.ctimeMs}` !== selected.stamp)
+              throw new Error("The ZIP changed since you selected it. Choose it again.");
+            this.uploading = true;
+            this.uploadAbort = new AbortController();
+            this.progress("download", `Importing ${path.basename(selected.file)}`, 0, 1);
+            archive = await importLegacyZip(selected.file, meta, this.uploadAbort.signal);
+            this.uploadAbort.signal.throwIfAborted();
+            this.uploading = false;
+          }
+          await this.createLegacy(message.version, archive);
+        } finally {
+          this.uploading = false;
+          this.uploadAbort = undefined;
+          this.endProgress("download");
+          this.post({ type: "uploadState", busy: false });
+          archive?.dispose();
+        }
+        return;
+      }
       case "stopWaiting":
         this.uploadAbort?.abort();
         return;
@@ -1073,9 +1178,24 @@ export class WorkshopPanel {
     const rel = path.relative(workshopDir, target).split(path.sep).join("/");
     const value = rel !== "" && !rel.startsWith("..") ? rel : target;
     try {
-      await vscode.workspace
-        .getConfiguration("px", vscode.Uri.file(root))
-        .update("workshop.changelog", value, vscode.ConfigurationTarget.WorkspaceFolder);
+      const uri = vscode.Uri.file(root);
+      const cfg = { ...readConfig(uri), modPath: root, gameId: this.options.meta.id };
+      const inspected = await inspectProjectSetting(cfg, "workshop.changelog");
+      if (inspected.error) throw new Error(inspected.error);
+      if (value === rel) {
+        await saveProjectSetting(cfg, "workshop.changelog", value, inspected.stamp);
+      } else {
+        await writeMachineSetting(
+          "workshop.changelog",
+          value,
+          cfg.gameId,
+          vscode.workspace.workspaceFile ? "folder" : "workspace",
+          undefined,
+          uri
+        );
+        if (inspected.ownValue !== undefined)
+          await saveProjectSetting(cfg, "workshop.changelog", undefined, inspected.stamp);
+      }
       this.notify(`Changenotes now come from ${target}.`);
     } catch (e) {
       this.notifyError(`Setting px.workshop.changelog failed - ${String(e)}`, e);
@@ -1569,11 +1689,52 @@ export class WorkshopPanel {
     this.post({ type: "uploadState", busy: true });
     step(steps[0] ?? "Upload", "starting…");
     let staging: string | null = null;
+    let previewStaging: string | null = null;
     let unlock: (() => void) | undefined;
     let refreshAfterFailure = false;
     let pendingLegacyStage: "creating" | "submitted" | undefined;
     try {
       if (legacy) unlock = lockLegacyUpload(wsDir);
+      if (message.content && legacy && readLegacyItem(wsDir).legacy.archive) {
+        step("Mod files", "preparing saved ZIP files…");
+        staging = makeStagingDir();
+        const content = path.join(wsDir, "content");
+        this.assertSaved(content);
+        stageLegacyArchive(content, staging, meta);
+      }
+      const previews = message.previews ? readPreviews(wsDir) : null;
+      let previewImages: string[] | undefined;
+      if (previews) {
+        const large = previews.images.filter((file) => fs.statSync(file).size >= PREVIEW_MAX_BYTES);
+        const gifs = large.filter((file) => path.extname(file).toLowerCase() === ".gif");
+        if (gifs.length)
+          throw new Error(
+            `GIF previews must be under 1 MB to preserve animation: ${gifs.map((file) => path.basename(file)).join(", ")}. Resize them before uploading.`
+          );
+        let resizeConfirmed = false;
+        if (large.length) {
+          const choice = await vscode.window.showWarningMessage(
+            `${large.length} preview image(s) exceed Steam's 1 MB limit: ${large.map((file) => path.basename(file)).join(", ")}. ` +
+              `Create smaller copies and continue uploading? Full-size originals move to ${path.join(wsDir, PREVIEW_ORIGINALS_DIR)}. Smaller copies replace them in ${PREVIEWS_DIR}/ and keep their gallery order.`,
+            "Create Smaller Copies",
+            "Cancel Upload"
+          );
+          if (choice !== "Create Smaller Copies" || this.disposed) return;
+          resizeConfirmed = true;
+        }
+        step("Previews", "preparing gallery images…");
+        previewStaging = makeStagingDir();
+        previewImages = await preparePreviewImages(
+          previews.images,
+          previewStaging,
+          resizeConfirmed ? wsDir : null,
+          (dataUri) => this.encodePreview(dataUri),
+          (message) => log(`workshop: ${message}`),
+          this.uploadAbort.signal,
+          () => this.assertSaved(path.join(wsDir, PREVIEWS_DIR))
+        );
+      }
+      if (this.disposed || this.uploadAbort.signal.aborted) return;
       let needsAgreement = false;
       const createdNow = !itemId;
       if (!itemId) {
@@ -1612,14 +1773,13 @@ export class WorkshopPanel {
               ? path.join(root, "descriptor.mod")
               : path.join(root, ".px-toolkit", "workshop.json")
           );
-          persistPublishedId(root, meta, itemId);
+          await persistPublishedId(root, meta, itemId);
         }
         log(`workshop: created item ${itemId} for ${root}`);
       }
 
       // One query serves the preview replacement and the requirement diff;
       // a just-created item has nothing on Steam yet.
-      const previews = message.previews ? readPreviews(wsDir) : null;
       const deps = message.requirements ? readDependencies(wsDir) : null;
       if (deps) steps.push("Requirements");
       const liveItem = !createdNow && (previews || deps) ? await this.queryItem(itemId) : null;
@@ -1631,13 +1791,7 @@ export class WorkshopPanel {
         const main: SubmitSpec = {};
         if (message.previews && previews) {
           step("Previews", "listing the gallery…");
-          const small = previews.images.filter((p) => fs.statSync(p).size < PREVIEW_MAX_BYTES);
-          if (small.length < previews.images.length)
-            this.notify(
-              `${previews.images.length - small.length} preview image(s) of 1 MB or more were skipped; Steam rejects them.`,
-              "warn"
-            );
-          main.previewImages = small;
+          main.previewImages = previewImages;
           main.previewVideos = previews.videos;
           const count = liveItem?.additionalPreviews.length ?? 0;
           main.removePreviewIndexes = Array.from({ length: count }, (_, i) => i);
@@ -1677,23 +1831,26 @@ export class WorkshopPanel {
         // and a details pass can leave a description edited on Steam alone.
         if (message.description) main.description = descriptionBBCode(info, "", info.description ?? "");
         if (message.content) {
-          step("Mod files", "preparing files…");
-          if (ensurePxIgnore(root)) this.explainPxIgnore(root);
-          staging = makeStagingDir();
-          stageContent(root, staging, [workshopDirFor(root, meta)]);
-          // Preserve unsaved source edits in the staged copy, leaving the editor and disk untouched.
-          for (const document of vscode.workspace.textDocuments) {
-            if (
-              !document.isDirty ||
-              document.uri.scheme !== "file" ||
-              !isInsideDir(root, document.uri.fsPath)
-            )
-              continue;
-            const dest = path.join(staging, path.relative(root, document.uri.fsPath));
-            if (!fs.existsSync(dest) || !fs.statSync(dest).isFile()) continue;
-            const original = fs.readFileSync(dest);
-            const bom = original[0] === 0xef && original[1] === 0xbb && original[2] === 0xbf ? "\uFEFF" : "";
-            fs.writeFileSync(dest, bom + document.getText().replace(/^\uFEFF/, ""), "utf8");
+          if (!staging) {
+            step("Mod files", "preparing files…");
+            staging = makeStagingDir();
+            if (ensurePxIgnore(root)) this.explainPxIgnore(root);
+            stageContent(root, staging, [workshopDirFor(root, meta)]);
+            // Preserve unsaved source edits in the staged copy, leaving the editor and disk untouched.
+            for (const document of vscode.workspace.textDocuments) {
+              if (
+                !document.isDirty ||
+                document.uri.scheme !== "file" ||
+                !isInsideDir(root, document.uri.fsPath)
+              )
+                continue;
+              const dest = path.join(staging, path.relative(root, document.uri.fsPath));
+              if (!fs.existsSync(dest) || !fs.statSync(dest).isFile()) continue;
+              const original = fs.readFileSync(dest);
+              const bom =
+                original[0] === 0xef && original[1] === 0xbb && original[2] === 0xbf ? "\uFEFF" : "";
+              fs.writeFileSync(dest, bom + document.getText().replace(/^\uFEFF/, ""), "utf8");
+            }
           }
           if (legacy) prepareLegacyContent(staging, meta, info, itemId);
           main.contentPath = staging;
@@ -1811,6 +1968,7 @@ export class WorkshopPanel {
       this.endProgress("upload");
       try {
         if (staging) fs.rmSync(staging, { recursive: true, force: true });
+        if (previewStaging) fs.rmSync(previewStaging, { recursive: true, force: true });
         unlock?.();
       } catch (e) {
         this.notifyError(`Upload cleanup failed: ${String(e)}`, e);

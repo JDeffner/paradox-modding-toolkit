@@ -8,6 +8,14 @@ beside the binary where that is noted.
 
 ---
 
+## Standalone CLI runtime
+
+The CLI installs [Sharp](https://github.com/lovell/sharp) (Apache-2.0) as a native runtime dependency for common image formats and resizing. Sharp's platform packages include libvips (LGPL-2.1-or-later) and codec dependencies with their own notices. Those packages provide their license and third-party notice files; they are installed through the package manager rather than embedded in the JavaScript bundle. Upstream distribution and license details: https://sharp.pixelplumbing.com/install/.
+
+The `pxtk` build bundles the [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) (MIT, Anthropic PBC), [Zod](https://github.com/colinhacks/zod) (MIT, Colin McDonnell), and [VS Code language-server libraries](https://github.com/microsoft/vscode-languageserver-node) (MIT, Microsoft), plus their runtime dependencies. The build records every included package and version in `dist/licenses/dependencies.json` and copies each upstream license into that directory. These license files ship in the CLI tarball. Per-game data keeps the notices included with the server data.
+
+---
+
 ## cwtools-eu5-config
 
 - Upstream: https://github.com/kaiser-chris/cwtools-eu5-config
@@ -261,4 +269,80 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+```
+
+---
+
+## yauzl
+
+- Upstream: https://github.com/thejoshwolfe/yauzl
+- Bundled version: 3.4.0
+
+The VS Code extension bundles yauzl for streaming legacy mod ZIP imports.
+
+```
+The MIT License (MIT)
+
+Copyright (c) 2014 Josh Wolfe
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+---
+
+## Steam Workshop tag names
+
+The bundled `packages/server/data/<game>/workshopTags.json` files contain public tag names and group labels from each game's Steam Workshop configuration. They are factual lookup data, harvested with `scripts/build-workshop-tags.ts`, with their source URLs recorded in the files. No Steam page code or artwork is redistributed.
+
+- [Crusader Kings III](https://steamcommunity.com/workshop/browse/?appid=1158310&l=english)
+- [Victoria 3](https://steamcommunity.com/workshop/browse/?appid=529340&l=english)
+- [Europa Universalis V](https://steamcommunity.com/workshop/browse/?appid=3450310&l=english)
+
+## pend
+
+- Upstream: https://github.com/andrewrk/node-pend
+- Bundled version: 1.2.0
+
+The VS Code extension bundles pend for streaming legacy mod ZIP imports.
+
+```
+The MIT License (Expat)
+
+Copyright (c) 2014 Andrew Kelley
+
+Permission is hereby granted, free of charge, to any person
+obtaining a copy of this software and associated documentation files
+(the "Software"), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge,
+publish, distribute, sublicense, and/or sell copies of the Software,
+and to permit persons to whom the Software is furnished to do so,
+subject to the following conditions:
+
+The above copyright notice and this permission notice shall be
+included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
+BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "pxtk": {
+      "command": "pxtk",
+      "args": ["mcp"]
+    }
+  }
+}

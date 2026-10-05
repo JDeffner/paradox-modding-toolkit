@@ -27,7 +27,11 @@ if (process.argv.includes("--watch")) {
   await build(options);
   await build({
     absWorkingDir: extensionRoot,
-    entryPoints: { steamBridge: "src/steam/bridge.ts", ddsWorker: "src/webviews/guiEditor/decodeWorker.ts" },
+    entryPoints: {
+      steamBridge: "src/steam/bridge.ts",
+      ddsWorker: "src/webviews/guiEditor/decodeWorker.ts",
+      migrationWorker: "../server/src/migrations/node/worker.ts",
+    },
     outdir: "dist",
     bundle: true,
     format: "cjs",

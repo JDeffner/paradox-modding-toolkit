@@ -6,6 +6,7 @@ import { detectGameId } from "../gameDetect";
 import { metaFor } from "../meta";
 import { findGameFolder, findSteamLibraries } from "../steamDetect";
 import { discoverMods, modInFolder, type ModLocation } from "./discover";
+import { readMachineSetting } from "../machineSettings";
 
 /** Add another root without replacing the current workspace or opening a window. */
 export async function addModToWorkspace(cfg: PxConfig, log: (message: string) => void): Promise<void> {
@@ -52,7 +53,7 @@ export async function addModToWorkspace(cfg: PxConfig, log: (message: string) =>
           workshop: true,
         }));
       } else {
-        const projects = vscode.workspace.getConfiguration("px").get<string>("modProjectsDir")?.trim();
+        const projects = readMachineSetting<string>("modProjectsDir", cfg.gameId)?.trim();
         if (!projects) {
           const action = await vscode.window.showInformationMessage(
             "Set your mod projects folder before searching it.",

@@ -27,7 +27,7 @@ This is a beta. Check generated content in the game before publishing it. After 
 
 ## At the cursor
 
-- **Toolkit Settings:** open Project > Settings > All settings to search, filter and reset settings. Choose User, Workspace or a supported folder scope before saving. Drafts survive view changes, and stale saves leave newer values intact.
+- **Toolkit Settings:** open Project > Settings > All settings for one searchable catalogue. Each setting labels its save destination and active source. Use Details to choose another destination; question-mark help appears on hover or keyboard focus. Drafts survive context changes, and stale saves leave newer values intact.
 
 - **Live editing:** suggestions, navigation and rename follow unsaved edits. Problems update when referenced events or required translations change in another file.
 
@@ -39,6 +39,9 @@ This is a beta. Check generated content in the game before publishing it. After 
 - **Section folding:** `### Title` or longer hash headings fold through the next heading or the end of the file, across closing braces.
 - **Validation:** instant structural checks for malformed files, encodings and folder mistakes. CK3 and Victoria 3 also integrate tiger for deeper validation.
 - **Localization:** coverage, inlay hints, quick fixes and workflows for adding languages or making a translation mod.
+- **Project settings:** shared authoring rules travel with `.px-toolkit/project.json`; personal paths stay in your VS Code User profile. Both are available in the same settings catalogue. Existing settings upgrade with conflict reporting and source preservation.
+- **Mod Compatibility (experimental):** exact game-version routes, reusable compatibility notes and migration recipes, required choices, reviewed changes and recovery. Includes CK3 faith/rite and portrait mask mip migrations. Enable `px.experimentalFeatures` to try it; target gameplay remains unverified.
+- **Compatibility Patch (experimental):** combine an ordered set of CK3 mods, save contribution and field decisions, and review affected choices after updates. Build a separate patch with guarded writes, preservation of manual output edits and recovery. Unsupported work stays visible. Enable `px.experimentalFeatures` to try it.
 - **Context actions:** right-click files, definitions, overrides and localization references to open, compare or edit the selected source. Project shows the current mod, with **All Tools** and **Customize** in its title bar.
 - **BBCode preview:** choose **BBCode Preview** from VS Code's editor selector or open it beside the source. Preview includes unsaved edits and preserves the BBCode language mode.
 
@@ -132,6 +135,7 @@ The extension stands on work by others. The key sources and inspirations:
 - [tiger](https://github.com/amtep/tiger) by amtep, the validator behind the
   ck3-tiger and vic3-tiger diagnostics integration.
 - [pngjs](https://github.com/pngjs/pngjs) (MIT), bundled for PNG decoding that preserves packed mask channels, including RGB under zero alpha.
+- [yauzl](https://github.com/thejoshwolfe/yauzl) and [pend](https://github.com/andrewrk/node-pend) (MIT), bundled for reading legacy mod ZIP archives without loading the archive into memory.
 - [cwtools](https://github.com/cwtools/cwtools) and cwtools-vscode, for the
   landscape and design inspiration.
 - [kaiser-chris/cwtools-eu5-config](https://github.com/kaiser-chris/cwtools-eu5-config),
@@ -143,6 +147,7 @@ The extension stands on work by others. The key sources and inspirations:
   [ATTRIBUTION.md](https://github.com/JDeffner/paradox-modding-toolkit/blob/main/packages/server/data/ck3/wikidocs/ATTRIBUTION.md)).
 - Paradox's own in-game `_*.info` format docs, the primary ground truth for the
   CK3 schema layers. No game assets are redistributed.
+- [Steam Workshop](https://steamcommunity.com/workshop/) supplies the public category and compatibility-version tag names bundled for each game's upload picker.
 
 The complete table with licenses is on the
 [Credits wiki page](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Credits).

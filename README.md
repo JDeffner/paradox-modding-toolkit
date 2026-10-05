@@ -39,6 +39,10 @@ Open **Start Here** in the PX Toolkit sidebar to create a mod or find an existin
 
 Open **Toolkit Settings** from Project > Settings > All settings to search, filter and reset settings, with an explicit choice of save scope. CK3 character-history edits preserve source formatting and comments. DDS conversion can match a reference texture or write a custom mip chain. Workshop legacy listings keep a separate item for each saved game version; their first upload uses the current project files, and later uploads change listing information only.
 
+Shared mod rules live in `.px-toolkit/project.json`; personal game and workspace paths stay in the VS Code User profile. Older settings upgrade on trusted startup, preserving legacy files and reporting conflicts. The optional **Mod Compatibility** workflow uses exact game-version routes, reusable notes and recipes, human decisions, reviewed edits and recovery. CK3 faith/rite and portrait mask migrations are experimental and off by default. They do not establish target-game compatibility.
+
+The separate experimental **Compatibility Patch** workflow maintains a patch for an ordered set of CK3 mods. Save how conflicting contributions should combine, review changed decisions after an update, and preserve independent manual output edits. Unsupported rules and assets remain explicit manual work. Both compatibility workflows require `px.experimentalFeatures`, which is off by default.
+
 Create your first mod with the guided tutorial, convert batches of images, and get suggestions and navigation that follow unsaved edits. Problems update when referenced events or required translations change in another file.
 
 Right-click files, definitions, overrides or localization references to act on that source. The Project panel shows the current mod, with **All Tools** and **Customize** in its title bar. BBCode files offer **BBCode Preview** in VS Code's editor selector and can preview unsaved edits beside the source.
@@ -233,3 +237,12 @@ Code codicons (CC BY 4.0), all in
 redistributed.
 
 PNG conversion bundles [pngjs](https://github.com/pngjs/pngjs) (MIT) to preserve all mask channels. Its license is included in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+The standalone CLI also bundles these libraries and their transitive dependencies. Its build includes the actual license texts in `dist/licenses/`.
+
+| Source | Use | License |
+|---|---|---|
+| [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) | Local stdio MCP tools | MIT |
+| [Zod](https://github.com/colinhacks/zod) | Configuration and tool-input validation | MIT |
+| [Sharp](https://github.com/lovell/sharp) | CLI image decoding, encoding and resizing; installed native dependency | Apache-2.0; libvips LGPL-2.1-or-later |
+| [VS Code language-server libraries](https://github.com/microsoft/vscode-languageserver-node) | LSP transport and bundled server | MIT |

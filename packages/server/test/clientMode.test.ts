@@ -17,7 +17,7 @@ import { provideCodeActions, type LocEditContext } from "../src/features/codeAct
 import { provideHover } from "../src/features/hover";
 import { provideGuiHover } from "../src/features/guiLanguage";
 import { ServerData } from "../src/serverData";
-import type { Diagnostic } from "vscode-languageserver/node";
+import type { Diagnostic, TextDocumentEdit, TextEdit } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
 
 /** Install the capabilities a client declaring `init` would get. */
@@ -262,6 +262,33 @@ describe("code actions per client mode", () => {
   const stubData = { index: { lookup: () => [] } } as unknown as ServerData;
   const indexedKey = { index: { lookup: () => [{ kind: "loc_key" }] } } as unknown as ServerData;
 
+  function withMod(
+    run: (root: string, write: (file: string, text: string) => string, ctx: LocEditContext) => void
+  ): void {
+    asClient({ clientCommands: false });
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "px-loc-policy-"));
+    const write = (file: string, text: string) => {
+      const target = path.join(root, file);
+      fs.mkdirSync(path.dirname(target), { recursive: true });
+      fs.writeFileSync(target, text);
+      return target;
+    };
+    try {
+      run(root, write, { locLanguage: "english", modRootOf: () => root, locRoots: ["localization"] });
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  }
+
+  const missingActions = (root: string, ctx: LocEditContext) =>
+    provideCodeActions(
+      stubData,
+      doc(fileUri(path.join(root, "common/decisions/d.txt"))),
+      missingLoc.range,
+      [missingLoc],
+      ctx
+    );
+
   it("rich client: command-carrying actions, no edit", () => {
     asClient({ clientCommands: true });
     const actions = provideCodeActions(
@@ -295,20 +322,24 @@ describe("code actions per client mode", () => {
         { edits: { newText: string }[] },
       ];
       expect(createFile.kind).toBe("create");
-      expect(createFile.uri).toContain("zzz_px_lsp_edits_l_english.yml");
+      expect(createFile.uri).toContain("d_l_english.yml");
+      expect(createFile).not.toHaveProperty("options.ignoreIfExists", true);
       expect(textEdit.edits[0].newText).toBe('﻿l_english:\n some_decision_title: ""\n');
     } finally {
       fs.rmSync(modRoot, { recursive: true, force: true });
     }
   });
 
-  it("plain client appends to an existing edits file without recreating it", () => {
+  it("plain client uses the sibling localization file and its entry version", () => {
     asClient({ clientCommands: false });
     const modRoot = fs.mkdtempSync(path.join(os.tmpdir(), "px-locedit-"));
     try {
       const locDir = path.join(modRoot, "localization", "english");
       fs.mkdirSync(locDir, { recursive: true });
-      fs.writeFileSync(path.join(locDir, "zzz_px_lsp_edits_l_english.yml"), '﻿l_english:\n existing: "x"\n');
+      fs.writeFileSync(
+        path.join(locDir, "decisions_l_english.yml"),
+        '\uFEFFl_english:\n some_decision_desc:17 "x"\n'
+      );
       const ctx: LocEditContext = {
         locLanguage: "english",
         modRootOf: () => modRoot,
@@ -320,7 +351,7 @@ describe("code actions per client mode", () => {
       const changes = actions[0].edit!.documentChanges!;
       expect(changes).toHaveLength(1);
       const textEdit = changes[0] as { edits: { newText: string }[] };
-      expect(textEdit.edits[0].newText).toBe(' some_decision_title: ""\n');
+      expect(textEdit.edits[0].newText).toBe(' some_decision_title:17 ""\n');
     } finally {
       fs.rmSync(modRoot, { recursive: true, force: true });
     }
@@ -335,6 +366,171 @@ describe("code actions per client mode", () => {
       [missingLoc]
     );
     expect(actions).toHaveLength(0);
+  });
+
+  it("uses per-mod language, target template and entry-version defaults", () => {
+    withMod((root, write, ctx) => {
+      write(
+        ".px-toolkit/localization.json",
+        JSON.stringify({
+          language: "german",
+          newKeyFile: "localization/{language}/{source}_l_{language}.yml",
+          entryVersion: "zero",
+        })
+      );
+      const [action] = missingActions(root, ctx);
+      const changes = action.edit!.documentChanges!;
+      expect(changes[0]).toMatchObject({
+        kind: "create",
+        uri: fileUri(path.join(root, "localization/german/d_l_german.yml")),
+      });
+      expect(((changes[1] as TextDocumentEdit).edits[0] as TextEdit).newText).toBe(
+        '\uFEFFl_german:\n some_decision_title:0 ""\n'
+      );
+    });
+  });
+
+  it("reads legacy per-mod defaults through resolveConfigDir", () => {
+    withMod((root, write, ctx) => {
+      write(
+        ".ck3modding/localization.json",
+        JSON.stringify({ newKeyFile: "localization/english/chosen_l_english.yml" })
+      );
+      expect(missingActions(root, ctx)[0].edit!.documentChanges![0]).toMatchObject({
+        uri: fileUri(path.join(root, "localization/english/chosen_l_english.yml")),
+      });
+    });
+  });
+
+  it("reads BOM-prefixed localization defaults", () => {
+    withMod((root, write, ctx) => {
+      write(
+        ".px-toolkit/localization.json",
+        "\uFEFF" +
+          JSON.stringify({
+            language: "german",
+            newKeyFile: "localization/german/chosen_l_german.yml",
+          })
+      );
+      const [action] = missingActions(root, ctx);
+      expect(action.disabled).toBeUndefined();
+      expect(action.edit!.documentChanges![0]).toMatchObject({
+        kind: "create",
+        uri: fileUri(path.join(root, "localization/german/chosen_l_german.yml")),
+      });
+    });
+  });
+
+  it("creates localization in the source stage despite an existing other-stage layout", () => {
+    withMod((root, write, ctx) => {
+      ctx.locRoots = ["localization", "in_game/localization", "main_menu/localization"];
+      write(
+        "in_game/localization/replace/english/decisions_l_english.yml",
+        '\uFEFFl_english:\n some_decision_desc:0 "other stage"\n'
+      );
+      const source = doc(fileUri(path.join(root, "main_menu/events/foo.txt")));
+      const [action] = provideCodeActions(stubData, source, missingLoc.range, [missingLoc], ctx);
+      expect(action.disabled).toBeUndefined();
+      expect(action.edit!.documentChanges![0]).toMatchObject({
+        kind: "create",
+        uri: fileUri(path.join(root, "main_menu/localization/english/foo_l_english.yml")),
+      });
+    });
+  });
+
+  it("uses unsaved localization text and guards its edit with the document version", () => {
+    withMod((root, write, ctx) => {
+      const target = write(
+        "localization/english/decisions_l_english.yml",
+        '\uFEFFl_english:\n disk_only:0 "disk"\n'
+      );
+      const dirty =
+        '\uFEFFl_english:\r\n # keep this comment\r\n some_decision_desc:9 "unsaved" # keep\r\n unrelated:4 "keep"\r\n';
+      const open = TextDocument.create(fileUri(target), "paradox-localization", 7, dirty);
+      ctx.openDocuments = [open];
+      const edit = missingActions(root, ctx)[0].edit!.documentChanges![0] as TextDocumentEdit;
+      expect(edit.textDocument).toEqual({ uri: open.uri, version: 7 });
+      const updated = TextDocument.applyEdits(open, edit.edits as TextEdit[]);
+      expect(updated).toContain(' some_decision_title:9 ""\r\n');
+      expect(updated).toContain(' some_decision_desc:9 "unsaved" # keep\r\n');
+      expect(updated).toContain(' unrelated:4 "keep"\r\n');
+      expect(updated).toContain(" # keep this comment\r\n");
+      expect(updated).not.toContain("disk_only");
+      expect(fs.readFileSync(target, "utf8")).toContain("disk_only");
+    });
+  });
+
+  it("routes into a new unsaved localization buffer without creating over it", () => {
+    withMod((root, _write, ctx) => {
+      const uri = fileUri(path.join(root, "localization/english/unsaved_l_english.yml"));
+      ctx.openDocuments = [
+        TextDocument.create(
+          uri,
+          "paradox-localization",
+          3,
+          '\uFEFFl_english:\n some_decision_desc:2 "draft"\n'
+        ),
+      ];
+      const changes = missingActions(root, ctx)[0].edit!.documentChanges!;
+      expect(changes).toHaveLength(1);
+      expect((changes[0] as TextDocumentEdit).textDocument).toEqual({ uri, version: 3 });
+    });
+  });
+
+  it("does not blank an owned key for a stale missing-key diagnostic", () => {
+    withMod((root, write, ctx) => {
+      write(
+        "localization/english/owned_l_english.yml",
+        '\uFEFFl_english:\n some_decision_title:3 "existing value"\n'
+      );
+      expect(missingActions(root, ctx)).toEqual([]);
+    });
+  });
+
+  it("requires a choice when equally related localization files exist", () => {
+    withMod((root, write, ctx) => {
+      write("localization/english/one_l_english.yml", '\uFEFFl_english:\n some_decision_desc:0 "one"\n');
+      write("localization/english/two_l_english.yml", '\uFEFFl_english:\n some_decision_name:0 "two"\n');
+      const [action] = missingActions(root, ctx);
+      expect(action.edit).toBeUndefined();
+      expect(action.disabled?.reason).toContain("one_l_english.yml");
+      expect(action.disabled?.reason).toContain("two_l_english.yml");
+    });
+  });
+
+  it("excludes generated files from inferred targets and rejects configured generated targets", () => {
+    withMod((root, write, ctx) => {
+      write(
+        "localization/english/generated_l_english.yml",
+        '\uFEFF# generated by tool\nl_english:\n some_decision_desc:0 "generated"\n'
+      );
+      expect(missingActions(root, ctx)[0].edit!.documentChanges![0]).toMatchObject({
+        kind: "create",
+        uri: fileUri(path.join(root, "localization/english/d_l_english.yml")),
+      });
+      write(
+        ".px-toolkit/localization.json",
+        JSON.stringify({ newKeyFile: "localization/english/generated_l_english.yml" })
+      );
+      const [action] = missingActions(root, ctx);
+      expect(action.edit).toBeUndefined();
+      expect(action.disabled?.reason).toContain("generated");
+    });
+  });
+
+  it("reports malformed defaults and unreadable targets without fabricating missing files", () => {
+    withMod((root, write, ctx) => {
+      write(".px-toolkit/localization.json", "invalid JSON");
+      expect(missingActions(root, ctx)[0].disabled).toBeDefined();
+      write(
+        ".px-toolkit/localization.json",
+        JSON.stringify({ newKeyFile: "localization/english/blocked_l_english.yml" })
+      );
+      fs.mkdirSync(path.join(root, "localization/english/blocked_l_english.yml"), { recursive: true });
+      const [action] = missingActions(root, ctx);
+      expect(action.edit).toBeUndefined();
+      expect(action.disabled?.reason).toMatch(/EISDIR|EPERM|EACCES/);
+    });
   });
 
   it("a client registering only px.editLocalization gets that action and not the other", () => {

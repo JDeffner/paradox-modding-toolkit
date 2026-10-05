@@ -12,6 +12,16 @@ import { METADATA_REL_PATH, scaffoldMetadata } from "@px-lsp/protocol/descriptor
 import { readModName } from "@px-lsp/protocol/modName";
 import type { PxConfig } from "../config";
 import { gameDocsSubdir } from "../config";
+import {
+  readMachineSetting,
+  writeMachineSetting,
+  prepareMachineSettingsMove,
+  assertMachineSettingsMoveCurrent,
+  applyMachineSettingsMove,
+  rollbackMachineSettingsMove,
+  type MachineSettingsMove,
+} from "../machineSettings";
+import { canonicalConfigPath } from "@px-lsp/protocol/configDir";
 import { detectGameVersion } from "../descriptorMod";
 import { GAME_METAS } from "../gameDetect";
 import { metaFor } from "../meta";
@@ -35,15 +45,15 @@ import { chooseModDestination } from "./open";
 
 const PREFIX = "Paradox Modding Toolkit";
 
-function modProjectsDirSetting(): string | null {
-  const v = (vscode.workspace.getConfiguration("px").get<string>("modProjectsDir") ?? "").trim();
+function modProjectsDirSetting(gameId: string): string | null {
+  const v = (readMachineSetting<string>("modProjectsDir", gameId) ?? "").trim();
   return v === "" ? null : v;
 }
 
 /** The configured projects folder, or ask for one and save it (Global: it is
  * a per-machine choice, like the game path). Null when the user cancels. */
-async function ensureModProjectsDir(): Promise<string | null> {
-  const existing = modProjectsDirSetting();
+async function ensureModProjectsDir(gameId: string): Promise<string | null> {
+  const existing = modProjectsDirSetting(gameId);
   if (existing) {
     fs.mkdirSync(existing, { recursive: true });
     return existing;
@@ -57,9 +67,7 @@ async function ensureModProjectsDir(): Promise<string | null> {
   });
   if (!pick || pick.length === 0) return null;
   const dir = pick[0].fsPath;
-  await vscode.workspace
-    .getConfiguration("px")
-    .update("modProjectsDir", dir, vscode.ConfigurationTarget.Global);
+  await writeMachineSetting("modProjectsDir", dir, gameId, "default");
   return dir;
 }
 
@@ -97,7 +105,7 @@ function scaffoldFor(
  * (junction on Windows — no admin rights needed — symlink elsewhere; linking
  * into the mod folder is the documented external-mod workflow for these
  * games). Returns the link path; throws when the name is taken. */
-function createLauncherLink(
+export function createLauncherLink(
   meta: GameMeta,
   gameModDir: string,
   name: string,
@@ -149,7 +157,7 @@ export async function createModCommand(cfg: PxConfig, log: (msg: string) => void
   const slug = slugify(modName);
 
   const gameModDir = gameDocsSubdir(meta, "mod");
-  const projectsDir = modProjectsDirSetting();
+  const projectsDir = modProjectsDirSetting(meta.id);
   const linkNoun = meta.descriptor === "mod" ? `a small ${slug}.mod link file` : "a folder link";
   type LocItem = vscode.QuickPickItem & { mode: "project" | "game" };
   const loc = await vscode.window.showQuickPick<LocItem>(
@@ -182,12 +190,12 @@ export async function createModCommand(cfg: PxConfig, log: (msg: string) => void
   try {
     const gamePath = (meta.id === cfg.gameId ? cfg.gamePath : null) ?? findGameFolder(meta.name);
     const saveGameChoice = (root: string) => {
-      fs.mkdirSync(path.join(root, ".vscode"), { recursive: true });
-      fs.writeFileSync(
-        path.join(root, ".vscode", "settings.json"),
-        JSON.stringify({ "px.gameId": meta.id }, null, 2) + "\n",
-        { encoding: "utf8", flag: "wx" }
-      );
+      const file = canonicalConfigPath(root, meta, "project.json");
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, JSON.stringify({ version: 1, gameId: meta.id }, null, 2) + "\n", {
+        encoding: "utf8",
+        flag: "wx",
+      });
     };
     if (loc.mode === "game") {
       if (!gameModDir) {
@@ -217,7 +225,7 @@ export async function createModCommand(cfg: PxConfig, log: (msg: string) => void
       return;
     }
 
-    const projects = await ensureModProjectsDir();
+    const projects = await ensureModProjectsDir(meta.id);
     if (!projects) return;
     const projectDir = path.join(projects, projectFolderName(modName));
     if (entryExists(projectDir)) {
@@ -229,7 +237,7 @@ export async function createModCommand(cfg: PxConfig, log: (msg: string) => void
     const file = path.join(contentDir, ...scaffold.relPath);
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, scaffold.text, "utf8");
-    saveGameChoice(projectDir);
+    saveGameChoice(contentDir);
 
     let linkNote: string;
     if (gameModDir) {
@@ -349,7 +357,7 @@ export async function moveModCommand(cfg: PxConfig, log: (msg: string) => void):
     return;
   }
   const gameModDir = gameDocsSubdir(meta, "mod");
-  const projectsDir = modProjectsDirSetting();
+  const projectsDir = modProjectsDirSetting(meta.id);
   const info = detectLayout(content, { gameModDir, projectsDir, descriptor: meta.descriptor });
   if (info.layout === "unknown") {
     void vscode.window.showErrorMessage(
@@ -366,14 +374,14 @@ export async function moveModCommand(cfg: PxConfig, log: (msg: string) => void):
     return;
   }
 
-  const workshopSetting = vscode.workspace.getConfiguration("px").get<string>("workshop.dir");
+  const workshopSetting = readMachineSetting<string>("workshop.dir", meta.id, vscode.Uri.file(content));
   const linkNoun = meta.descriptor === "mod" ? "pointer file" : "folder link";
 
   let plan: MovePlan;
   let oldRoots: string[];
   let linkName: string;
   if (info.layout === "game") {
-    const projects = await ensureModProjectsDir();
+    const projects = await ensureModProjectsDir(meta.id);
     if (!projects) return;
     linkName = path.basename(content);
     const destRoot = path.join(projects, projectFolderName(readModName(content)));
@@ -400,10 +408,12 @@ export async function moveModCommand(cfg: PxConfig, log: (msg: string) => void):
       : info.links.length > 0
         ? path.basename(info.links[0])
         : slugify(readModName(content));
-    // A metadata game's link IS a directory entry under the destination name.
-    for (const link of info.links) fs.rmSync(link);
+    // A metadata game's existing launcher link is removed only after approval.
     const destRoot = path.join(gameModDir, linkName);
-    if (!claimDest(destRoot)) {
+    if (
+      !info.links.some((link) => path.resolve(link).toLowerCase() === path.resolve(destRoot).toLowerCase()) &&
+      !claimDest(destRoot)
+    ) {
       void vscode.window.showErrorMessage(`${PREFIX}: ${destRoot} already exists.`);
       return;
     }
@@ -418,6 +428,15 @@ export async function moveModCommand(cfg: PxConfig, log: (msg: string) => void):
     oldRoots = info.projectDir ? [info.projectDir, content] : [content];
   }
 
+  let personalMove: MachineSettingsMove;
+  try {
+    personalMove = prepareMachineSettingsMove(oldRoots, plan.destRoot, cfg.gameId, content, plan.destContent);
+  } catch (error) {
+    void vscode.window.showErrorMessage(
+      `${PREFIX}: move stopped: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return;
+  }
   const listingLine = plan.listingPinned
     ? " The Workshop listing stays where px.workshop.dir points."
     : plan.relocate.length > 0 || plan.copies.length > 1
@@ -433,17 +452,62 @@ export async function moveModCommand(cfg: PxConfig, log: (msg: string) => void):
   if (ok !== "Move") return;
 
   let files: number;
+  const removedLinks: { link: string; target: string }[] = [];
+  const restoreLinks = () => {
+    for (const { link, target } of removedLinks) {
+      if (fs.existsSync(link)) {
+        const incomplete = `${link}.px-move-incomplete-${Date.now()}`;
+        if (fs.existsSync(incomplete))
+          throw new Error(`Cannot preserve the incomplete destination at ${incomplete}`);
+        fs.renameSync(link, incomplete);
+        log(`incomplete move preserved at ${incomplete}`);
+      }
+      fs.symlinkSync(target, link, process.platform === "win32" ? "junction" : "dir");
+    }
+  };
   try {
+    assertMachineSettingsMoveCurrent(personalMove);
+    for (const link of info.links) {
+      const target = fs.readlinkSync(link);
+      fs.rmSync(link);
+      removedLinks.push({ link, target });
+    }
     files = runPlan(plan);
+    await applyMachineSettingsMove(personalMove);
   } catch (err) {
+    let restoreError = "";
+    try {
+      restoreLinks();
+    } catch (error) {
+      restoreError = ` Launcher link restore failed: ${String(error)}`;
+    }
     void vscode.window.showErrorMessage(
-      `${PREFIX}: move stopped before anything was removed: ${err instanceof Error ? err.message : String(err)}`
+      `${PREFIX}: move stopped; the source mod was kept: ${err instanceof Error ? err.message : String(err)}${restoreError}`
     );
     return;
   }
 
   // From here the destination holds everything; the rest is wiring and cleanup.
   syncDescriptorPath(plan.destContent);
+  const expectedSwap = (vscode.workspace.workspaceFolders ?? []).some((folder) =>
+    oldRoots.some(
+      (root) => path.resolve(root).toLowerCase() === path.resolve(folder.uri.fsPath).toLowerCase()
+    )
+  );
+  const swapped = swapWorkspaceFolder(oldRoots, plan.destRoot);
+  if (!swapped && expectedSwap) {
+    let restoreError = "";
+    try {
+      await rollbackMachineSettingsMove(personalMove);
+      restoreLinks();
+    } catch (error) {
+      restoreError = ` Restore failed: ${String(error)}`;
+    }
+    void vscode.window.showErrorMessage(
+      `${PREFIX}: VS Code could not replace the workspace folder. The source mod was kept.${restoreError}`
+    );
+    return;
+  }
   let linkNote: string;
   try {
     if (plan.direction === "toProjects") {
@@ -471,7 +535,6 @@ export async function moveModCommand(cfg: PxConfig, log: (msg: string) => void):
     linkNote = `launcher ${linkNoun} NOT updated (${err instanceof Error ? err.message : String(err)})`;
   }
 
-  const swapped = swapWorkspaceFolder(oldRoots, plan.destRoot);
   const retired = await retireAll(plan.retire);
   if (plan.pruneIfEmpty) {
     try {

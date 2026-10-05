@@ -5,7 +5,12 @@ import { dataHealthLines, onboardingReadiness } from "../src/dataHealth";
 
 vi.mock("vscode", () => ({
   commands: { executeCommand: vi.fn(async () => undefined) },
-  workspace: { getConfiguration: () => ({ get: () => "configured" }) },
+  workspace: {
+    getConfiguration: () => ({
+      get: () => "configured",
+      inspect: (key: string) => ({ globalValue: key === "machinePaths" ? undefined : "configured" }),
+    }),
+  },
   window: {
     showInformationMessage: vi.fn(async () => undefined),
     createStatusBarItem: () => ({}),

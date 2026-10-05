@@ -14,6 +14,7 @@ import { findGameFolder } from "./steamDetect";
 import { downloadLatestTiger, findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
 import { StartupNotices } from "./notifications";
 import { metaFor, scriptDocsDir } from "./meta";
+import { readMachineSetting, writeMachineSetting } from "./machineSettings";
 
 export interface SetupDeps {
   storageDir: string;
@@ -58,9 +59,7 @@ export async function selectGameFolder(deps: SetupDeps): Promise<void> {
     );
     return;
   }
-  await vscode.workspace
-    .getConfiguration("px")
-    .update("gamePath", folder, vscode.ConfigurationTarget.Workspace);
+  await writeMachineSetting("gamePath", folder, cfg.gameId, "workspace");
   await deps.refresh();
   void vscode.window
     .showInformationMessage(`${meta.shortName} game folder saved for this workspace.`, "Check Setup")
@@ -118,7 +117,6 @@ export async function downloadTigerCommand(deps: SetupDeps, askFirst: boolean): 
 
 export async function runSetup(deps: SetupDeps): Promise<void> {
   const report: string[] = [];
-  const config = vscode.workspace.getConfiguration("px");
   let cfg = deps.getConfig();
   if (!cfg.isCk3Workspace) {
     const action = await vscode.window.showInformationMessage(
@@ -146,7 +144,7 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
   } else {
     const detected = findGameFolder(meta.name);
     if (detected) {
-      await config.update("gamePath", detected, vscode.ConfigurationTarget.Workspace);
+      await writeMachineSetting("gamePath", detected, cfg.gameId, "workspace");
       report.push(`✓ game: found via Steam and saved to settings — ${detected}`);
     } else {
       report.push(`✗ game: not found in Steam libraries. Use Choose Game Folder for a custom installation.`);
@@ -172,7 +170,7 @@ export async function runSetup(deps: SetupDeps): Promise<void> {
   // and Workshop listing files next to it, a launcher link in the game's mod
   // folder). Advice, not a blocker.
   // A "✓" here would inflate the ready count, so the set case stays silent.
-  if ((config.get<string>("modProjectsDir") ?? "").trim() === "") {
+  if ((readMachineSetting<string>("modProjectsDir", cfg.gameId) ?? "").trim() === "") {
     report.push(
       `• Optional project layout: set px.modProjectsDir to keep content in <project>/mod ` +
         `with Git and Workshop listing files beside it. New Mod offers this layout as an alternative to the game's mod folder.`

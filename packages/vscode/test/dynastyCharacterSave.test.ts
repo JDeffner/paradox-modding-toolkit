@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
 import { URI } from "vscode-uri";
 import type { AppToHost, HostToApp, CharacterForm } from "../src/webviews/dynastyTree/messages";
@@ -79,6 +79,7 @@ beforeEach(() => {
   mkdirSync(base, { recursive: true });
   scratch = mkdtempSync(path.join(base, "dynasty-save-"));
   host.mod = path.join(scratch, "Mod");
+  mkdirSync(host.mod);
   host.file = path.join(host.mod, "history/characters/characters.txt");
   host.text = SOURCE;
   host.posted = [];
@@ -100,7 +101,7 @@ beforeEach(() => {
     actions,
     {
       cfg: { gameId: "ck3", modPath: host.mod, workspaceMods: [], parentPaths: [] } as unknown as PxConfig,
-      meta: { name: "CK3" } as GameMeta,
+      meta: { name: "CK3", configDirName: ".px-toolkit", legacyConfigDirName: ".ck3modding" } as GameMeta,
       mods: [{ path: host.mod, label: "Mod" }],
       modRoot: host.mod,
     }
@@ -136,6 +137,36 @@ it("opens unsaved text and preserves unrelated unsaved edits when saving through
   await save(form);
   expect(host.text).toBe(before.replace("culture = norse", "culture = anglo_saxon"));
   expect(host.posted.some((m) => m.type === "saved")).toBe(true);
+});
+
+it("uses portable quotation rules from the selected mod beside unrelated current config", async () => {
+  mkdirSync(path.join(host.mod, ".px-toolkit"));
+  writeFileSync(path.join(host.mod, ".px-toolkit/schema.json"), "{}");
+  mkdirSync(path.join(host.mod, ".ck3modding"));
+  writeFileSync(
+    path.join(host.mod, ".ck3modding/project.json"),
+    JSON.stringify({
+      version: 1,
+      gameId: "ck3",
+      authoring: { characterHistory: { quoteNames: false, quoteCultures: false, quoteReligions: true } },
+    })
+  );
+  host.text = "";
+  await save({ ...characterForm(SOURCE), name: "My_name_key", religion: "catholic" }, false);
+  expect(host.text).toContain("name = My_name_key");
+  expect(host.text).toContain("culture = norse");
+  expect(host.text).toContain('religion = "catholic"');
+});
+
+it("reports invalid portable settings before changing a character", async () => {
+  mkdirSync(path.join(host.mod, ".px-toolkit"));
+  writeFileSync(path.join(host.mod, ".px-toolkit/project.json"), "broken");
+  const original = host.text;
+  const form = await open();
+  await save({ ...form, name: "Changed" });
+  expect(host.save).not.toHaveBeenCalled();
+  expect(host.text).toBe(original);
+  expect(host.posted.some((msg) => msg.type === "characterSaveFailed")).toBe(true);
 });
 
 it("refuses a form whose character changed after it opened", async () => {

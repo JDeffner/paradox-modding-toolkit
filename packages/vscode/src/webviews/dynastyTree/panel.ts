@@ -35,6 +35,8 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import { parseScript } from "@px-lsp/server/parser";
+import { getProjectSetting } from "@px-lsp/protocol/projectSettings";
+import { readProjectAuthoringSettings } from "../../projectConfigFile";
 import { readModName } from "@px-lsp/protocol/modName";
 import type { PxConfig } from "../../config";
 import { calendarForMod } from "../../calendarInsert";
@@ -94,6 +96,18 @@ export interface DynastyTreeActions {
   editDefinition(params: DefinitionEditParams): Promise<DefinitionEditResult>;
   /** writeLocSmart: the one entry point for a loc value (locCommands.ts). */
   writeLoc(key: string, value: string): Promise<string>;
+  /** Resolve the destination once for both the write and its undo pre-image. */
+  prepareLoc?(
+    key: string,
+    modRoot?: string | null
+  ): Promise<
+    | {
+        file: string;
+        language: string;
+        apply(value: string): Promise<string>;
+      }
+    | undefined
+  >;
   /**
    * Where `writeLoc` WOULD write a key, resolved without writing, so the
    * panel can keep the file's pre-image for undo. Optional: a client that
@@ -337,10 +351,21 @@ export class DynastyTreePanel {
             "px",
             choice ? vscode.Uri.file(choice.modPath) : undefined
           );
+          const project = choice
+            ? readProjectAuthoringSettings(choice.modPath, this.options.meta, this.options.cfg.gameId)
+            : undefined;
+          const quote = (
+            key:
+              | "characterHistory.quoteNames"
+              | "characterHistory.quoteCultures"
+              | "characterHistory.quoteReligions"
+          ) =>
+            (project && (getProjectSetting(project, key) as boolean | undefined)) ??
+            config.get<boolean>(key, true);
           const block = characterBlock(msg.form, source?.text, {
-            name: config.get<boolean>("characterHistory.quoteNames", true),
-            culture: config.get<boolean>("characterHistory.quoteCultures", true),
-            religion: config.get<boolean>("characterHistory.quoteReligions", true),
+            name: quote("characterHistory.quoteNames"),
+            culture: quote("characterHistory.quoteCultures"),
+            religion: quote("characterHistory.quoteReligions"),
           });
           const saved = await this.write(
             TARGETS.character,
@@ -1173,26 +1198,40 @@ export class DynastyTreePanel {
     return true;
   }
 
-  /**
-   * The display name of a dynasty or house: a loc key, written through
-   * writeLocSmart. The loc writer picks the file itself, so its pre-image is
-   * taken from the file it SAYS it will write (`locTarget`); a write that then
-   * lands somewhere else, or in a file that did not exist, is not journalled
-   * rather than journalled wrongly.
-   */
+  /** The prepared destination is also the source of the undo pre-image. */
   private async writeName(key: string, value: string): Promise<void> {
     if (!key || !value) return;
-    let predicted: string | null = null;
-    let before: string | null = null;
     try {
-      predicted = (await this.actions.locTarget?.(key)) ?? null;
-      if (predicted) before = await this.docText(predicted);
-    } catch {
-      /* an unpredictable target only costs this write its undo */
-    }
-    try {
-      const file = await this.actions.writeLoc(key, value);
-      if (predicted && before !== null && samePath(predicted, file)) await this.remember(file, before, true);
+      let file: string;
+      if (this.actions.prepareLoc) {
+        const plan = await this.actions.prepareLoc(key, this.targetChoice()?.modPath ?? this.options.modRoot);
+        if (!plan) return;
+        const open = vscode.workspace.textDocuments.find((document) =>
+          samePath(document.uri.fsPath, plan.file)
+        );
+        let before = open?.getText();
+        if (before === undefined) {
+          try {
+            await fs.promises.stat(plan.file);
+            before = (await vscode.workspace.openTextDocument(vscode.Uri.file(plan.file))).getText();
+          } catch (err) {
+            if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+          }
+        }
+        file = await plan.apply(value);
+        // Undo a created file's added keys while retaining a valid empty localization file.
+        before ??= `\uFEFFl_${plan.language}:\n`;
+        const after = (await vscode.workspace.openTextDocument(vscode.Uri.file(plan.file))).getText();
+        this.journal.record({ file: plan.file, before, after }, true);
+        this.postJournal();
+      } else {
+        // Older embedders expose separate prediction and write callbacks.
+        const predicted = (await this.actions.locTarget?.(key)) ?? null;
+        const before = predicted ? await this.docText(predicted) : null;
+        file = await this.actions.writeLoc(key, value);
+        if (predicted && before !== null && samePath(predicted, file))
+          await this.remember(file, before, true);
+      }
       this.post({ type: "toast", message: `Wrote ${key} to ${path.basename(file)}.` });
     } catch (err) {
       this.post({

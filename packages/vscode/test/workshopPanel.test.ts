@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { URI } from "vscode-uri";
+import AdmZip from "adm-zip";
 import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
 import type { AppToHost, HostToApp, WorkshopModInfo } from "../src/webviews/workshop/messages";
 import type { BridgeDone, BridgeJob, ItemDetails } from "../src/steam/jobs";
@@ -12,6 +13,7 @@ const host = vi.hoisted(() => ({
   close: () => {},
   runBridge: vi.fn(),
   input: vi.fn(),
+  open: vi.fn(),
   errors: vi.fn(),
   warnings: vi.fn(),
   documents: [] as { uri: URI; isDirty: boolean; getText: () => string }[],
@@ -26,11 +28,15 @@ vi.mock("vscode", async () => {
     ViewColumn: { Active: 1 },
     RelativePattern: class {},
     workspace: {
+      isTrusted: true,
+      workspaceFolders: [],
+      getWorkspaceFolder: () => undefined,
       get textDocuments() {
         return host.documents;
       },
       getConfiguration: () => ({
         get: (key: string, fallback: unknown) => (key === "workshop.dir" ? host.listing : fallback),
+        inspect: (key: string) => ({ globalValue: key === "workshop.dir" ? host.listing : undefined }),
       }),
       createFileSystemWatcher: () => ({
         ...disposable,
@@ -50,6 +56,7 @@ vi.mock("vscode", async () => {
         return Promise.resolve(undefined);
       },
       showInputBox: (...args: unknown[]) => host.input(...args),
+      showOpenDialog: (...args: unknown[]) => host.open(...args),
       createWebviewPanel: () => ({
         reveal() {},
         dispose() {},
@@ -153,8 +160,7 @@ async function send(message: AppToHost): Promise<WorkshopModInfo> {
   return drain();
 }
 async function createLegacy(): Promise<WorkshopModInfo> {
-  host.input.mockResolvedValueOnce("1.19.*");
-  return send({ type: "createLegacy", target: mainTarget() });
+  return send({ type: "createLegacy", version: "1.19.*", target: mainTarget() });
 }
 function upload(legacy = true, content = true): Extract<AppToHost, { type: "upload" }> {
   return {
@@ -188,6 +194,24 @@ function showPanel(): void {
   );
 }
 
+it("offers Steam compatibility versions and persists the exact tag with existing categories", async () => {
+  const info = await drain();
+  expect(info.knownTags).toEqual(
+    expect.arrayContaining([
+      "1.18 'Crane'",
+      "1.17 'Ascendant'",
+      "1.16 'Chamfron'",
+      "1.15 'Crown'",
+      "Older",
+      "1.19 'Scribe'",
+      "1.20 'Crozier'",
+    ])
+  );
+  const saved = await send({ type: "setTags", tags: ["Gameplay", "1.20 'Crozier'"], target: mainTarget() });
+  expect(saved.tags).toEqual(["Gameplay", "1.20 'Crozier'"]);
+  expect(fs.readFileSync(path.join(root, "descriptor.mod"), "utf8")).toContain("\"1.20 'Crozier'\"");
+});
+
 beforeEach(async () => {
   vi.clearAllMocks();
   host.posted = [];
@@ -215,6 +239,109 @@ afterEach(() => {
   host.close();
   vi.restoreAllMocks();
   fs.rmSync(scratch, { recursive: true, force: true });
+});
+
+async function chooseZip(
+  files: Record<string, string> = {
+    "release/descriptor.mod":
+      '\uFEFFname="Archived mod"\nversion="1.0"\nsupported_version="1.18.*"\nremote_file_id="999"\n# Preserve archive comment\n',
+    "release/events/old.txt": "\uFEFFOld files",
+  }
+): Promise<{ id: string; file: string }> {
+  const file = path.join(scratch, "old.zip");
+  const zip = new AdmZip();
+  for (const [name, text] of Object.entries(files)) zip.addFile(name, Buffer.from(text));
+  zip.writeZip(file);
+  host.open.mockResolvedValueOnce([URI.file(file)]);
+  await send({ type: "pickLegacyZip", request: "pick-1", target: mainTarget() });
+  const reply = host.posted.filter((message) => message.type === "legacyZipPicked").at(-1);
+  if (reply?.type !== "legacyZipPicked" || !reply.archive) throw new Error("Expected a ZIP selection");
+  return { id: reply.archive.id, file };
+}
+
+describe("legacy ZIP source through the Workshop panel", () => {
+  it("saves the archive locally and uploads only those files with a new ID, preserving both sources", async () => {
+    const selected = await chooseZip();
+    const originalZip = fs.readFileSync(selected.file);
+    const info = await send({
+      type: "createLegacy",
+      version: "1.19",
+      archive: selected.id,
+      target: mainTarget(),
+    });
+    expect(host.errors).not.toHaveBeenCalled();
+    expect(info).toMatchObject({ legacyArchive: "old.zip", version: "1.0", legacyContent: "new" });
+    const saved = path.join(legacyDir(), "content");
+    const descriptor = fs.readFileSync(path.join(saved, "descriptor.mod"), "utf8");
+    expect(descriptor).toContain('remote_file_id="999"');
+    expect(fs.readFileSync(selected.file)).toEqual(originalZip);
+    fs.unlinkSync(selected.file);
+    fs.writeFileSync(path.join(root, "current.txt"), "Later live files");
+    host.documents.push({
+      uri: URI.file(path.join(root, "events/old.txt")),
+      isDirty: true,
+      getText: () => "Unsaved live files",
+    });
+    let contents = "";
+    host.runBridge.mockImplementation(async (context, job: BridgeJob) => {
+      if (job.action === "publish") {
+        const staged = job.submits[0].contentPath!;
+        expect(fs.existsSync(path.join(staged, "current.txt"))).toBe(false);
+        expect(fs.readFileSync(path.join(staged, "events/old.txt"), "utf8")).toBe("\uFEFFOld files");
+        contents = fs.readFileSync(path.join(staged, "descriptor.mod"), "utf8");
+      }
+      return completeBridge(context, job);
+    });
+    await send(upload());
+    expect(host.errors).not.toHaveBeenCalled();
+    expect(contents).toContain('remote_file_id="222"');
+    expect(contents).toContain('supported_version="1.19.*"');
+    expect(contents).toContain('version="1.0"');
+    expect(contents).toContain("# Preserve archive comment");
+    expect(fs.readFileSync(path.join(saved, "descriptor.mod"), "utf8")).toBe(descriptor);
+    expect(fs.readFileSync(path.join(root, "descriptor.mod"), "utf8")).toBe(originalDescriptor);
+    const calls = jobs().length;
+    await send(upload());
+    expect(jobs()).toHaveLength(calls);
+  });
+
+  it("does not create local or remote items for a damaged ZIP or changed selection", async () => {
+    const selected = await chooseZip({ "README.txt": "No mod" });
+    await send({ type: "createLegacy", version: "1.19", archive: selected.id, target: mainTarget() });
+    expect(host.errors.mock.calls.flat().join(" ")).toContain("exactly one descriptor");
+    expect(fs.existsSync(legacyDir())).toBe(false);
+    expect(jobs()).toHaveLength(0);
+    fs.appendFileSync(selected.file, "changed");
+    await send({ type: "createLegacy", version: "1.19", archive: selected.id, target: mainTarget() });
+    expect(host.errors.mock.calls.flat().join(" ")).toContain("ZIP changed");
+    expect(jobs()).toHaveLength(0);
+  });
+
+  it("rejects a missing saved archive before creating a Steam item, without falling back to live files", async () => {
+    const selected = await chooseZip();
+    await send({ type: "createLegacy", version: "1.19", archive: selected.id, target: mainTarget() });
+    fs.unlinkSync(path.join(legacyDir(), "content/descriptor.mod"));
+    host.runBridge.mockClear();
+    await send(upload());
+    expect(jobs()).toHaveLength(0);
+    expect(readLegacyItem(legacyDir()).legacy.content).toBe("new");
+    expect(host.errors).toHaveBeenCalled();
+  });
+
+  it("cancels the file picker without creation and rejects arbitrary archive paths", async () => {
+    host.open.mockResolvedValueOnce(undefined);
+    await send({ type: "pickLegacyZip", request: "cancel", target: mainTarget() });
+    expect(host.posted).toContainEqual(expect.objectContaining({ type: "legacyZipPicked", archive: null }));
+    await send({
+      type: "createLegacy",
+      version: "1.19",
+      archive: path.join(scratch, "arbitrary.zip"),
+      target: mainTarget(),
+    });
+    expect(fs.existsSync(legacyDir())).toBe(false);
+    expect(jobs()).toHaveLength(0);
+    expect(host.errors.mock.calls.flat().join(" ")).toContain("Choose the legacy ZIP again");
+  });
 });
 
 describe("Workshop panel dependency failures", () => {
@@ -395,8 +522,7 @@ describe("Workshop panel legacy items", () => {
     await createLegacy();
     const file = path.join(legacyDir(), "description.bbcode");
     fs.writeFileSync(file, "Keep this legacy draft");
-    host.input.mockResolvedValueOnce("1.19");
-    await send({ type: "createLegacy", target: legacyTarget() });
+    await send({ type: "createLegacy", version: "1.19.*", target: legacyTarget() });
     expect(fs.readFileSync(file, "utf8")).toBe("Keep this legacy draft");
     expect(host.errors.mock.calls.flat().join(" ")).toContain("Delete that local directory");
     expect(jobs().every((job) => job.action === "query")).toBe(true);

@@ -9,6 +9,7 @@
  */
 import {
   createConnection,
+  DiagnosticSeverity,
   DidChangeWatchedFilesNotification,
   DidChangeConfigurationNotification,
   MarkupKind,
@@ -167,7 +168,8 @@ import { ModOriginResolver } from "./index/modOrigin";
 import { loadSchema, type SchemaData } from "./schema/loader";
 import { VARIABLE_KINDS } from "./games/jomini/variables";
 import { activeProfile, setActiveProfile } from "./games/active";
-import { indexConfigWatchPatterns, isIndexConfigFile, resolveConfigDir } from "@px-lsp/protocol/configDir";
+import { indexConfigWatchPatterns, isIndexConfigFile, resolveConfigPath } from "@px-lsp/protocol/configDir";
+import { owningProjectRoot, ProjectPolicyCache, projectDiagnosticPolicy } from "./projectPolicy";
 import { defaultSettings, isSettingsObject, readSettings, resolveSettings } from "./settings";
 import { allProfiles, resolveProfile } from "./games/registry";
 import { definitionKinds, type SchemaEntry } from "./schema/types";
@@ -581,6 +583,7 @@ const fileRootScopesCache = new Map<string, Set<string> | null>();
 /** Drop everything derived from the current settings/schema (reindex path). */
 function clearPathCaches(): void {
   playsetCache.clear();
+  projectPolicies.clear();
   contentRootsCache = null;
   fileRootScopesCache.clear();
   data.invalidateInference();
@@ -613,9 +616,38 @@ function workspaceModRoots(): string[] {
  * a first-class editable mod (source "mod"); there is no primary-mod special
  * case — dependency parents (parent-mods setting / playset) stay "parent". */
 function workspaceRootOf(fsPath: string): string | null {
-  const lower = fsPath.toLowerCase();
-  if (settings.modPath && lower.startsWith(settings.modPath.toLowerCase())) return settings.modPath;
-  return workspaceModRoots().find((r) => lower.startsWith(r.toLowerCase())) ?? null;
+  return owningProjectRoot(fsPath, [...(settings.modPath ? [settings.modPath] : []), ...workspaceModRoots()]);
+}
+
+const projectPolicies = new ProjectPolicyCache();
+const projectPolicyDiagnosticUris = new Set<string>();
+
+/** Configuration errors remain visible even when script diagnostics are suppressed. */
+function refreshProjectPolicies(): void {
+  const previous = new Set(projectPolicyDiagnosticUris);
+  projectPolicyDiagnosticUris.clear();
+  for (const root of [...(settings.modPath ? [settings.modPath] : []), ...workspaceModRoots()]) {
+    const file = projectPolicies.read(root, activeProfile());
+    if (!file.error) continue;
+    const uri = URI.file(file.path).toString();
+    projectPolicyDiagnosticUris.add(uri);
+    previous.delete(uri);
+    const message = `${file.error}. Project rules could not be loaded; language features use client settings until this file is fixed.`;
+    log(`project settings (${file.path}): ${message}`);
+    void connection.sendDiagnostics({
+      uri,
+      diagnostics: [
+        {
+          range: { start: { line: 0, character: 0 }, end: { line: 0, character: 1 } },
+          severity: DiagnosticSeverity.Error,
+          code: "invalid-project-settings",
+          source: activeProfile().diagnosticSource,
+          message,
+        },
+      ],
+    });
+  }
+  for (const uri of previous) void connection.sendDiagnostics({ uri, diagnostics: [] });
 }
 
 /**
@@ -1159,8 +1191,8 @@ function rebuildModNamespaces(): void {
 
 /** Ordered parent-mod roots from <mod>/<configDir>/playset.json, if present. */
 function readPlayset(modPath: string): string[] {
-  const file = path.join(resolveConfigDir(modPath, activeProfile()), "playset.json");
   try {
+    const file = resolveConfigPath(modPath, activeProfile(), "playset.json");
     if (!fs.existsSync(file)) return [];
     const parsed = JSON.parse(fs.readFileSync(file, "utf8"));
     const list: unknown[] = Array.isArray(parsed)
@@ -1188,6 +1220,7 @@ async function buildIndex(): Promise<void> {
   localizationCoverage.clear();
   clearPathCaches();
   calendarByRoot.clear();
+  refreshProjectPolicies();
   schema = loadSchema([...(settings.modPath ? [settings.modPath] : []), ...workspaceModRoots()], log);
   indexSchema =
     settings.indexAssets === false
@@ -1678,7 +1711,7 @@ function handleModFileChange(fsPath: string): void {
       clearPathCaches();
       invalidateGuiDefsCache();
       loadDocs(false);
-      startIndexBuild("workspace schema or playset changed");
+      startIndexBuild("workspace configuration changed");
     }, MOD_CHANGE_DEBOUNCE_MS);
     return;
   }
@@ -2265,6 +2298,7 @@ connection.onCodeAction((params) => {
     locLanguage: settings.locLanguage,
     modRootOf: workspaceRootOf,
     locRoots: schema.entries.filter((e) => e.kind === "loc_key").map((e) => e.path),
+    openDocuments: documents.all(),
   });
 });
 
@@ -2292,10 +2326,13 @@ connection.languages.inlayHint.on((params) =>
 connection.languages.semanticTokens.on((params) =>
   indexRead(`semanticTokens ${perfName(params.textDocument.uri)}`, () => {
     const doc = documents.get(params.textDocument.uri);
-    // gui files benefit too: template/type names classify via the index.
-    if (!doc || (!isScriptLanguage(doc.languageId) && doc.languageId !== "paradox-gui")) return { data: [] };
-    const entry = isScriptLanguage(doc.languageId) ? schemaEntryForFile(URI.parse(doc.uri).fsPath) : null;
-    return provideSemanticTokens(data, doc, schema.refFields, entry, schema.structures);
+    if (
+      !doc ||
+      (!isScriptLanguage(doc.languageId) && !["paradox-gui", "paradox-loc"].includes(doc.languageId))
+    )
+      return { data: [] };
+    const entry = schemaEntryForFile(URI.parse(doc.uri).fsPath);
+    return provideSemanticTokens(data, doc, schema.refFields, entry, schema.structures, schema);
   })
 );
 
@@ -2414,6 +2451,8 @@ function readBomFromDisk(uri: string): boolean | null {
 
 /** Path used to match `ignorePatterns`: mod-relative when possible, else parent/game-relative, else basename. */
 function relForPatterns(fsPath: string): string {
+  const owner = workspaceRootOf(fsPath);
+  if (owner) return path.relative(owner, fsPath).replace(/\\/g, "/");
   const lower = fsPath.toLowerCase();
   for (const root of contentRoots()) {
     if (lower.startsWith(root.toLowerCase())) {
@@ -2489,10 +2528,11 @@ function filterSuppressed(
   fsPath: string,
   text: string
 ): import("vscode-languageserver/node").Diagnostic[] {
-  const cfg = {
-    ignore: settings.diagnosticsIgnore,
-    ignorePatterns: settings.diagnosticsIgnorePatterns,
-  };
+  const owner = workspaceRootOf(fsPath);
+  const cfg = projectDiagnosticPolicy(
+    owner ? projectPolicies.read(owner, activeProfile()) : undefined,
+    settings
+  );
   const rel = relForPatterns(fsPath);
   const inline = scanInlineSuppressions(text);
   return diagnostics.filter((d) => {
@@ -2551,7 +2591,7 @@ documents.onDidClose((e) => {
   validatedAt.delete(uri);
   bomByUri.delete(uri);
   evictParse(uri);
-  void connection.sendDiagnostics({ uri, diagnostics: [] });
+  if (!projectPolicyDiagnosticUris.has(uri)) void connection.sendDiagnostics({ uri, diagnostics: [] });
 });
 
 documents.listen(connection);

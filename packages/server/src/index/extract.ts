@@ -19,10 +19,29 @@ const DEF_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 export const EVENT_ID = /^[A-Za-z0-9_-]+\.\d+$/;
 const TITLE_KEY = /^[ekdcb]_[A-Za-z0-9_-]+$/;
 
+/** Schema markers distinguish databases that share a folder across game versions. */
+export function topLevelDefinitionKind(entry: SchemaEntry, stmt: Statement): string {
+  const rule = entry.kindByField;
+  return rule &&
+    stmt.kind === "assignment" &&
+    stmt.value?.kind === "block" &&
+    stmt.value.statements.some(
+      (child) =>
+        child.kind === "assignment" &&
+        (child.op === "=" || child.op === "?=") &&
+        !child.key.quoted &&
+        child.key.text === rule.field &&
+        child.value?.kind === "scalar"
+    )
+    ? rule.kind
+    : (rule?.otherwise ?? entry.kind);
+}
+
 /** The extractor and symbol resolver must agree about nested declaration sites. */
 export function nestedDefinitionKind(entry: SchemaEntry, path: readonly Statement[]): string | null {
   const rule = entry.nestedDefinitions;
   if (!rule || path.length !== rule.path.length + 2) return null;
+  if (entry.kindByField && topLevelDefinitionKind(entry, path[0]) === rule.kind) return null;
   if (
     path.some(
       (s) =>
@@ -133,7 +152,7 @@ export function extractDefinitionsParsed(
           name = name.slice(mode[0].length);
         }
         if (!DEF_NAME.test(name) || name === "namespace") continue;
-        push(name, stmt.key.range.start);
+        push(name, stmt.key.range.start, undefined, topLevelDefinitionKind(entry, stmt));
         if (entryMode) defs[defs.length - 1].entryMode = entryMode;
         if (harvestParams) {
           const body = content.slice(stmt.range.start, stmt.range.end);

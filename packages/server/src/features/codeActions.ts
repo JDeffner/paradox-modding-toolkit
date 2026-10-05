@@ -15,13 +15,20 @@ import {
   type Range,
   type WorkspaceEdit,
 } from "vscode-languageserver/node";
-import type { TextDocument } from "vscode-languageserver-textdocument";
+import { TextDocument } from "vscode-languageserver-textdocument";
 import * as fs from "fs";
 import * as path from "path";
 import { URI } from "vscode-uri";
 import type { ServerData } from "../serverData";
 import { findLocKeyRefs, type LocKeyRef } from "@px-lsp/protocol/locRefs";
 import { clientCommands } from "@px-lsp/protocol/protocol";
+import { resolveConfigPath } from "@px-lsp/protocol/configDir";
+import {
+  generatedLocalizationSource,
+  parseLocalizationDefaults,
+  suggestLocalizationTarget,
+  upsertLocalizationText,
+} from "@px-lsp/protocol/localizationPolicy";
 import { getLineText } from "../documents";
 import { activeProfile } from "../games/active";
 import { canRunCommand } from "../clientMode";
@@ -38,56 +45,160 @@ export interface LocEditContext {
   modRootOf: (fsPath: string) => string | null;
   /** Mod-relative localization root(s) from the loc_key schema entries. */
   locRoots: string[];
+  /** Current buffers, including localization files not saved to disk yet. */
+  openDocuments?: readonly TextDocument[];
 }
 
-/**
- * A WorkspaceEdit that appends `key: ""` to the server-managed loc file
- * (creating it, BOM included, when absent). Only one writer is ever active
- * per session: a client registering px.editLocalization owns its own
- * zzz_*_edits file and never sees this fallback, so the two files can coexist
- * without fighting.
- */
-export function locCreateEdit(key: string, docFsPath: string, ctx: LocEditContext): WorkspaceEdit | null {
+function readOptional(file: string): string | undefined {
+  try {
+    return fs.readFileSync(file, "utf8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined;
+    throw error;
+  }
+}
+
+function relativeWithin(root: string, file: string): string | undefined {
+  const relative = path.relative(root, file).replace(/\\/g, "/");
+  return relative && relative !== ".." && !relative.startsWith("../") && !path.isAbsolute(relative)
+    ? relative
+    : undefined;
+}
+
+/** Never write through a localization symlink into a reference tree. */
+function assertModTarget(root: string, target: string): void {
+  const realRoot = fs.realpathSync(root);
+  let ancestor = target;
+  while (true) {
+    try {
+      const real = fs.realpathSync(ancestor);
+      if (real !== realRoot && !relativeWithin(realRoot, real)) {
+        throw new Error("Localization target is outside the editable mod");
+      }
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      ancestor = path.dirname(ancestor);
+    }
+  }
+}
+
+/** Missing-key edits use mod conventions and version the current target buffer. */
+export function locCreateEdit(
+  key: string,
+  docFsPath: string,
+  ctx: LocEditContext,
+  relatedKeys: string[] = []
+): WorkspaceEdit | null {
   const modRoot = ctx.modRootOf(docFsPath);
   if (!modRoot) return null;
-  const lang = ctx.locLanguage;
-  const locRoot = ctx.locRoots[0] ?? "localization";
-  const target = path.join(modRoot, locRoot, lang, `zzz_px_lsp_edits_l_${lang}.yml`);
-  const uri = URI.file(target).toString();
-  const entryLine = ` ${key}: ""`;
-  let content: string | null = null;
-  try {
-    content = fs.readFileSync(target, "utf8");
-  } catch {
-    content = null;
+  const normalize = (file: string) => (process.platform === "win32" ? file.toLowerCase() : file);
+  const open = new Map((ctx.openDocuments ?? []).map((doc) => [normalize(URI.parse(doc.uri).fsPath), doc]));
+  const current = (file: string) => open.get(normalize(file));
+  const readCurrent = (file: string) => current(file)?.getText() ?? readOptional(file);
+  const configFile = resolveConfigPath(modRoot, activeProfile(), "localization.json");
+  const config = readCurrent(configFile);
+  const defaults = parseLocalizationDefaults(
+    config === undefined ? undefined : JSON.parse(config.replace(/^\uFEFF/, ""))
+  );
+  const lang = defaults.language || ctx.locLanguage;
+  const texts = new Map<string, string>();
+  const visited = new Set<string>();
+  const realModRoot = fs.realpathSync(modRoot);
+  const walk = (directory: string): void => {
+    let real: string;
+    try {
+      real = fs.realpathSync(directory);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+      throw error;
+    }
+    if (!relativeWithin(realModRoot, real) || visited.has(normalize(real))) return;
+    visited.add(normalize(real));
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const file = path.join(directory, entry.name);
+      if (entry.isDirectory()) walk(file);
+      else if (entry.isFile() && entry.name.toLowerCase().endsWith(".yml")) {
+        const text = readCurrent(file);
+        if (text === undefined) throw new Error(`Localization file changed during the scan: ${file}`);
+        texts.set(relativeWithin(modRoot, file)!, text);
+      } else if (entry.isSymbolicLink()) {
+        const resolved = fs.realpathSync(file);
+        if (!relativeWithin(realModRoot, resolved)) continue;
+        if (fs.statSync(file).isDirectory()) walk(file);
+        else if (entry.name.toLowerCase().endsWith(".yml")) {
+          const text = readCurrent(file);
+          if (text === undefined) throw new Error(`Localization file changed during the scan: ${file}`);
+          texts.set(relativeWithin(modRoot, file)!, text);
+        }
+      }
+    }
+  };
+  for (const root of ctx.locRoots) walk(path.join(modRoot, root));
+  for (const doc of open.values()) {
+    const relative = relativeWithin(modRoot, URI.parse(doc.uri).fsPath);
+    if (relative?.endsWith(".yml") && ctx.locRoots.some((root) => relative.startsWith(`${root}/`))) {
+      texts.set(relative, doc.getText());
+    }
   }
-  if (content === null) {
+  const suggestion = suggestLocalizationTarget({
+    key,
+    language: lang,
+    locRoots: ctx.locRoots,
+    documents: [...texts].map(([file, text]) => ({ path: file, text })),
+    defaults,
+    sourcePath: relativeWithin(modRoot, docFsPath),
+    relatedKeys,
+    subject: path.basename(modRoot),
+  });
+  if (suggestion.reason === "existing key") return null;
+  if (!suggestion.path) {
+    throw new Error(
+      `Choose a localization file or set localization.json newKeyFile: ${suggestion.candidates?.join(", ")}`
+    );
+  }
+  const target = path.join(modRoot, suggestion.path);
+  assertModTarget(modRoot, target);
+  const uri = URI.file(target).toString();
+  const content = readCurrent(target);
+  if (content !== undefined && generatedLocalizationSource(content)) {
+    throw new Error(`Localization target is generated: ${suggestion.path}`);
+  }
+  let updated = upsertLocalizationText(content ?? "", lang, key, "", defaults.entryVersion);
+  if (!updated.startsWith("\uFEFF")) updated = "\uFEFF" + updated;
+  if (content === undefined) {
     return {
       documentChanges: [
-        CreateFile.create(uri, { ignoreIfExists: true }),
+        CreateFile.create(uri),
         TextDocumentEdit.create({ uri, version: null }, [
           {
             range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-            newText: "﻿" + `l_${lang}:\n${entryLine}\n`,
+            newText: updated,
           },
         ]),
       ],
     };
   }
-  const endLine = content.split("\n").length;
-  const needsNewline = content.length > 0 && !content.endsWith("\n");
+  const targetDoc = current(target) ?? TextDocument.create(uri, "paradox-localization", 0, content);
+  let start = 0;
+  while (start < content.length && start < updated.length && content[start] === updated[start]) start++;
+  let end = content.length;
+  let updatedEnd = updated.length;
+  while (end > start && updatedEnd > start && content[end - 1] === updated[updatedEnd - 1]) {
+    end--;
+    updatedEnd--;
+  }
   return {
     documentChanges: [
-      TextDocumentEdit.create({ uri, version: null }, [
+      TextDocumentEdit.create({ uri: targetDoc.uri, version: current(target)?.version ?? null }, [
         {
-          range: { start: { line: endLine, character: 0 }, end: { line: endLine, character: 0 } },
-          newText: `${needsNewline ? "\n" : ""}${entryLine}\n`,
+          range: { start: targetDoc.positionAt(start), end: targetDoc.positionAt(end) },
+          newText: updated.slice(start, updatedEnd),
         },
       ]),
     ],
   };
 }
-
 export function provideCodeActions(
   data: ServerData,
   document: TextDocument,
@@ -113,8 +224,21 @@ export function provideCodeActions(
         command: { command: clientCommands.editLocalization, title: "Create localization", arguments: [key] },
       });
     } else if (locEditContext) {
-      const edit = locCreateEdit(key, URI.parse(document.uri).fsPath, locEditContext);
-      if (edit) actions.push({ title, kind: CodeActionKind.QuickFix, diagnostics: [d], edit });
+      try {
+        const relatedKeys = document
+          .getText()
+          .split(/\r?\n/)
+          .flatMap((line) => findLocKeyRefs(line).map((ref) => ref.key));
+        const edit = locCreateEdit(key, URI.parse(document.uri).fsPath, locEditContext, relatedKeys);
+        if (edit) actions.push({ title, kind: CodeActionKind.QuickFix, diagnostics: [d], edit });
+      } catch (error) {
+        actions.push({
+          title,
+          kind: CodeActionKind.QuickFix,
+          diagnostics: [d],
+          disabled: { reason: error instanceof Error ? error.message : String(error) },
+        });
+      }
     }
   }
 

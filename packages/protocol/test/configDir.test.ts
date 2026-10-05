@@ -16,15 +16,16 @@ describe("configDir", () => {
   it("watches current and legacy index configuration, including absent files", () => {
     const root = path.resolve("mod");
     expect(indexConfigWatchPatterns(names)).toEqual([
-      "**/.px-toolkit/{schema,playset}.json",
-      "**/.ck3modding/{schema,playset}.json",
+      "**/.px-toolkit/{schema,playset,project}.json",
+      "**/.ck3modding/{schema,playset,project}.json",
     ]);
     expect(indexConfigWatchPatterns({ configDirName: ".px-toolkit" })).toEqual([
-      "**/.px-toolkit/{schema,playset}.json",
+      "**/.px-toolkit/{schema,playset,project}.json",
     ]);
     for (const dir of [names.configDirName, names.legacyConfigDirName]) {
       expect(isIndexConfigFile(path.join(root, dir, "schema.json"), [root], names)).toBe(true);
       expect(isIndexConfigFile(path.join(root, dir, "playset.json"), [root], names)).toBe(true);
+      expect(isIndexConfigFile(path.join(root, dir, "project.json"), [root], names)).toBe(true);
     }
     for (const relative of [
       "schema.json",

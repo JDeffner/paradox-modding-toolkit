@@ -33,6 +33,7 @@ installTips();
 
 const DIAGNOSTICS = "diagnostics";
 const MOD_REPORT = "mod-report";
+const LAUNCH_OPTIONS = "launch-options";
 const DIAG_SECTION = "Diagnostics";
 
 let hub: WikiHubEntry[] = [];
@@ -389,6 +390,7 @@ function select(id: string | null): void {
     report = null;
     send({ type: "modReport" });
   }
+  if (id === LAUNCH_OPTIONS) send({ type: "refreshLaunchOptions" });
   renderNav();
   renderPage();
   $("doc").scrollTop = 0;
@@ -413,6 +415,14 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
     select(msg.select && known(msg.select) ? msg.select : selected);
   } else if (msg.type === "select") {
     if (known(msg.id)) select(msg.id);
+  } else if (msg.type === "launchOptions") {
+    articles = [...articles.filter((article) => article.id !== LAUNCH_OPTIONS), ...msg.articles];
+    renderNav();
+    if (selected === LAUNCH_OPTIONS) {
+      const scroll = $("doc").scrollTop;
+      renderPage();
+      $("doc").scrollTop = scroll;
+    }
   } else if (msg.type === "modReport") {
     report = msg.markdown;
     if (selected === MOD_REPORT) renderPage();
@@ -450,6 +460,10 @@ $("helpBtn").addEventListener("click", () =>
       {
         title: "The pages",
         items: [
+          {
+            lead: "Launch Options",
+            text: "reads launch flags, descriptions and warnings from the installed game's documentation. The page updates when the source file changes and when you open it again.",
+          },
           {
             lead: "Image Guidelines",
             text: "holds the sizes, formats and file names the game expects for previews, portraits, coats of arms and the rest.",

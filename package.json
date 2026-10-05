@@ -10,7 +10,8 @@
     "name": "Joël Deffner"
   },
   "scripts": {
-    "compile": "pnpm --filter px-toolkit run compile",
+    "compile": "pnpm --filter px-toolkit run compile && pnpm --filter @px-lsp/cli run compile",
+    "pxtk": "node packages/cli/dist/pxtk.cjs",
     "perf:history": "node --experimental-strip-types packages/server/test/perf/profileWorkspace.ts",
     "package:test": "node scripts/package-test.mjs",
     "typecheck": "tsc --noEmit && node scripts/compile-webviews.mjs --typecheck",
@@ -30,9 +31,11 @@
     "@eslint/js": "^9.39.5",
     "@px-lsp/protocol": "workspace:*",
     "@px-lsp/server": "workspace:*",
+    "@types/adm-zip": "^0.5.8",
     "@types/jsdom": "^28.0.3",
     "@types/node": "^26.1.0",
     "@types/vscode": "^1.91.0",
+    "@types/yauzl": "^3.4.0",
     "@vscode/codicons": "0.0.46-24",
     "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.3.0",

@@ -50,6 +50,140 @@ function boot() {
 }
 
 describe("Event Graph boot", () => {
+  it("commits the first active field before Ctrl+S reaches a disabled Save button", () => {
+    const app = boot();
+    app.push({ type: "init", state: { focus: {}, positions: {}, pending: [] } });
+    app.push({
+      type: "graph",
+      params: { connectedOnly: false },
+      graph: {
+        nodes: [{ id: "test.1", kind: "event", source: "mod", file: "/mods/one.txt", line: 1 }],
+        edges: [],
+        truncated: false,
+      },
+    });
+    app.document
+      .querySelector(".node")!
+      .dispatchEvent(new app.window.KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    app.push({
+      type: "detail",
+      id: "test.1",
+      detail: {
+        id: "test.1",
+        file: "/mods/one.txt",
+        sourceHash: "fixture",
+        line: 1,
+        endLine: 4,
+        bodyLine: 2,
+        fields: [{ key: "gold", value: "10", line: 2 }],
+        sections: [],
+        options: [],
+        refs: [],
+      },
+    });
+    (app.document.querySelector("#inspector .tval") as HTMLElement).click();
+    const input = app.document.querySelector<HTMLInputElement>("#inspector .editWrap input")!;
+    input.value = "20";
+    // JSDOM does not emit the browser's change-on-blur event.
+    input.addEventListener("blur", () => input.dispatchEvent(new app.window.Event("change")));
+    input.dispatchEvent(new app.window.KeyboardEvent("keydown", { key: "s", ctrlKey: true, bubbles: true }));
+    expect([...app.posted].reverse().find((message) => message.type === "save")).toMatchObject({
+      type: "save",
+      edits: [{ kind: "setField", value: "20", sourceHash: "fixture" }],
+    });
+    expect(app.errors).toEqual([]);
+  });
+  it("includes source identity and a return to the original scalar value in the rendered Save batch", () => {
+    const app = boot();
+    app.push({ type: "init", state: { focus: {}, positions: {}, pending: [] } });
+    app.push({
+      type: "graph",
+      params: { connectedOnly: false },
+      graph: {
+        nodes: [{ id: "test.1", kind: "event", source: "mod", file: "/mods/one.txt", line: 1 }],
+        edges: [],
+        truncated: false,
+      },
+    });
+    app.document
+      .querySelector(".node")!
+      .dispatchEvent(new app.window.KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    app.push({
+      type: "detail",
+      id: "test.1",
+      detail: {
+        id: "test.1",
+        file: "/mods/one.txt",
+        sourceHash: "fixture",
+        line: 1,
+        endLine: 4,
+        bodyLine: 2,
+        fields: [{ key: "gold", value: "10", line: 2 }],
+        sections: [],
+        options: [],
+        refs: [],
+      },
+    });
+    const edit = (value: string) => {
+      (app.document.querySelector("#inspector .tval") as HTMLElement).click();
+      const input = app.document.querySelector<HTMLInputElement>("#inspector .editWrap input")!;
+      input.value = value;
+      input.dispatchEvent(new app.window.Event("change"));
+    };
+    edit("20");
+    edit("10");
+    app.document.getElementById("save")!.click();
+    const save = [...app.posted].reverse().find((message) => message.type === "save");
+    expect(save).toMatchObject({
+      type: "save",
+      edits: [
+        { kind: "setField", value: "20", sourceHash: "fixture" },
+        { kind: "setField", value: "10", sourceHash: "fixture" },
+      ],
+    });
+    app.push({ type: "saved", applied: [0, 1] });
+    expect([...app.posted].reverse().find((message) => message.type === "fetch")).toMatchObject({
+      type: "fetch",
+      params: { connectedOnly: false },
+    });
+    expect(app.document.getElementById("toolConnected")!.getAttribute("aria-pressed")).toBe("false");
+    expect(app.errors).toEqual([]);
+  });
+  it("retains failed edits and allows Save to retry without changing the batch", () => {
+    const app = boot();
+    const state: GraphState = {
+      focus: {},
+      positions: {},
+      pending: [
+        {
+          kind: "setField",
+          id: "test.1",
+          file: "/mods/one.txt",
+          key: "gold",
+          value: "25",
+          line: 2,
+          insertLine: 2,
+          indent: 1,
+          sourceHash: "fixture",
+        },
+      ],
+    };
+    app.push({ type: "init", state });
+    app.document.getElementById("save")!.click();
+    expect((app.document.getElementById("save") as HTMLButtonElement).disabled).toBe(true);
+    expect((app.document.getElementById("inspector") as HTMLElement).inert).toBe(true);
+    app.push({ type: "saved", applied: [], error: "save rejected" });
+    expect((app.document.getElementById("save") as HTMLButtonElement).disabled).toBe(false);
+    expect((app.document.getElementById("inspector") as HTMLElement).inert).toBe(false);
+    app.document.getElementById("save")!.click();
+    expect(app.posted.filter((message) => message.type === "save")).toEqual([
+      { type: "save", edits: state.pending },
+      { type: "save", edits: state.pending },
+    ]);
+    app.push({ type: "saved", applied: [0] });
+    expect((app.document.getElementById("save") as HTMLButtonElement).disabled).toBe(true);
+    expect(app.errors).toEqual([]);
+  });
   it("requests host state before sending any session and restores unsaved edits after reload", () => {
     const state: GraphState = {
       focus: { namespace: "test" },

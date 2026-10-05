@@ -4,6 +4,7 @@ import { addModToWorkspace } from "./modProjects/addToWorkspace";
 import { chooseModDestination } from "./modProjects/open";
 import { GAME_METAS } from "./gameDetect";
 import { discoverMods, modInFolder, type ModLocation } from "./modProjects/discover";
+import { readMachineSetting } from "./machineSettings";
 
 const WALKTHROUGH = "JDeffner.px-toolkit#px.gettingStarted";
 const TUTORIAL_STEPS = ["mod", "setup", "explore", "overview", "tiger", "scriptdocs", "advanced"];
@@ -23,8 +24,13 @@ export async function openModCommand(log: (message: string) => void): Promise<vo
       const folder = gameDocsSubdir(meta, "mod");
       return folder ? [{ folder, label: meta.name, launcher: true }] : [];
     });
-    const projects = vscode.workspace.getConfiguration("px").get<string>("modProjectsDir")?.trim();
-    if (projects) locations.unshift({ folder: projects, label: "Mod projects" });
+    const projectsSeen = new Set<string>();
+    for (const meta of Object.values(GAME_METAS)) {
+      const projects = readMachineSetting<string>("modProjectsDir", meta.id)?.trim();
+      if (!projects || projectsSeen.has(projects.toLowerCase())) continue;
+      projectsSeen.add(projects.toLowerCase());
+      locations.unshift({ folder: projects, label: "Mod projects" });
+    }
     const { mods, issues } = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Window, title: "Finding local mods" },
       () => discoverMods(locations)

@@ -10,6 +10,7 @@ import * as path from "path";
 import type { PxConfig } from "./config";
 import { listFiles } from "@px-lsp/protocol/fsWalk";
 import { readDocument, writeDocument } from "./documentWrite";
+import { assertLocalizationPath, effectiveLocConfig, localizationRoots } from "./localizationProject";
 import {
   LOC_LANGUAGES,
   buildTranslation,
@@ -19,9 +20,9 @@ import {
 } from "@px-lsp/protocol/translationCore";
 
 /** Languages that actually occur in the mod's localization folder. */
-function languagesInMod(locDir: string): string[] {
+function languagesInMod(locFiles: string[]): string[] {
   const langs = new Set<string>();
-  for (const file of listFiles(locDir, ".yml")) {
+  for (const file of locFiles) {
     const lang = detectLocFileLanguage(file);
     if (lang) langs.add(lang);
   }
@@ -29,22 +30,26 @@ function languagesInMod(locDir: string): string[] {
 }
 
 export async function createTranslationCommand(cfg: PxConfig, log: (msg: string) => void): Promise<void> {
+  cfg = effectiveLocConfig(cfg);
   if (!cfg.modPath) {
     void vscode.window.showWarningMessage(
       "Paradox Modding Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
     );
     return;
   }
-  const locDir = path.join(cfg.modPath, "localization");
-  const present = fs.existsSync(locDir) ? languagesInMod(locDir) : [];
+  const roots = localizationRoots(cfg).map((root) => path.join(cfg.modPath!, root));
+  const locFiles = roots.flatMap((root) => (fs.existsSync(root) ? listFiles(root, ".yml") : []));
+  const present = languagesInMod(locFiles);
   if (present.length === 0) {
     const language = await vscode.window.showQuickPick([...LOC_LANGUAGES], {
       title: `Add language to ${path.basename(cfg.modPath)}`,
       placeHolder: "Choose the first localization language",
     });
     if (!language) return;
+    const locDir = roots.find((root) => fs.existsSync(root)) ?? roots[0];
     const file = path.join(locDir, language, `mod_l_${language}.yml`);
     try {
+      assertLocalizationPath(cfg, file, language);
       const snapshot = await readDocument(file, true);
       if (!snapshot.created) throw new Error("Localization file already exists");
       await writeDocument(snapshot, `l_${language}:\n`, true);
@@ -81,7 +86,7 @@ export async function createTranslationCommand(cfg: PxConfig, log: (msg: string)
     if (!target) return;
   }
 
-  const sourceFiles = listFiles(locDir, ".yml").filter((f) => detectLocFileLanguage(f) === source);
+  const sourceFiles = locFiles.filter((f) => detectLocFileLanguage(f) === source);
   let created = 0;
   let updated = 0;
   let addedKeys = 0;
@@ -92,6 +97,7 @@ export async function createTranslationCommand(cfg: PxConfig, log: (msg: string)
     const dst = retargetLocPath(src, source, target);
     if (!dst) continue;
     try {
+      assertLocalizationPath(cfg, dst, target);
       const sourceSnapshot = await readDocument(src);
       const destination = await readDocument(dst, true);
       if (!destination.created) {

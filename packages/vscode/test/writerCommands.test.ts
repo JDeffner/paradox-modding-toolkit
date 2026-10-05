@@ -5,7 +5,7 @@ import type { PxConfig } from "../src/config";
 import type { TraitSave } from "../src/webviews/traitCreator/messages";
 
 interface Document {
-  uri: { fsPath: string };
+  uri: { fsPath: string; scheme: string };
   text: string;
   version: number;
   encoding: string | undefined;
@@ -29,7 +29,7 @@ const editor = vi.hoisted(() => ({
 }));
 
 vi.mock("vscode", () => ({
-  Uri: { file: (fsPath: string) => ({ fsPath, toString: () => `file:${fsPath}` }) },
+  Uri: { file: (fsPath: string) => ({ scheme: "file", fsPath, toString: () => `file:${fsPath}` }) },
   Position: class {
     constructor(
       public line: number,
@@ -51,6 +51,9 @@ vi.mock("vscode", () => ({
   ViewColumn: { Beside: 2 },
   window: editor,
   workspace: {
+    get textDocuments() {
+      return [...editor.documents.values()];
+    },
     openTextDocument: async (uri: { fsPath: string } | string) => {
       const file = typeof uri === "string" ? uri : uri.fsPath;
       let doc = editor.documents.get(file);
@@ -58,7 +61,7 @@ vi.mock("vscode", () => ({
         const disk = fs.readFileSync(file, "utf8");
         const encoding = disk.startsWith("\uFEFF") ? "utf8bom" : "utf8";
         doc = {
-          uri: { fsPath: file },
+          uri: { fsPath: file, scheme: "file" },
           text: disk.replace(/^\uFEFF/, ""),
           encoding,
           version: 1,
@@ -89,14 +92,16 @@ vi.mock("vscode", () => ({
 
 import * as vscode from "vscode";
 import { readDocument, writeDocument } from "../src/documentWrite";
-import { applyDefinitionEdits } from "../src/creators/save";
+import { applyDefinitionEdits, writeLocValues } from "../src/creators/save";
 import { writeFlagFile } from "../src/webviews/flagBuilder/save";
 import { FlagBuilderPanel } from "../src/webviews/flagBuilder/panel";
 import { CoaDesignerPanel } from "../src/webviews/coaDesigner/panel";
 import { newContentCommand } from "../src/scaffold/command";
 import { createTranslationCommand } from "../src/translation";
+import { createTranslationModCommand } from "../src/translationMod";
+import { generateCalendarLocCommand } from "../src/calendarInsert";
 import { ck3Meta } from "../../server/src/games/ck3/meta";
-import { renderScaffold } from "../src/scaffold/templates";
+import { renderScaffold } from "../../server/src/games/renderScaffold";
 import { TraitCreatorPanel } from "../src/webviews/traitCreator/panel";
 import { DynastyTreePanel } from "../src/webviews/dynastyTree/panel";
 import { WriteJournal } from "../src/webviews/dynastyTree/journal";
@@ -338,6 +343,264 @@ describe("Add Language command", () => {
     if (failure === "edit") editor.rejectEdit = true;
     if (failure === "save") editor.saveMode = "reject";
     await run();
+    expect(editor.showErrorMessage).toHaveBeenCalledTimes(1);
+    expect(editor.showInformationMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe("adaptive specialized writers", () => {
+  function defaults(value: unknown) {
+    const file = path.join(root, ".px-toolkit/localization.json");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify(value));
+  }
+
+  it("creator saves new keys into the author default and keeps owned keys in their dirty document", async () => {
+    defaults({
+      language: "german",
+      newKeyFile: "localization/replace/german/author_l_german.yml",
+      entryVersion: "none",
+    });
+    const existing = path.join(root, "localization/german/traits_l_german.yml");
+    seed(existing, 'l_german:\n old_trait:0 "Old"\n neighbor:7 "Keep"\n');
+    await dirty(existing, 'l_german:\n old_trait:0 "Unsaved"\n neighbor:7 "Unsaved neighbor" # keep\n');
+    const files = await writeLocValues(
+      cfg,
+      async () => [],
+      [
+        { key: "old_trait", value: "Changed" },
+        { key: "fresh_trait", value: "Fresh" },
+      ],
+      { modPath: root, file: "traits.txt" }
+    );
+    expect(files[0]).toBe(existing);
+    expect(savedText(existing)).toContain('neighbor:7 "Unsaved neighbor" # keep');
+    expect(savedText(existing)).toContain('old_trait:0 "Changed"');
+    const newFile = path.join(root, "localization/replace/german/author_l_german.yml");
+    expect(files[1]).toBe(newFile);
+    expect(savedText(newFile)).toContain('fresh_trait: "Fresh"');
+    expect(fs.existsSync(path.join(root, "localization/english/traits_l_english.yml"))).toBe(false);
+  });
+
+  it("New Content routes localization through the portable author default", async () => {
+    defaults({ language: "german", newKeyFile: "localization/german/my_events_l_german.yml" });
+    const template = ck3Meta.scaffolds!.find((item) => item.id === "event")!;
+    editor.showQuickPick.mockResolvedValue({ template });
+    editor.showInputBox.mockResolvedValueOnce("audit").mockResolvedValueOnce("audit.1");
+    await newContentCommand(cfg, vi.fn());
+    expect(editor.showErrorMessage).not.toHaveBeenCalled();
+    expect(savedText(path.join(root, "localization/german/my_events_l_german.yml"))).toContain("audit_1_t:");
+    expect(fs.existsSync(path.join(root, "localization/english/audit_events_l_english.yml"))).toBe(false);
+  });
+
+  it("Add Language discovers staged localization and mirrors its source layout", async () => {
+    cfg = { ...cfg, gameId: "eu5" };
+    defaults({ language: "german" });
+    const source = path.join(root, "main_menu/localization/replace/german/menu_l_german.yml");
+    seed(source, 'l_german:\n menu_title: "Titel"\n');
+    editor.showQuickPick.mockResolvedValue("french");
+    await createTranslationCommand(cfg, vi.fn());
+    expect(savedText(path.join(root, "main_menu/localization/replace/french/menu_l_french.yml"))).toContain(
+      "# german: Titel"
+    );
+    expect(fs.readFileSync(source, "utf8")).toContain('menu_title: "Titel"');
+  });
+
+  it("creates a first language under a profile stage for a new staged mod", async () => {
+    cfg = { ...cfg, gameId: "eu5" };
+    editor.showQuickPick.mockResolvedValue("german");
+    await createTranslationCommand(cfg, vi.fn());
+    expect(savedText(path.join(root, "in_game/localization/german/mod_l_german.yml"))).toBe("l_german:\n");
+    expect(fs.existsSync(path.join(root, "localization"))).toBe(false);
+  });
+});
+
+describe("calendar localization command", () => {
+  function targets() {
+    return [
+      path.join(root, "localization/english/px_calendar_l_english.yml"),
+      path.join(root, "localization/replace/english/px_calendar_dates_l_english.yml"),
+    ];
+  }
+  function calendarFile() {
+    return path.join(root, ".px-toolkit/calendar.json");
+  }
+  beforeEach(() => {
+    cfg = { ...cfg, calendar: { epoch: 4000, after: "AD", before: "BC" } };
+    editor.showWarningMessage.mockResolvedValue("Regenerate");
+  });
+  it("uses the dirty declaration and preserves unrelated dirty localization and existing versions", async () => {
+    seed(calendarFile(), JSON.stringify(cfg.calendar));
+    await dirty(calendarFile(), JSON.stringify({ epoch: 3000, after: "CE", before: "BCE" }));
+    const [math] = targets();
+    seed(math, 'l_english:\n PX_CAL_ERA:7 "Old" # retain\n unrelated:0 "Old neighbor"\n');
+    await dirty(math, 'l_english:\n PX_CAL_ERA:7 "Edited" # retain\n unrelated:0 "Unsaved neighbor"\n');
+    await generateCalendarLocCommand(cfg);
+    const text = savedText(math);
+    expect(text).toContain('unrelated:0 "Unsaved neighbor"');
+    expect(text).toContain("PX_CAL_ERA:7");
+    expect(text).toContain("'CE', 'BCE'");
+    expect(text).toContain("# retain");
+    expect(fs.readFileSync(calendarFile(), "utf8")).toContain("4000");
+    expect(editor.showErrorMessage).not.toHaveBeenCalled();
+  });
+  it("uses the author language and version setting for generated calendar files", async () => {
+    const file = path.join(root, ".px-toolkit/localization.json");
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, JSON.stringify({ language: "german", entryVersion: "none" }));
+    await generateCalendarLocCommand(cfg);
+    expect(savedText(path.join(root, "localization/german/px_calendar_l_german.yml"))).toContain(
+      'PX_CAL_ERA: "'
+    );
+    expect(fs.existsSync(targets()[0])).toBe(false);
+  });
+  it("does not create a missing sibling file when regeneration is cancelled", async () => {
+    const [math, dates] = targets();
+    seed(math, 'l_english:\n PX_CAL_ERA:0 "Old"\n');
+    await dirty(math, 'l_english:\n PX_CAL_ERA:0 "Unsaved"\n unrelated:0 "Keep"\n');
+    const before = fs.readFileSync(math, "utf8");
+    editor.showWarningMessage.mockResolvedValue(undefined);
+    await generateCalendarLocCommand(cfg);
+    expect(fs.existsSync(dates)).toBe(false);
+    expect(fs.readFileSync(math, "utf8")).toBe(before);
+    expect(editor.documents.get(math)!.text).toContain('unrelated:0 "Keep"');
+    expect(editor.applyEdit).not.toHaveBeenCalled();
+  });
+  it("checks all existing calendar documents before writing a missing sibling", async () => {
+    const [math, dates] = targets();
+    seed(dates, "not a localization header\n");
+    await generateCalendarLocCommand(cfg);
+    expect(fs.existsSync(math)).toBe(false);
+    expect(editor.applyEdit).not.toHaveBeenCalled();
+    expect(editor.showErrorMessage).toHaveBeenCalledWith(expect.stringContaining("header"));
+  });
+  it.each(["target", "source", "defaults"])(
+    "rejects a stale %s after the regenerate prompt",
+    async (which) => {
+      seed(calendarFile(), JSON.stringify(cfg.calendar));
+      const defaults = path.join(root, ".px-toolkit/localization.json");
+      seed(defaults, JSON.stringify({ language: "english" }));
+      const [math, dates] = targets();
+      seed(math, 'l_english:\n PX_CAL_ERA:0 "Old"\n');
+      seed(dates, "l_english:\n");
+      const before = targets().map((file) => fs.readFileSync(file, "utf8"));
+      editor.showWarningMessage.mockImplementation(async () => {
+        const doc = editor.documents.get(
+          which === "source" ? calendarFile() : which === "defaults" ? defaults : math
+        )!;
+        doc.text += "\n";
+        doc.version++;
+        return "Regenerate";
+      });
+      await generateCalendarLocCommand(cfg);
+      expect(editor.applyEdit).not.toHaveBeenCalled();
+      expect(editor.showErrorMessage).toHaveBeenCalledWith(expect.stringContaining("changed during"));
+      expect(targets().map((file) => fs.readFileSync(file, "utf8"))).toEqual(before);
+      expect(editor.showInformationMessage).not.toHaveBeenCalled();
+    }
+  );
+  it("refuses a calendar destination inside vanilla", async () => {
+    cfg = { ...cfg, gamePath: path.join(root, "localization") };
+    const [math] = targets();
+    seed(math, 'l_english:\n PX_CAL_ERA:0 "Vanilla"\n');
+    await generateCalendarLocCommand(cfg);
+    expect(editor.applyEdit).not.toHaveBeenCalled();
+    expect(editor.showErrorMessage).toHaveBeenCalledWith(expect.stringContaining("read-only"));
+    expect(fs.readFileSync(math, "utf8")).toContain('"Vanilla"');
+  });
+  it.each(["edit", "save"])("reports %s failure without success feedback", async (failure) => {
+    if (failure === "edit") editor.rejectEdit = true;
+    else editor.saveMode = "reject";
+    await generateCalendarLocCommand(cfg);
+    expect(editor.showErrorMessage).toHaveBeenCalledTimes(1);
+    expect(editor.showInformationMessage).not.toHaveBeenCalled();
+    expect(editor.showTextDocument).not.toHaveBeenCalled();
+  });
+});
+
+describe("standalone translation mod command", () => {
+  let destination: string;
+  let source: string;
+  beforeEach(() => {
+    destination = path.join(root, "generated");
+    source = path.join(root, "localization/english/source_l_english.yml");
+    cfg = { ...cfg, parentPaths: [] };
+    seed(source, 'l_english:\n source_key:0 "Saved source"\n');
+    editor.showQuickPick.mockImplementation(async (_items, options: { title: string }) =>
+      options.title === "Translate which mod?" ? { root, label: "Source" } : "german"
+    );
+    editor.showInputBox.mockImplementation(async () => destination);
+  });
+  it("translates the dirty source without saving it", async () => {
+    await dirty(source, 'l_english:\n source_key:0 "Unsaved source"\n');
+    const original = fs.readFileSync(source, "utf8");
+    await createTranslationModCommand(cfg, vi.fn());
+    expect(savedText(path.join(destination, "localization/german/replace/source_l_german.yml"))).toContain(
+      "# english: Unsaved source"
+    );
+    expect(fs.readFileSync(source, "utf8")).toBe(original);
+    expect(editor.showErrorMessage).not.toHaveBeenCalled();
+  });
+  it("retains unique source entries when plain and replace filenames match", async () => {
+    seed(
+      path.join(root, "localization/replace/english/source_l_english.yml"),
+      'l_english:\n replace_key:0 "Replace entry"\n'
+    );
+    await createTranslationModCommand(cfg, vi.fn());
+    const translated = savedText(path.join(destination, "localization/german/replace/source_l_german.yml"));
+    expect(translated).toContain("# english: Saved source");
+    expect(translated).toContain("# english: Replace entry");
+    expect(editor.showErrorMessage).not.toHaveBeenCalled();
+  });
+  it("reports conflicting collapsed source values before creating the destination", async () => {
+    seed(
+      path.join(root, "localization/replace/english/source_l_english.yml"),
+      'l_english:\n source_key:0 "Different source"\n'
+    );
+    await createTranslationModCommand(cfg, vi.fn());
+    expect(fs.existsSync(destination)).toBe(false);
+    expect(editor.applyEdit).not.toHaveBeenCalled();
+    expect(editor.showErrorMessage).toHaveBeenCalledWith(
+      expect.stringContaining("Conflicting source localization for source_key")
+    );
+    expect(editor.showInformationMessage).not.toHaveBeenCalled();
+  });
+  it("rejects a source changed while opening a destination", async () => {
+    editor.onOpen = (file) => {
+      if (file.startsWith(destination)) {
+        const doc = editor.documents.get(source)!;
+        doc.text += "# concurrent\n";
+        doc.version++;
+      }
+    };
+    await createTranslationModCommand(cfg, vi.fn());
+    expect(editor.applyEdit).not.toHaveBeenCalled();
+    expect(editor.showErrorMessage).toHaveBeenCalledWith(expect.stringContaining("changed during"));
+    expect(editor.showInformationMessage).not.toHaveBeenCalled();
+  });
+  it("rejects a destination that became nonempty after selection", async () => {
+    editor.showInputBox.mockImplementation(async () => {
+      seed(path.join(destination, "keep.txt"), "User work");
+      return destination;
+    });
+    await createTranslationModCommand(cfg, vi.fn());
+    expect(editor.applyEdit).not.toHaveBeenCalled();
+    expect(fs.readFileSync(path.join(destination, "keep.txt"), "utf8")).toBe(BOM + "User work");
+    expect(editor.showErrorMessage).toHaveBeenCalledWith(expect.stringContaining("no longer empty"));
+  });
+  it("refuses a new translation mod inside vanilla before writing any generated file", async () => {
+    cfg = { ...cfg, gamePath: path.join(root, "game") };
+    fs.mkdirSync(cfg.gamePath!, { recursive: true });
+    destination = path.join(cfg.gamePath!, "translation");
+    await createTranslationModCommand(cfg, vi.fn());
+    expect(editor.applyEdit).not.toHaveBeenCalled();
+    expect(fs.existsSync(destination)).toBe(false);
+    expect(editor.showErrorMessage).toHaveBeenCalledWith(expect.stringContaining("read-only"));
+  });
+  it.each(["edit", "save"])("reports %s failure without a success summary", async (failure) => {
+    if (failure === "edit") editor.rejectEdit = true;
+    else editor.saveMode = "reject";
+    await createTranslationModCommand(cfg, vi.fn());
     expect(editor.showErrorMessage).toHaveBeenCalledTimes(1);
     expect(editor.showInformationMessage).not.toHaveBeenCalled();
   });

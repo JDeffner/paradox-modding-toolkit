@@ -22,6 +22,71 @@ full contract below including `serverInfo` in the `initialize` result, the
 `paradox/scopeAt`, the `paradox/exampleWiki` pair, and `dataDir`
 (`paradox/*` has been the method prefix since extension 0.1.2).
 
+## pxtk CLI and MCP
+
+Preparation operations extend the core queries with init, create, loc, logs, format and image. All are available through the CLI and matching pxtk_* MCP tools. CLI --to maps to the image request's format field. Common write arguments are write (default false) and expect (a preview token).
+
+| Operation | Input | Data |
+|---|---|---|
+| init | Optional write, expect | Exclusive configuration creation for an existing mod. |
+| create | Optional kind, name, prefix, stage, language, write, expect | No kind lists profile-supported templates. A selected kind previews or writes script and localization files. |
+| loc | action: get/set/check; optional name, value, file, stage, language, limit, write, expect | Lookup sources, bounded language coverage or a localization edit proposal. Only set writes. |
+| logs | action: read/checkpoint; optional file, since, output, limit, write, expect | Grouped records, rotation status, pending bytes and checkpoint metadata. Only checkpoint creates an output file. |
+| format | files array; optional check, write, expect | Conservative indentation edits and changed count. |
+| image | action: inspect/convert; files array; optional output, format, dds, width, height, fit, background, limit, write, expect | Image metadata or conversion results. Only convert writes. |
+
+Utility write results contain mode (preview/check/written), previewToken, changed, written and files. Each file has its mod-relative path, create/update action, before/after SHA-256 and output byte count. Text previews include at most 16,000 characters with contentTruncated. Passing expect binds application to the recomputed preview and rejects changed inputs or options. Writers check source snapshots immediately before applying changes. New files are exclusive creations; each update is atomic, but a batch is not transactional. A failure reports completed paths. Destinations cannot escape the editable mod or traverse linked paths. Image, configuration and checkpoint outputs never replace existing files.
+
+Inspect accepts examples and templates booleans for separate bounded lists. Impact returns exact standard-LSP reference sites (file, line, column, 1-based) separately from callers grouped by definition. Its coverage labels dynamic-reference limits and override ordering/winners. Validate accepts an optional files array to focus structural checks. Tiger still checks the whole mod and all Tiger findings remain visible. The scope field reports structural (selected_files/workspace), tiger (workspace) and selected paths. Baseline identity includes the sorted structural selection.
+
+Formatting check differences and localization coverage findings use exit 1. Preparation commands that do not load the LSP report unknown documentation provenance and an empty serverVersion. Localization entries report their own indexed source locations. Formatting, scaffolding, initialization, logs and image preparation use shared modules directly.
+
+The standalone `@px-lsp/cli` package exposes `pxtk status`, `search`, `inspect`, `impact`, and `validate`. This adapter uses the existing LSP methods below. It does not change their names or payloads. Its JSON types live in `@px-lsp/protocol/agentTools`.
+
+`--json` prints one object to stdout:
+
+```ts
+interface PxtkResult<Data = Record<string, unknown>> {
+  schemaVersion: 1;
+  operation: "status" | "search" | "inspect" | "impact" | "validate" | "init" | "create" | "loc" | "logs" | "format" | "image";
+  status: "ok" | "not_found" | "ambiguous" | "incomplete";
+  sources: {
+    game: string;
+    gamePath: string | null;
+    gameVersion: string;
+    mod: string;
+    parents: string[];
+    logsPath: string | null;
+    documentation: "generated" | "bundled" | "wiki" | "none" | "unknown";
+    documentationMatchesGame: "unknown";
+    serverVersion: string;
+    savedFilesOnly: true;
+  };
+  warnings: string[];
+  data: Data;
+}
+```
+
+Execution and input errors use `{ schemaVersion: 1, status: "error", error: { code, message } }`. The game must be explicitly selected. The documentation field describes loaded script identifiers; the status command's index data separately reports data-type provenance. Documentation provenance is separate from patch compatibility: neither a bundled snapshot nor a generated dump certifies the latter.
+
+| Operation | Input | Data |
+|---|---|---|
+| status | No query | Resolved config file, index status, capabilities, issues, Tiger configuration, and setup steps. Invalid paths return issues without starting the LSP. |
+| search | `query`, optional `kind` | Documentation and LSP workspace-symbol matches, plus documentation sources. |
+| inspect | `name`, optional `kind` | Exact documentation entries and definition source excerpts. An ambiguous name returns candidates and asks for a kind. |
+| impact | `name`, optional `kind` | Definition, callers, outgoing dependencies, overrides, and coverage limits. Multiple definition kinds return an ambiguity result. |
+| validate | Optional `baseline` path | Structural and Tiger results, full counts, bounded findings, baseline comparison, input identity, and `gameplayTested: false`. |
+
+`limit` is optional (default 20, range 1 to 200). Lists use `{ items, total, truncated }`; totals count all matches available to the adapter before its own limit. Workspace-symbol lookup inherits the LSP cap of 512 matches, and impact inherits the override catalog cap of 2000 entries. Source excerpts contain at most 18 lines of 500 characters each. Search's standard LSP locations retain zero-based positions; source excerpts, impact sites, and findings use one-based lines. Documentation entries retain their existing LSP shapes.
+
+Validation reports `complete`, `baselineApplied`, `structural`, `tiger`, `context`, `findings`, `newFindings`, `existingFindings`, `resolvedFindings`, and `newErrors`. A finding has `source` (structural or tiger), `code`, `severity` (error, warning, or info), `message`, and nullable `file`, `line`, `column`. Files are relative to the editable mod where possible. A Tiger process error or unreadable report makes the result incomplete, even if structural checks passed. Baseline comparison is applied only after complete validation.
+
+CLI exit codes are 0 for completed work without new errors, 1 for new errors/no match/ambiguity, and 2 for invalid input, incomplete coverage, cancellation, or execution failure. `status: "ok"` on validation means the tools completed; inspect `newErrors` to determine whether it passed. Warnings do not set exit 1.
+
+`validate --write-baseline <file>` is CLI-only. It requires complete validation and creates a new JSON file in an existing directory inside the editable mod. It never overwrites a file. The baseline stores `schemaVersion: 1`, `type: "pxtk-baseline"`, validation `context`, and all findings. Comparison counts repeated findings while ignoring line and column movement. It rejects changed game/version, validator/configuration, schema, documentation, language, or dependency content. Game files are identified by installation and detected version; manual changes to vanilla without a version change require a fresh validation target.
+
+`pxtk mcp` serves the same operations over local stdio using MCP tool names `pxtk_status`, `pxtk_search`, `pxtk_inspect`, `pxtk_impact`, and `pxtk_validate`. Each tool returns the envelope in both JSON text content and `structuredContent`. Execution errors and incomplete results set `isError`. Invalid MCP arguments are rejected earlier with the SDK's standard tool-error response. New validation findings remain normal tool results so an agent can inspect them. Core query tools declare read-only annotations. Preparation tools declare write capability because their explicit write mode changes mod files. Only protocol messages go to stdout; process diagnostics go to stderr. Each call resolves the configuration again. Indexed operations use a fresh LSP session; direct preparation utilities do not start one. Requests are serialized; cancellation and closed stdin stop active child processes.
+
 ## Transport and lifecycle
 
 - Transports: `--stdio` (what external clients use; also the default when no
@@ -52,6 +117,14 @@ Symbol identity includes its definition kind. Source priority applies within eac
 Open script and localization documents are indexed from their current text. Send `didChange` before requesting completion, navigation or rename; a file watcher does not replace an open document's text. `didClose` restores the saved content or removes an unsaved-only definition. Watcher notifications also invalidate cached reference searches in dependency roots.
 
 For rename, declare standard `capabilities.workspace.workspaceEdit.documentChanges: true` and enforce each returned `TextDocumentEdit.textDocument.version`. Closed files carry a null version. Without this capability, rename returns `WorkspaceEdit.changes` only when all open sources match disk; otherwise the request fails and asks the user to save first. Rename rejects ambiguous symbol types, stale or unreadable source text, read-only targets and a target name already used by that kind. Graphics, GUI and nested symbol types whose reference forms are not fully indexed cannot be renamed. This includes CK3 faiths and laws, which are available for completion, hover, navigation and typed references. A declaration with several occurrences of its name on one line must be split across lines before rename.
+
+## Semantic tokens
+
+`textDocument/semanticTokens/full` covers script, GUI and localization documents. Read the token legend from `initialize.capabilities.semanticTokensProvider.legend`; do not hardcode its numeric positions. All token types are standard LSP types. Generic database and GUI definition names use `type`, script values use `enumMember`, runtime names use `variable`, and scope navigation uses `property`. Engine effects use `method`, triggers and datafunctions use `function`, and scripted effects and triggers use `macro`. Localization prose remains syntax-colored; its embedded datafunction expressions receive semantic tokens.
+
+The standard modifiers are `defaultLibrary`, `declaration`, `readonly` and `modification`. Additional modifiers are `px` (a toolkit token), `pxEffect` (an engine or scripted effect), `pxTrigger` (an engine or scripted trigger), and `pxScope` (a saved scope or scope link). Clients can ignore these extra modifiers and use the standard token types. The effect and trigger modifiers let clients distinguish both engine calls and scripted calls without inventing nonstandard token types.
+
+Classification uses the field's declared reference kind and trigger/effect context before a same-named engine token. Declarations and explicit reference prefixes retain their roles while indexing runs. Unresolved bare identifiers keep syntax coloring. Color is a reading aid, not a validation result; inferred scope compatibility does not remove tokens or generate diagnostics.
 
 ## Initialization
 
@@ -166,9 +239,76 @@ For example, this standard notification changes hover detail while retaining the
 { "jsonrpc": "2.0", "method": "workspace/didChangeConfiguration", "params": { "settings": { "pxLsp": { "hoverDetail": "compact" } } } }
 ```
 
-Creation, changes, and deletion of `schema.json` or `playset.json` in an editable mod's profile config directory trigger a debounced full rebuild. The profile's legacy directory is also watched where supported. Standard `workspace/didChangeWatchedFiles` and custom `paradox/modFileChanged` events share the same debounce, so a burst across both transports rebuilds once. Custom watcher clients must include these JSON files; dynamically registered server watchers include them. Other file changes keep their existing single-file behavior.
+Creation, changes, and deletion of `schema.json`, `playset.json` or `project.json` in an editable mod's profile config directory trigger a debounced full rebuild. The profile's legacy directory is also watched where supported. Standard `workspace/didChangeWatchedFiles` and custom `paradox/modFileChanged` events share the same debounce, so a burst across both transports rebuilds once. Custom watcher clients must include these JSON files; dynamically registered server watchers include them. Other file changes keep their existing single-file behavior.
 
 Reloading a playset does not extend the client's watched roots. A host must watch external dependency folders if it needs later edits in those files to update the index.
+
+### Portable project rules
+
+`<mod>/.px-toolkit/project.json` stores shared authoring rules. It is separate from the existing `calendar.json`, `localization.json`, `schema.json`, `playset.json`, `workshop.json` and Workshop listing folder. Those artifacts keep their existing formats.
+
+```json
+{
+  "version": 1,
+  "gameId": "ck3",
+  "authoring": {
+    "characterHistory": {
+      "quoteNames": true,
+      "quoteCultures": true,
+      "quoteReligions": true
+    }
+  },
+  "validation": {
+    "ignore": [],
+    "ignorePatterns": [],
+    "requireDescriptor": true
+  },
+  "publishing": {
+    "changelog": "changelog"
+  }
+}
+```
+
+Only `version` is required. `gameId` is a generic game identifier; a parser given an expected game requires an exact match. VS Code can use the shared declaration to select its game profile before reading that game's personal paths. The file parser rejects unsupported versions and invalid known fields. It preserves unknown fields, including fields nested under known objects, when a setting changes. The pure model is exported by `@px-lsp/protocol/projectSettings`; `@px-lsp/protocol/projectSettingsFile` is its read-only Node filesystem boundary.
+
+| Client setting | Field in `project.json` |
+| --- | --- |
+| `gameId` | `gameId` |
+| `characterHistory.quoteNames` | `authoring.characterHistory.quoteNames` |
+| `characterHistory.quoteCultures` | `authoring.characterHistory.quoteCultures` |
+| `characterHistory.quoteReligions` | `authoring.characterHistory.quoteReligions` |
+| `diagnostics.ignore` | `validation.ignore` |
+| `diagnostics.ignorePatterns` | `validation.ignorePatterns` |
+| `diagnostics.requireDescriptor` | `validation.requireDescriptor` |
+| `workshop.changelog` | `publishing.changelog` |
+
+`publishing.changelog` is a safe relative file or folder path **from the Workshop listing directory**, not from the mod root. Absolute paths and `..` traversal are rejected. A personal changelog outside that directory belongs in the host's private configuration.
+
+Each artifact resolves independently. A consumer first checks its exact path in `.px-toolkit`, then the same path in the active profile's legacy config directory. An existing current artifact takes priority even if it is malformed or unreadable. Creating `.px-toolkit/project.json` therefore does not hide an older `calendar.json` or Workshop folder. New writes use `.px-toolkit` and preserve legacy originals. Config path helpers reject unsafe directory names, traversal and links that escape the selected config folder. `resolveConfigDir` and `migrateConfigDir` remain deprecated compatibility exports; new consumers use `resolveConfigPath` and `canonicalConfigPath`.
+
+The server reads project validation rules for each editable mod. Explicit `ignore` and `ignorePatterns` arrays replace the corresponding client defaults, including empty arrays. A bad declaration emits `invalid-project-settings` on the selected file and uses client diagnostic settings until it is fixed; it never substitutes legacy project rules. Other authoring and publishing fields are for host workflows. The declaration does not select the server's game: hosts still send `settings.gameId`. Browser hosts can use the pure model; the Node file reader and automatic storage upgrade are not available to the browser language service. No new LSP method or capability is added.
+
+## Migration data types
+
+The host's version-1 `MachineSettings` also accepts `patches: Record<projectId, PatchBindings>`, where `PatchBindings` contains an absolute `output` path and a `sources` map from stable source IDs to absolute paths. These are private User settings. Portable patch intent lives in the output mod's `.px-toolkit/compatibility.json`. Unknown binding fields survive edits, malformed known fields and future registry versions are read-only, and Move Mod relocates affected local bindings. This adds no LSP method or capability.
+
+`@px-lsp/protocol/migration` exports serializable types for the Mod Compatibility host workflow. These add no LSP requests, notifications or client capabilities. Bare LSP clients and the browser language service receive no migration UI or apply operation.
+
+| Type | Contract |
+| --- | --- |
+| `MigrationManifest` | Stable contribution ID and independent revision, `sdkVersion: 1` or `2`, game ID, exact `fromVersion` and `toVersion`, `kind` (`advisory` or `recipe`), `detection` (`none` or `script`), `requirement` (`required` or `informational`), title, description, plain-text guidance, evidence, limitations, entry dependencies and input prefixes. SDK 2 adds listing/prefix capture, extension filters, matching mod paths and frozen exact byte requests. |
+| `MigrationTransition` / `MigrationRoute` | An edge contains every registered contribution for its exact build pair. A route contains ordered transitions and dependency-ordered entry IDs. It does not certify coverage of all game changes. |
+| `MigrationRouteResult` | Known versions, explicit route alternatives and issues such as missing transitions or dependencies. No version range or unsupported downgrade is inferred. |
+| `MigrationInspection` | `applicable`, `not-applicable` or `unknown`, plus findings, questions and coverage. Coverage is not a compatibility score. |
+| `MigrationQuestion` / `MigrationAnswers` | Required or optional text, choice or boolean questions; answers map stable question IDs to strings or booleans. |
+| `MigrationFinding` / `MigrationCheck` | Findings carry severity and optional path/line; checks record before/after-apply stage, required/advisory necessity and passed/failed/not-run status. A check does not run a validator. |
+| `SavedMigrationEntry` | Manifest, local artifact path and artifact hash. Saved executable metadata does not grant trust to run code. |
+| `MigrationCompletion` | Contribution revision and `applied`, `not-applicable`, `manual` or `read` state, with an optional manual note. Manual reports and read acknowledgments do not establish target-game verification. |
+| `MigrationSession` | Version 2, game ID, selected roots, exact source/target builds, chosen route, build-to-reference-folder map, local entry metadata, answer maps, per-entry completions and optional recovery checkpoint. |
+
+Exact build identifiers have two to four numeric components without leading zeros. The mod root is writable; source and target roots are read-only references for the current transition. Intermediate transitions can require distinct reference folders. A data-only advisory has no preparation function. Recipes produce frozen per-step plans, and the host applies a step before inspecting the next. Missing human decisions or required manual work pause progress. Manual completion can record work done outside an advisory or recipe; it does not certify the detector or target game. The host checks completed progress against route, catalog and artifact identity and completed entries' declared inputs. Changes used only by future entries preserve earlier completion; changed completed inputs reopen the route.
+
+The compiled SDK, snapshots and prepared-plan types are in `@px-lsp/server/migrations`. See the [author guide](../packages/server/migrations/README.md) and [embedding boundary](EMBEDDING.md#mod-compatibility).
 
 ## Custom methods: client → server
 
@@ -349,6 +489,8 @@ is the signal to render an input instead of a dropdown. `modRoot` scopes the
 definition-backed sets like the graph.
 
 `paradox/eventDetail` accepts an optional `file` selector as an absolute path or file URI. With it, only the event in that indexed file can match; a missing event or unreadable file returns `null`. Without it, the existing ID lookup order applies.
+
+`EventDetail.sourceHash` identifies the decoded source text used to calculate its coordinates. It is an optional opaque freshness value, not a security hash. Older servers omit it. An editor must compare the current source before applying coordinate-based changes and refresh stale detail; absence does not establish freshness. The toolkit Event Graph rejects stale forms, preserves unsaved text and unrelated statements, and reports failed edits or saves without clearing the draft.
 
 `paradox/eventDetail` carries an event's blocks twice over: `keys` /
 `effectKeys` summarize them for an inspector, and `lines` / `totalLines` /
@@ -811,9 +953,7 @@ capability at a time. A client declaring nothing (every field off) gets:
   span *content* is always self-sufficient plain text ("■ trigger", a scope
   name), so the cards read the same either way;
 - **`px.editLocalization` not listed** — the "create localization key" quick
-  fix carries a real `WorkspaceEdit` instead (appending to
-  `<locRoot>/<lang>/zzz_px_lsp_edits_l_<lang>.yml`, creating it BOM-first when
-  absent), and the "edit localization" action is omitted;
+  fix carries a real `WorkspaceEdit` using mod conventions and `localization.json` defaults. New files include a BOM and language header. Open targets use their current document version; closed targets use standard LSP `version: null`. File creation fails on a collision. Ambiguous, generated or invalid targets produce a disabled action with a reason. The "edit localization" command action is omitted;
 - **`px.openLocalizationSideBySide` not listed** — that action is omitted;
 - **`px.showReferences` not listed** — the hover reference line is dropped
   entirely. A count the user cannot click answers no question, so the card

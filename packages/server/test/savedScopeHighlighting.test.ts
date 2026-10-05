@@ -33,7 +33,11 @@ describe("saved-scope highlighting", () => {
     "targets = { scope:county_culture }",
   ])("keeps the prefix distinct before and after indexing: %s", (text) => {
     const data = new ServerData();
-    const expected = [{ text: "scope:", type: "keyword" }];
+    const name = /scope:([A-Za-z0-9_]+)/.exec(text)![1];
+    const expected = [
+      { text: "scope:", type: "keyword" },
+      { text: name, type: "variable" },
+    ];
     expect(tokens(data, text)).toEqual(expected);
     data.index.addAll([
       { name: "scope", kind: "scripted_effect", file: "fixture.txt", line: 0, source: "mod" },
@@ -52,6 +56,9 @@ describe("saved-scope highlighting", () => {
         data,
         '# scope:county_culture\ntext = "scope:county_culture"\nvalue = county_culture\nvalue = culture:county_culture'
       )
-    ).toEqual([{ text: "culture", type: "variable" }]);
+    ).toEqual([
+      { text: "culture:", type: "keyword" },
+      { text: "county_culture", type: "type" },
+    ]);
   });
 });

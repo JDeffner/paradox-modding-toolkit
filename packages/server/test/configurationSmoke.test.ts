@@ -90,6 +90,7 @@ async function client(
     registerOptions: { watchers?: Array<{ globPattern: string }> };
   }> = [];
   const listeners = new Set<() => void>();
+  const diagnostics = new Map<string, Array<{ code?: string | number; message: string }>>();
   const signal = () => listeners.forEach((listener) => listener());
   const wait = (predicate: () => boolean) =>
     new Promise<void>((resolve, reject) => {
@@ -114,6 +115,13 @@ async function client(
     signal();
   });
   conn.onNotification(() => undefined);
+  conn.onNotification(
+    "textDocument/publishDiagnostics",
+    (params: { uri: string; diagnostics: Array<{ code?: string | number; message: string }> }) => {
+      diagnostics.set(params.uri, params.diagnostics);
+      signal();
+    }
+  );
   conn.onRequest("window/workDoneProgress/create", () => null);
   conn.onRequest("client/registerCapability", (p: { registrations: typeof registrations }) => {
     registrations.push(...p.registrations);
@@ -140,6 +148,7 @@ async function client(
   await conn.sendNotification("initialized", {});
   return {
     conn,
+    diagnostics,
     registrations,
     wait,
     get builds() {
@@ -165,6 +174,116 @@ async function client(
 }
 
 describe.skipIf(!fs.existsSync(SERVER))("configuration over stdio", () => {
+  it.each(["standard", "custom"] as const)(
+    "applies each mod's project rules and refreshes them through %s watching",
+    async (transport) => {
+      const f = fixture();
+      const first = f.write("mod/events/policy.txt", "namespace = px_policy\npx_policy.1 = {\n");
+      const second = f.write(
+        "second/events/policy.txt",
+        "namespace = px_policy_second\npx_policy_second.1 = {\n"
+      );
+      f.write(
+        "mod/.px-toolkit/project.json",
+        JSON.stringify({ version: 1, validation: { ignore: ["unclosed-brace"], ignorePatterns: [] } })
+      );
+      f.write(
+        "second/.px-toolkit/project.json",
+        JSON.stringify({ version: 1, validation: { ignore: [], ignorePatterns: [] } })
+      );
+      const c = await client(f, {
+        settings: {
+          modPath: f.mod,
+          workspaceMods: [f.second],
+          diagnosticsIgnore: ["unclosed-brace"],
+          diagnosticsIgnorePatterns: ["events/*"],
+        },
+      });
+      await c.built(1);
+      const open = async (file: string) => {
+        const uri = URI.file(file).toString();
+        await c.conn.sendNotification("textDocument/didOpen", {
+          textDocument: { uri, version: 1, languageId: "paradox", text: fs.readFileSync(file, "utf8") },
+        });
+        await c.wait(() => c.diagnostics.has(uri));
+        return uri;
+      };
+      const firstUri = await open(first);
+      const secondUri = await open(second);
+      const codes = (uri: string) => c.diagnostics.get(uri)?.map((item) => item.code);
+      expect(codes(firstUri)).not.toContain("unclosed-brace");
+      expect(codes(firstUri)).toContain("missing-bom");
+      expect(codes(secondUri)).toContain("unclosed-brace");
+      const policy = f.write(
+        "mod/.px-toolkit/project.json",
+        JSON.stringify({ version: 1, validation: { ignore: [], ignorePatterns: [] } })
+      );
+      const notify = () =>
+        transport === "standard"
+          ? c.conn.sendNotification("workspace/didChangeWatchedFiles", {
+              changes: [{ uri: URI.file(policy).toString(), type: 2 }],
+            })
+          : c.conn.sendNotification(modFileChangedNotification, { fsPath: policy });
+      await notify();
+      await c.built(2);
+      await c.barrier();
+      expect(codes(firstUri)).toContain("unclosed-brace");
+      fs.unlinkSync(policy);
+      await notify();
+      await c.built(3);
+      await c.barrier();
+      expect(codes(firstUri)).toEqual([]);
+      expect(codes(secondUri)).toContain("unclosed-brace");
+    }
+  );
+
+  it("reports invalid project policies without legacy fallback and clears errors after repair", async () => {
+    const f = fixture();
+    f.write("mod/.ck3modding/project.json", JSON.stringify({ version: 1, validation: { ignore: [] } }));
+    const policy = f.write("mod/.px-toolkit/project.json", "{");
+    const c = await client(f);
+    await c.built(1);
+    const uri = URI.file(policy).toString();
+    expect(c.diagnostics.get(uri)?.[0]).toMatchObject({ code: "invalid-project-settings" });
+    expect(c.diagnostics.get(uri)?.[0].message).toContain("client settings");
+    await c.conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri, version: 1, languageId: "json", text: "{" },
+    });
+    await c.conn.sendNotification("textDocument/didClose", { textDocument: { uri } });
+    await c.barrier();
+    expect(c.diagnostics.get(uri)?.[0].code).toBe("invalid-project-settings");
+    for (const [version, value, cause] of [
+      [2, { version: 2 }, "version"],
+      [3, { version: 1, gameId: "vic3" }, "vic3"],
+      [4, { version: 1 }, null],
+    ] as const) {
+      fs.writeFileSync(policy, JSON.stringify(value));
+      await c.conn.sendNotification("workspace/didChangeWatchedFiles", { changes: [{ uri, type: 2 }] });
+      await c.built(version);
+      await c.barrier();
+      if (cause) expect(c.diagnostics.get(uri)?.[0].message).toContain(cause);
+      else expect(c.diagnostics.get(uri)).toEqual([]);
+    }
+  });
+
+  it("loads disjoint current and legacy schema/playset artifacts", async () => {
+    const f = fixture();
+    f.write("mod/.px-toolkit/project.json", JSON.stringify({ version: 1 }));
+    f.write(
+      "mod/.px-toolkit/schema.json",
+      JSON.stringify({ entries: [{ path: "common/px_cfg_custom", kind: "scripted_effect" }] })
+    );
+    f.write("mod/.ck3modding/playset.json", JSON.stringify({ parents: [f.parent] }));
+    f.write("mod/common/px_cfg_custom/one.txt", "px_cfg_custom = {}\n");
+    const c = await client(f);
+    await c.built(1);
+    expect(await c.symbols()).toEqual(["px_cfg_custom", "px_cfg_first", "px_cfg_parent"]);
+    const playset = f.write("mod/.px-toolkit/playset.json", "{");
+    await c.conn.sendNotification(modFileChangedNotification, { fsPath: playset });
+    await c.built(2);
+    expect(await c.symbols()).toEqual(["px_cfg_custom", "px_cfg_first"]);
+  });
+
   it.each(["event", "localization"] as const)(
     "refreshes untouched script diagnostics after cross-file %s changes",
     async (kind) => {

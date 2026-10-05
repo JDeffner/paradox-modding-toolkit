@@ -63,6 +63,7 @@ const EU5_HAND_ENTRIES: SchemaEntry[] = [
 
 export const eu5Profile: GameProfile = {
   ...eu5Meta,
+  migrations: [],
   schema: [...EU5_SCHEMA, ...EU5_HAND_ENTRIES],
   refFields: EU5_REF_FIELDS,
   // No verified vanilla event-localization naming convention yet.

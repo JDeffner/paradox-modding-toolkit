@@ -1,4 +1,10 @@
-export type SettingsTarget = "user" | "workspace" | `folder:${string}`;
+export type SettingsTarget =
+  | "user"
+  | "workspace"
+  | `folder:${string}`
+  | `project:${string}`
+  | "machine:workspace"
+  | `machine-folder:${string}`;
 export type SettingValue = string | boolean | number | null | string[] | Record<string, unknown>;
 
 export interface SettingSchema {
@@ -19,6 +25,14 @@ export interface SettingRow {
   group: string;
   schema: SettingSchema;
   value: SettingValue;
+  /** Destination being edited, distinct from the mod context selected in the header. */
+  target: SettingsTarget;
+  targetLabel: string;
+  targets: { id: SettingsTarget; label: string }[];
+  effectiveValue: SettingValue;
+  effectiveSource: string;
+  resetLabel: string;
+  resetValue?: SettingValue;
   explicit: boolean;
   stamp: string;
   source: string;
@@ -35,24 +49,29 @@ export interface SettingsState {
   targets: { id: SettingsTarget; label: string }[];
   rows: SettingRow[];
   game: string;
+  scopeDescription?: string;
   summary: string[];
   actions: { command: string; label: string; group: string }[];
+}
+
+export interface SettingsSave {
+  id: number;
+  context: SettingsTarget;
+  target: SettingsTarget;
+  key: string;
+  stamp: string;
+  value: SettingValue;
+  reset?: boolean;
 }
 
 export type AppToHost =
   | { type: "ready"; target?: SettingsTarget }
   | { type: "target"; target: SettingsTarget }
+  | { type: "destination"; context: SettingsTarget; key: string; target: SettingsTarget }
   | { type: "refresh" }
-  | {
-      type: "save";
-      id: number;
-      target: SettingsTarget;
-      key: string;
-      stamp: string;
-      value: SettingValue;
-      reset?: boolean;
-    }
-  | { type: "browse"; id: number; target: SettingsTarget; key: string }
+  | ({ type: "save" } & SettingsSave)
+  | { type: "saveBatch"; changes: SettingsSave[] }
+  | { type: "browse"; id: number; context: SettingsTarget; target: SettingsTarget; key: string }
   | { type: "action"; command: string };
 
 export type HostToApp =

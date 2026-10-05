@@ -10,10 +10,15 @@ const state = vi.hoisted(() => ({
   root: "",
   settings: {} as Record<string, unknown>,
   folders: [] as unknown[],
+  rejectMachineSave: false,
 }));
 vi.mock("vscode", () => ({
   Uri: {
-    file: (fsPath: string) => ({ fsPath, scheme: "file" }),
+    file: (fsPath: string) => ({
+      fsPath,
+      scheme: "file",
+      toString: () => `test://workspace/${encodeURIComponent(fsPath)}`,
+    }),
     joinPath: (base: { fsPath: string }, ...parts: string[]) => ({
       fsPath: path.join(base.fsPath, ...parts),
       scheme: "file",
@@ -26,15 +31,24 @@ vi.mock("vscode", () => ({
     registerCommand: vi.fn(() => ({ dispose() {} })),
   },
   workspace: {
+    getWorkspaceFolder: (resource: { fsPath: string }) =>
+      state.folders.find((entry) => {
+        const folder = entry as { uri: { fsPath: string } };
+        return (
+          resource.fsPath === folder.uri.fsPath || resource.fsPath.startsWith(folder.uri.fsPath + path.sep)
+        );
+      }),
     get workspaceFolders() {
       return state.folders;
     },
     getConfiguration: () => ({
       get: (key: string) => state.settings[key],
       update: vi.fn(async (key, value) => {
+        if (key === "machinePaths" && state.rejectMachineSave)
+          throw new Error("Personal settings are read-only");
         state.settings[key] = value;
       }),
-      inspect: () => ({}),
+      inspect: (key: string) => ({ globalValue: state.settings[key] }),
     }),
     updateWorkspaceFolders: vi.fn(),
   },
@@ -60,7 +74,7 @@ vi.mock("../src/descriptorMod", () => ({ detectGameVersion: vi.fn(() => null) })
 import * as vscode from "vscode";
 import { openModCommand, readTutorialStep, startFirstMod } from "../src/onboarding";
 import { addModToWorkspace } from "../src/modProjects/addToWorkspace";
-import { createModCommand } from "../src/modProjects/command";
+import { createModCommand, moveModCommand } from "../src/modProjects/command";
 import { runSetup, selectGameFolder } from "../src/setup";
 
 const cfg = {
@@ -79,6 +93,7 @@ beforeEach(async () => {
   vi.mocked(vscode.workspace.updateWorkspaceFolders).mockReset().mockReturnValue(true);
   state.settings = {};
   state.folders = [];
+  state.rejectMachineSave = false;
   await fs.mkdir(path.resolve(".local/testing"), { recursive: true });
   state.root = await fs.mkdtemp(path.resolve(".local/testing/onboarding-"));
 });
@@ -211,8 +226,9 @@ it.each(
       expect.objectContaining({ ignoreFocusOut: true })
     );
     const folder = path.join(state.root, gameId, "mod/first_mod");
-    expect(JSON.parse(await fs.readFile(path.join(folder, ".vscode/settings.json"), "utf8"))).toEqual({
-      "px.gameId": gameId,
+    expect(JSON.parse(await fs.readFile(path.join(folder, ".px-toolkit/project.json"), "utf8"))).toEqual({
+      version: 1,
+      gameId,
     });
     const descriptor = gameId === "ck3" ? "descriptor.mod" : ".metadata/metadata.json";
     expect(await fs.readFile(path.join(folder, descriptor), "utf8")).toContain("First Mod");
@@ -370,6 +386,76 @@ it("rejects a missing game-data folder without refreshing configuration", async 
     expect.stringContaining("Your setting was not changed")
   );
 });
+
+it.each(["success", "settings failure", "binding conflict", "container", "workspace failure"])(
+  "preserves personal path bindings during Move Mod (%s)",
+  async (scenario) => {
+    const source = path.join(state.root, "ck3/mod/Moving Mod");
+    const projects = path.join(state.root, "projects");
+    const destination = path.join(projects, "Moving Mod");
+    await fs.mkdir(source, { recursive: true });
+    await fs.mkdir(projects, { recursive: true });
+    await fs.writeFile(path.join(source, "descriptor.mod"), 'name="Moving Mod"\n');
+    state.settings.modProjectsDir = projects;
+    const contextRoot = scenario === "container" ? path.dirname(source) : source;
+    state.folders = [{ uri: vscode.Uri.file(contextRoot) }];
+    const oldUri = vscode.Uri.file(contextRoot).toString();
+    const newUri = vscode.Uri.file(destination).toString();
+    const registry = {
+      version: 1,
+      workspaces: { [oldUri]: { ck3: { gamePath: "personal-install", modPath: source } } },
+      folders: {
+        [oldUri]: { ck3: { logsPath: "personal-logs" } },
+        ...(scenario === "binding conflict" ? { [newUri]: { ck3: { logsPath: "conflicting-logs" } } } : {}),
+      },
+    };
+    state.settings.machinePaths = registry;
+    state.rejectMachineSave = scenario === "settings failure";
+    if (scenario === "workspace failure")
+      vi.mocked(vscode.workspace.updateWorkspaceFolders).mockReturnValue(false);
+    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue("Move" as never);
+    if (scenario === "container")
+      vi.mocked(vscode.window.showInformationMessage)
+        .mockReset()
+        .mockResolvedValueOnce("Move" as never)
+        .mockResolvedValueOnce("Open Folder" as never);
+    await moveModCommand({ ...cfg, modPath: source, isCk3Workspace: true }, () => undefined);
+    if (scenario === "success" || scenario === "container") {
+      expect(await fs.readFile(path.join(destination, "mod/descriptor.mod"), "utf8")).toContain(
+        'name="Moving Mod"'
+      );
+      await expect(fs.stat(source)).rejects.toThrow();
+      expect(state.settings.machinePaths).toMatchObject({
+        workspaces: {
+          [newUri]: { ck3: { gamePath: "personal-install", modPath: path.join(destination, "mod") } },
+        },
+        folders: { [newUri]: { ck3: { logsPath: "personal-logs" } } },
+      });
+      if (scenario === "container") {
+        expect(state.settings.machinePaths).toMatchObject({
+          workspaces: { [oldUri]: { ck3: { gamePath: "personal-install" } } },
+          folders: { [oldUri]: { ck3: { logsPath: "personal-logs" } } },
+        });
+        expect(vscode.workspace.updateWorkspaceFolders).not.toHaveBeenCalled();
+        expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+          "vscode.openFolder",
+          expect.objectContaining({ fsPath: destination }),
+          { forceNewWindow: true }
+        );
+      } else
+        expect(vscode.workspace.updateWorkspaceFolders).toHaveBeenCalledWith(0, 1, {
+          uri: expect.objectContaining({ fsPath: destination }),
+        });
+    } else {
+      expect(await fs.readFile(path.join(source, "descriptor.mod"), "utf8")).toContain('name="Moving Mod"');
+      expect(state.settings.machinePaths).toEqual(registry);
+      if (scenario === "workspace failure")
+        expect(vscode.workspace.updateWorkspaceFolders).toHaveBeenCalledOnce();
+      else expect(vscode.workspace.updateWorkspaceFolders).not.toHaveBeenCalled();
+      expect(vscode.window.showErrorMessage).toHaveBeenCalled();
+    }
+  }
+);
 
 it("enables scope hints only through the first-mod tutorial action", async () => {
   await startFirstMod();

@@ -274,6 +274,7 @@ export class Inspector {
           id: detail.id,
           file: detail.file,
           endLine: detail.endLine,
+          sourceHash: detail.sourceHash,
           count: detail.options.length + this.view.options,
         }),
       "outline"
@@ -620,9 +621,10 @@ export class Inspector {
     if (op !== "=") row.appendChild(el("span", "top", op));
     const current = this.view.values.get(fieldRowKey(detail.file, key, line)) ?? rawValue;
     const commit = (value: string): void => {
-      if (value === rawValue || value.trim() === "") return;
+      if (value === current || value.trim() === "") return;
       this.cb.onEdit(`set ${key}`, {
         kind: "setField",
+        sourceHash: detail.sourceHash,
         id: detail.id,
         file: detail.file,
         key,
@@ -786,6 +788,7 @@ export class Inspector {
   ): void {
     this.cb.onEdit(`add ${key}`, {
       kind: "setField",
+      sourceHash: detail.sourceHash,
       id: detail.id,
       file: detail.file,
       key,

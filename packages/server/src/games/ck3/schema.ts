@@ -131,14 +131,17 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
   { path: "common/combat_effects", kind: "combat_effect" },
 
   // --- Realm structure: laws, governments, titles, buildings, holdings ---
-  // common/laws top-level keys are law groups; their direct child blocks are laws.
+  // Pre-1.20 _laws.info: groups contain laws. 1.20 _laws.info: laws carry
+  // law_group_type and groups live in common/law_groups/_law_groups.info.
   {
     path: "common/laws",
-    kind: "law_group",
+    kind: "law",
     rootScopes: ["character"],
+    kindByField: { field: "law_group_type", kind: "law", otherwise: "law_group" },
     // _laws.info: direct children are laws, except the group's own trigger block.
     nestedDefinitions: { kind: "law", path: [], excludedKeys: ["can_change_law_group"] },
   },
+  { path: "common/law_groups", kind: "law_group", rootScopes: ["character"] },
   { path: "common/governments", kind: "government", rootScopes: ["character"] },
   {
     path: "common/landed_titles",
@@ -205,12 +208,29 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
   { path: "common/culture/eras", kind: "culture_era" },
 
   // --- Religion ---
-  // _religion_types.info: religions contain faiths = { faith_name = { ... } }.
+  // Pre-1.20 _religion_types.info: preserve faiths nested under religions.
   {
     path: "common/religion/religion_types",
     kind: "religion",
     requiredLoc: ["$"],
     nestedDefinitions: { kind: "faith", path: ["faiths"] },
+  },
+  // 1.20 _faith_types.info, _rite_types.info and _tenet_types.info: separate
+  // top-level databases. Each key is the identity referenced by script.
+  { path: "common/religion/faith_types", kind: "faith", rootScopes: ["faith"] },
+  {
+    path: "common/religion/rite_types",
+    kind: "rite",
+    rootScopes: ["rite"],
+    // _rite_types.info describes the faith-style generated keys; the concrete
+    // suffixes are present in localization/english/religion/rites_l_english.yml.
+    locPatterns: ["$", "$_adj", "$_adherent", "$_adherent_plural", "$_desc"],
+  },
+  {
+    path: "common/religion/tenet_types",
+    kind: "tenet",
+    rootScopes: ["faith"],
+    locPatterns: ["$_name", "$_desc"],
   },
   // doctrine_types top-level keys ARE the doctrine names (doctrine_monogamy),
   // which is exactly what `has_doctrine =` references. Doctrine *groups* live in
@@ -473,6 +493,27 @@ export const REF_FIELDS: RefField[] = [
   { key: "set_religion", kinds: ["religion"] },
   { key: "faith", kinds: ["faith"] },
   { key: "set_faith", kinds: ["faith"] },
+  // Crozier religion .info schemas and effects.log/triggers.log target types.
+  { key: "rite", kinds: ["rite"] },
+  { key: "main_rite", kinds: ["rite"] },
+  { key: "tenet", kinds: ["tenet"] },
+  { key: "fallback_tenet", kinds: ["tenet"] },
+  { key: "tenets", kinds: ["tenet"], form: "list" },
+  { key: "doctrines", kinds: ["doctrine"], form: "list" },
+  { key: "holy_sites", kinds: ["holy_site"], form: "list" },
+  { key: "eminent_holy_sites", kinds: ["holy_site"], form: "list" },
+  { key: "has_tenet", kinds: ["tenet"] },
+  { key: "rite_has_tenet", kinds: ["tenet"] },
+  { key: "add_tenet", kinds: ["tenet"] },
+  { key: "remove_tenet", kinds: ["tenet"] },
+  { key: "set_character_faith", kinds: ["faith"] },
+  { key: "set_character_faith_history", kinds: ["faith"] },
+  { key: "set_character_faith_with_conversion", kinds: ["faith"] },
+  { key: "set_county_faith", kinds: ["faith"] },
+  { key: "set_character_rite", kinds: ["rite"] },
+  { key: "set_character_rite_history", kinds: ["rite"] },
+  { key: "set_character_rite_with_conversion", kinds: ["rite"] },
+  { key: "set_county_rite", kinds: ["rite"] },
   { key: "culture", kinds: ["culture"] },
   { key: "set_culture", kinds: ["culture"] },
 
@@ -498,6 +539,7 @@ export const REF_FIELDS: RefField[] = [
   { key: "remove_realm_law", kinds: ["law"] },
   { key: "has_realm_law", kinds: ["law"] },
   { key: "has_realm_law_in_group", kinds: ["law_group"] },
+  { key: "law_group_type", kinds: ["law_group"] },
   { key: "add_title_law", kinds: ["law"] },
   { key: "add_title_law_effects", kinds: ["law"] },
   { key: "remove_title_law", kinds: ["law"] },
@@ -552,6 +594,7 @@ export const BLOCK_REF_FIELDS: Record<string, Record<string, string[]>> = {
 export const PREFIX_REFS: Record<string, string[]> = {
   culture: ["culture"],
   faith: ["faith"],
+  rite: ["rite"],
   religion: ["religion"],
   title: ["landed_title"],
   character: ["character"],

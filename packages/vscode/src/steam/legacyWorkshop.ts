@@ -6,22 +6,17 @@ import { METADATA_REL_PATH } from "@px-lsp/protocol/descriptorMetadata";
 import type { PublishInfo } from "./workshop";
 import { markdownToBBCode } from "./bbcodeMarkdown";
 import { readListingFiles, writeListingFiles, type ItemJson } from "./workshopFiles";
+import type { LegacyZip } from "./legacyZip";
 
 export const LEGACY_DIR = "legacy_version";
 export type LegacyContentState = "new" | "creating" | "ready" | "submitted" | "published";
 export interface LegacyItem extends ItemJson {
-  legacy: { supportedVersion: string; version: string | null; content: LegacyContentState };
+  legacy: { supportedVersion: string; version: string | null; content: LegacyContentState; archive?: string };
   preview?: string;
 }
 
-/** Two version components default to a patch wildcard; explicit patch versions remain exact. */
-export function legacyVersion(input: string): { key: string; supportedVersion: string } {
-  const value = input.trim();
-  if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)(?:\.(?:0|[1-9]\d*)){0,2}(?:\.\*)?$/.test(value))
-    throw new Error("Enter a game version such as 1.19.* or an exact version such as 1.19.2.");
-  const supportedVersion = /^\d+\.\d+$/.test(value) ? `${value}.*` : value;
-  return { key: supportedVersion.replace(/\.\*$/, ""), supportedVersion };
-}
+import { legacyVersion } from "./legacyVersion";
+export { legacyVersion } from "./legacyVersion";
 
 export function legacyDirectory(mainDir: string, key: string): string {
   if (legacyVersion(key).key !== key) throw new Error("Invalid legacy version directory.");
@@ -48,6 +43,10 @@ function validateLegacyItem(dir: string, item: LegacyItem): void {
     typeof item.legacy.supportedVersion !== "string" ||
     legacyVersion(item.legacy.supportedVersion).key !== path.basename(dir) ||
     !["new", "creating", "ready", "submitted", "published"].includes(item.legacy.content) ||
+    (item.legacy.archive !== undefined &&
+      (typeof item.legacy.archive !== "string" ||
+        !item.legacy.archive ||
+        /[\\/]/.test(item.legacy.archive))) ||
     (item.publishedfileid !== undefined &&
       (typeof item.publishedfileid !== "string" || !/^[1-9]\d*$/.test(item.publishedfileid))) ||
     (["ready", "submitted", "published"].includes(item.legacy.content) && !item.publishedfileid)
@@ -64,6 +63,8 @@ export function updateLegacyItem(dir: string, patch: Partial<LegacyItem>): Legac
   validateLegacyItem(dir, next);
   if (next.legacy.supportedVersion !== current.legacy.supportedVersion)
     throw new Error("A legacy item's game version cannot change.");
+  if (next.legacy.archive !== current.legacy.archive)
+    throw new Error("A legacy item's content source cannot change.");
   if (current.publishedfileid && next.publishedfileid !== current.publishedfileid)
     throw new Error("A legacy item's Workshop ID cannot change.");
   const states: LegacyContentState[] = ["new", "creating", "ready", "submitted", "published"];
@@ -113,7 +114,8 @@ export function createLegacyVersion(
   mainDir: string,
   input: string,
   info: PublishInfo,
-  readSource: (file: string) => Uint8Array = fs.readFileSync
+  readSource: (file: string) => Uint8Array = fs.readFileSync,
+  archive?: LegacyZip
 ): string {
   const version = legacyVersion(input);
   const dir = legacyDirectory(mainDir, version.key);
@@ -162,12 +164,19 @@ export function createLegacyVersion(
     preview = `thumbnail${path.extname(info.previewPath)}`;
     fs.writeFileSync(path.join(dir, preview), readSource(info.previewPath));
   }
+  if (archive)
+    fs.cpSync(archive.root, path.join(dir, "content"), { recursive: true, errorOnExist: true, force: false });
   const item: LegacyItem = {
     title: info.name ?? "",
     tags: [...info.tags],
     visibility: 2,
     ...(preview ? { preview } : {}),
-    legacy: { supportedVersion: version.supportedVersion, version: info.version, content: "new" },
+    legacy: {
+      supportedVersion: version.supportedVersion,
+      version: archive ? archive.version : info.version,
+      content: "new",
+      ...(archive ? { archive: archive.name } : {}),
+    },
   };
   fs.writeFileSync(path.join(dir, "item.json"), JSON.stringify(item, null, 2) + "\n", {
     encoding: "utf8",

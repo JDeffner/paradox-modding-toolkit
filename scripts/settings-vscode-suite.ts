@@ -5,102 +5,7 @@ import * as vscode from "vscode";
 
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function connect() {
-  const version = (await (await fetch("http://127.0.0.1:9339/json/version")).json()) as {
-    webSocketDebuggerUrl: string;
-  };
-  const socket = new WebSocket(version.webSocketDebuggerUrl);
-  await new Promise<void>((resolve, reject) => {
-    socket.addEventListener("open", () => resolve(), { once: true });
-    socket.addEventListener("error", reject, { once: true });
-  });
-  let id = 0;
-  const pending = new Map<
-    number,
-    { resolve(value: Record<string, unknown>): void; reject(error: Error): void }
-  >();
-  const contexts = new Map<string, number[]>();
-  socket.addEventListener("message", (event) => {
-    const reply = JSON.parse(String(event.data));
-    if (reply.method === "Runtime.executionContextCreated" && reply.params.context.auxData?.isDefault) {
-      const list = contexts.get(reply.sessionId) ?? [];
-      list.push(reply.params.context.id);
-      contexts.set(reply.sessionId, list);
-    }
-    const waiter = pending.get(reply.id);
-    if (!waiter) return;
-    pending.delete(reply.id);
-    if (reply.error) waiter.reject(new Error(JSON.stringify(reply.error)));
-    else waiter.resolve(reply.result);
-  });
-  const send = (
-    method: string,
-    params: Record<string, unknown> = {},
-    sessionId?: string
-  ): Promise<Record<string, unknown>> =>
-    new Promise((resolve, reject) => {
-      const next = ++id;
-      pending.set(next, { resolve, reject });
-      socket.send(JSON.stringify({ id: next, method, params, sessionId }));
-    });
-  const sessions = new Map<string, string>();
-  let workbench = "";
-  let app: { session: string; context: number } | undefined;
-  const evaluate = async (expression: string, session: string, context?: number) => {
-    const reply = await send(
-      "Runtime.evaluate",
-      { expression, contextId: context, returnByValue: true, awaitPromise: true },
-      session
-    );
-    if (reply.exceptionDetails) throw new Error(JSON.stringify(reply.exceptionDetails));
-    return (reply.result as { value: unknown }).value;
-  };
-  for (let attempt = 0; attempt < 80 && !app; attempt++) {
-    const { targetInfos } = (await send("Target.getTargets")) as {
-      targetInfos: { targetId: string; type: string; url: string }[];
-    };
-    for (const target of targetInfos.filter((t) => ["page", "iframe"].includes(t.type))) {
-      let session = sessions.get(target.targetId);
-      if (!session) {
-        const attached = await send("Target.attachToTarget", { targetId: target.targetId, flatten: true });
-        session = attached.sessionId as string;
-        sessions.set(target.targetId, session);
-        await send("Runtime.enable", {}, session);
-      }
-      if (target.url.includes("workbench")) workbench = session;
-      for (const context of contexts.get(session) ?? []) {
-        try {
-          if (
-            await evaluate(
-              "Boolean(document.getElementById('scope') && document.getElementById('categories'))",
-              session,
-              context
-            )
-          ) {
-            app = { session, context };
-            break;
-          }
-        } catch {
-          /* Contexts can be replaced while the webview starts. */
-        }
-      }
-    }
-    if (!app) await pause(250);
-  }
-  assert.ok(app, "settings app loaded in the packaged webview");
-  const active = app;
-  return {
-    eval: (expression: string) => evaluate(expression, active.session, active.context),
-    sendWorkbench: (method: string, params: Record<string, unknown>) => send(method, params, workbench),
-    screenshot: async (file: string) => {
-      await vscode.commands.executeCommand("notifications.clearAll");
-      await pause(250);
-      const shot = await send("Page.captureScreenshot", { format: "png" }, workbench);
-      await fs.writeFile(file, Buffer.from(shot.data as string, "base64"));
-    },
-    close: () => socket.close(),
-  };
-}
+import { connect } from "./webview-cdp";
 
 async function checks() {
   const scratch = process.env.PX_SETTINGS_TEST_SCRATCH!;
@@ -129,16 +34,36 @@ async function checks() {
     ui.eval(
       `[...document.querySelectorAll(${JSON.stringify(`[data-key="${key}"] button`)})].find(b=>b.textContent===${JSON.stringify(text)}).click()`
     );
-  const scope = async (id: string) => {
-    await ui.eval(
-      `document.getElementById('scope').value=${JSON.stringify(id)};document.getElementById('scope').dispatchEvent(new Event('change'))`
+  const choose = async (id: string, option: string, label?: string) => {
+    const labels: Record<string, string> = {
+      name: "Name",
+      default: "Default order",
+      drafts: "Unsaved drafts",
+      all: "All settings",
+      changed: "Customized",
+    };
+    const face = label ?? labels[option] ?? option;
+    if (await ui.eval(`document.getElementById(${JSON.stringify(id)}).getAttribute('role')==='radio'`)) {
+      await ui.eval(
+        `[...document.getElementById(${JSON.stringify(id)}).closest('[role=radiogroup]').querySelectorAll('[role=radio]')].find(node=>node.querySelector('.choice-label').textContent===${JSON.stringify(face)}).click()`
+      );
+    } else {
+      await ui.eval(`document.getElementById(${JSON.stringify(id)}).click()`);
+      const item = `[...document.querySelectorAll('.px-menu [role=option]')].find(node=>node.querySelector('.px-grow')?.textContent===${JSON.stringify(face)})`;
+      await waitFor(`Boolean(${item})`, `${face} menu option`);
+      await ui.eval(`(${item}).click()`);
+    }
+    await waitFor(
+      `document.getElementById(${JSON.stringify(id)}).value===${JSON.stringify(option)}`,
+      `${face} selected`
     );
-    await pause(250);
   };
-  const choose = (id: string, option: string) =>
-    ui.eval(
-      `document.getElementById(${JSON.stringify(id)}).value=${JSON.stringify(option)};document.getElementById(${JSON.stringify(id)}).dispatchEvent(new Event('change'))`
+  const destination = async (key: string, id: string, label: string) => {
+    await ui.eval(
+      `(() => {const button=document.getElementById(${JSON.stringify(`expand-${key}`)});if(button.getAttribute('aria-expanded')!=='true')button.click()})()`
     );
+    await choose(`destination-${key}`, id, label);
+  };
   const pressSpace = async () => {
     for (const type of ["keyDown", "keyUp"])
       await ui.sendWorkbench("Input.dispatchKeyEvent", {
@@ -150,33 +75,50 @@ async function checks() {
   };
   const layout = () =>
     ui.eval(`(() => {
-      const cards = [...document.querySelectorAll('.setting')].map(el => el.getBoundingClientRect());
+      const rows = [...document.querySelectorAll('.setting')];
+      const cards = rows.map(el => el.getBoundingClientRect());
+      const parts = rows.map(row=>({copy:row.querySelector('.setting-copy').getBoundingClientRect(),editor:row.querySelector('.setting-editor').getBoundingClientRect()}));
       const content = document.getElementById('content').getBoundingClientRect();
       const categories = document.getElementById('categories').getBoundingClientRect();
       return {
         columns: new Set(cards.map(r => Math.round(r.left))).size,
+        sideBySide: parts.every(({copy,editor})=>editor.left>=copy.right-1),
+        stacked: parts.every(({copy,editor})=>editor.top>=copy.bottom-1),
         cardsFit: cards.every(r => r.left >= content.left && r.right <= content.right),
         topFilters: categories.bottom <= content.top + 1,
         noOverflow: document.documentElement.scrollWidth <= window.innerWidth,
         contentHeight: content.height,
+        medianRowHeight: cards.map(r => r.height).sort((a,b) => a-b)[Math.floor(cards.length / 2)],
       };
     })()`) as Promise<{
       columns: number;
+      sideBySide: boolean;
+      stacked: boolean;
       cardsFit: boolean;
       topFilters: boolean;
       noOverflow: boolean;
       contentHeight: number;
+      medianRowHeight: number;
     }>;
   try {
     await waitFor("document.querySelectorAll('.setting').length > 0", "settings state");
     const sections = vscode.extensions.getExtension("JDeffner.px-toolkit")!.packageJSON.contributes
       .configuration as { properties: Record<string, unknown> }[];
-    const settingCount = sections.reduce((sum, section) => sum + Object.keys(section.properties).length, 0);
+    // machinePaths is the backing registry, edited through the individual path rows.
+    const settingCount = sections.reduce(
+      (sum, section) =>
+        sum + Object.keys(section.properties).filter((key) => key !== "px.machinePaths").length,
+      0
+    );
     assert.equal(await ui.eval("document.querySelector('h2').textContent"), "All settings");
     assert.equal(await ui.eval("document.querySelectorAll('.setting').length"), settingCount);
     const wide = await layout();
-    assert.ok(wide.columns >= 2, "settings use multiple card columns in a wide editor");
-    assert.ok(wide.cardsFit && wide.topFilters && wide.noOverflow, "cards fit below the top filters");
+    assert.equal(wide.columns, 1, "settings stay in one catalogue column");
+    assert.ok(wide.sideBySide, "wide setting rows show labels and controls side by side");
+    assert.equal(await ui.eval("document.querySelectorAll('.group-heading').length"), 5);
+    assert.equal(await ui.eval("document.querySelectorAll('.setting.is-expanded').length"), 0);
+    assert.equal(await ui.eval("document.getElementById('show-details').checked"), false);
+    assert.ok(wide.cardsFit && wide.topFilters && wide.noOverflow, "rows fit below the top filters");
     await choose("sort", "name");
     const labels = (await ui.eval(
       "[...document.querySelectorAll('.setting-head label')].map(el=>el.textContent)"
@@ -203,16 +145,54 @@ async function checks() {
       "[...document.querySelectorAll('nav button')].find(b=>b.textContent.startsWith('All settings')).click()"
     );
     assert.equal(await ui.eval("document.querySelectorAll('.setting').length"), settingCount);
-    assert.equal(await ui.eval("document.querySelectorAll('#scope option').length"), 4);
-    assert.equal(
-      await ui.eval(`new Promise(resolve => {
-      const image = new Image(); image.onload = () => resolve(true); image.onerror = () => resolve(false);
-      image.src = getComputedStyle(document.getElementById('scope')).backgroundImage.slice(5, -2);
-    })`),
-      true,
-      "the shared dropdown chevron loads under the panel CSP"
+    assert.equal(await ui.eval("document.querySelectorAll('select').length"), 0);
+    await ui.eval("document.getElementById('scope').click()");
+    assert.equal(await ui.eval("document.querySelectorAll('.px-menu [role=option]').length"), 2);
+    assert.deepEqual(
+      await ui.eval(
+        "[...document.querySelectorAll('.px-menu [role=option] .px-grow')].map(node=>node.textContent)"
+      ),
+      ["Settings Mod", "Settings Second"]
     );
+    assert.equal(
+      await ui.eval("Boolean(document.querySelector('#scope svg'))"),
+      true,
+      "shared dropdown chevron is inline under the CSP"
+    );
+    await ui.screenshot(path.join(scratch, "settings-dropdown-dark.png"));
+    await ui.eval("document.getElementById('scope').click()");
     await ui.screenshot(path.join(scratch, "settings-dark.png"));
+    await query("parentMods");
+    await ui.eval("document.getElementById('summary-parentMods').click()");
+    assert.equal(await ui.eval("document.activeElement.id"), "setting-parentMods");
+    assert.equal(await ui.eval("document.getElementById('setting-parentMods').hidden"), false);
+    await query("diagnostics.ignorePatterns");
+    await ui.eval("document.getElementById('expand-diagnostics.ignorePatterns').focus()");
+    await pressSpace();
+    assert.equal(
+      await ui.eval("document.getElementById('details-diagnostics.ignorePatterns').hidden"),
+      false
+    );
+    // Hover the help affordance using its rendered hit-test position.
+    await ui.eval(`(() => {
+      const help=document.querySelector('.extra-help summary');
+      const r=help.getBoundingClientRect();
+      help.dispatchEvent(new PointerEvent('pointermove', {bubbles:true,clientX:r.x+r.width/2,clientY:r.y+r.height/2}));
+    })()`);
+    await waitFor("!document.querySelector('.px-tip').hidden", "help appears on hover");
+    assert.match(
+      String(await ui.eval("document.querySelector('.px-tip').textContent")),
+      /common\/\*\*\/vendor/
+    );
+    await ui.screenshot(path.join(scratch, "settings-help.png"));
+    await ui.eval("document.querySelector('.extra-help summary').click()");
+    assert.equal(await ui.eval("document.querySelector('.extra-help').open"), true);
+    await ui.eval("document.getElementById('show-details').click()");
+    await query("");
+    assert.equal(await ui.eval("document.querySelectorAll('.setting.is-expanded').length"), settingCount);
+    await ui.screenshot(path.join(scratch, "settings-expanded.png"));
+    await ui.eval("document.getElementById('show-details').click()");
+    assert.equal(await ui.eval("document.querySelectorAll('.setting.is-expanded').length"), 0);
     await query("scopeInlayHints");
     await ui.eval("document.getElementById('setting-scopeInlayHints').focus()");
     await pressSpace();
@@ -221,9 +201,9 @@ async function checks() {
     await choose("filter", "changed");
     assert.equal(await ui.eval("document.querySelectorAll('.setting').length"), 1);
     await choose("filter", "all");
-    await click("scopeInlayHints", "Reset");
+    await click("scopeInlayHints", "Remove workspace override");
     await waitFor(
-      "!document.querySelector('[data-key=scopeInlayHints] .control-line button[title]')",
+      "![...document.querySelectorAll('[data-key=scopeInlayHints] .control-line button')].some(button=>button.textContent==='Remove workspace override')",
       "reset override"
     );
     assert.equal(
@@ -243,26 +223,32 @@ async function checks() {
     );
     assert.equal(vscode.workspace.getConfiguration("px").get("locLanguage"), "french");
     await click("locLanguage", "Discard draft");
-    await scope("user");
+    await destination("locLanguage", "user", "Personal defaults");
     await value("locLanguage", "german");
     await click("locLanguage", "Save");
     await waitFor("document.getElementById('notice').textContent.includes('saved')", "user save");
     assert.equal(vscode.workspace.getConfiguration("px").inspect("locLanguage")?.globalValue, "german");
     assert.equal(vscode.workspace.getConfiguration("px").get("locLanguage"), "french");
-    assert.match(String(await ui.eval("document.body.innerText")), /Overridden by workspace/);
+    assert.match(String(await ui.eval("document.querySelector('.setting-source').textContent")), /workspace/);
+    assert.match(String(await ui.eval("document.querySelector('.active-value').textContent")), /french/);
     const folder = vscode.workspace.workspaceFolders![0];
-    await scope(`folder:${folder.uri.toString()}`);
+    const context = `project:${folder.uri.toString()}`;
     await query("quoteNames");
+    await destination("characterHistory.quoteNames", context, "This mod · Shared");
     await ui.eval("document.getElementById('setting-characterHistory.quoteNames').click()");
     await waitFor("document.getElementById('notice').textContent.includes('saved')", "folder save");
+    const shared = JSON.parse(
+      await fs.readFile(path.join(folder.uri.fsPath, ".px-toolkit/project.json"), "utf8")
+    );
+    assert.equal(shared.authoring.characterHistory.quoteNames, false);
     assert.equal(
       vscode.workspace.getConfiguration("px", folder.uri).inspect("characterHistory.quoteNames")
         ?.workspaceFolderValue,
-      false
+      undefined
     );
     await query("gamePath");
-    assert.equal(await ui.eval("document.getElementById('setting-gamePath').disabled"), true);
-    await scope("workspace");
+    assert.equal(await ui.eval("document.getElementById('setting-gamePath').disabled"), false);
+    await destination("gamePath", "machine:workspace", "This workspace · Private");
     await query("texturePreview.background");
     await value("texturePreview.background", "invalid-color");
     await click("texturePreview.background", "Save");
@@ -279,6 +265,7 @@ async function checks() {
     edit.insert(workspace.uri, new vscode.Position(1, 0), "  // keep this unsaved note\n");
     assert.equal(await vscode.workspace.applyEdit(edit), true);
     await query("locLanguage");
+    await destination("locLanguage", "workspace", "This workspace");
     await value("locLanguage", "spanish");
     await click("locLanguage", "Save");
     await waitFor(
@@ -296,9 +283,13 @@ async function checks() {
     }
     assert.match(await fs.readFile(vscode.workspace.workspaceFile!.fsPath, "utf8"), /keep this unsaved note/);
     for (const gameId of ["vic3", "eu5"]) {
-      await vscode.workspace
-        .getConfiguration("px")
-        .update("gameId", gameId, vscode.ConfigurationTarget.Workspace);
+      await query("gameId");
+      await destination("gameId", context, "This mod · Shared");
+      await choose("setting-gameId", gameId, gameId === "vic3" ? "Vic3" : "Eu5");
+      await waitFor(
+        "document.getElementById('notice').textContent.includes('saved')",
+        `${gameId} game saved`
+      );
       await query("quoteNames");
       await waitFor(
         "document.getElementById('setting-characterHistory.quoteNames').disabled",
@@ -307,14 +298,30 @@ async function checks() {
     }
     await query("tigerRunOn");
     assert.equal(await ui.eval("document.getElementById('setting-tigerRunOn').disabled"), true);
-    await vscode.workspace
-      .getConfiguration("px")
-      .update("gameId", "ck3", vscode.ConfigurationTarget.Workspace);
+    await query("gameId");
+    await choose("setting-gameId", "ck3", "Ck3");
+    await waitFor("document.getElementById('notice').textContent.includes('saved')", "CK3 game saved");
     await query("");
     await ui.eval(
       "[...document.querySelectorAll('nav button')].find(b=>b.textContent.startsWith('Editor')).click()"
     );
     await ui.screenshot(path.join(scratch, "settings-editor.png"));
+    await query("completion.mode");
+    await ui.eval("document.getElementById('expand-completion.mode').click()");
+    await ui.eval("document.getElementById('setting-completion.mode').focus()");
+    for (const type of ["keyDown", "keyUp"])
+      await ui.sendWorkbench("Input.dispatchKeyEvent", {
+        type,
+        key: "ArrowRight",
+        code: "ArrowRight",
+        windowsVirtualKeyCode: 39,
+      });
+    await waitFor("document.getElementById('notice').textContent.includes('saved')", "choice save");
+    assert.equal(vscode.workspace.getConfiguration("px").get("completion.mode"), "examples");
+    await ui.screenshot(path.join(scratch, "settings-choices.png"));
+    await ui.eval("document.getElementById('expand-completion.mode').click()");
+    await query("");
+
     await vscode.workspace
       .getConfiguration("workbench")
       .update("colorTheme", "Default Light Modern", vscode.ConfigurationTarget.Global);
@@ -340,9 +347,14 @@ async function checks() {
     await pause(300);
     const compact = await layout();
     assert.equal(compact.columns, 1);
+    assert.ok(compact.stacked, "small setting rows stack labels above controls");
     assert.ok(compact.cardsFit && compact.noOverflow && compact.topFilters);
     assert.ok(compact.contentHeight >= 200, "top controls leave room for settings at small widths");
     await ui.screenshot(path.join(scratch, "settings-compact.png"));
+    await ui.eval("document.getElementById('show-details').click()");
+    const narrowExpanded = await layout();
+    assert.ok(narrowExpanded.cardsFit && narrowExpanded.noOverflow && narrowExpanded.topFilters);
+    await ui.screenshot(path.join(scratch, "settings-narrow-expanded.png"));
     await choose("filter", "drafts");
     await ui.eval("document.getElementById('native').click()");
     await pause(500);
@@ -359,12 +371,15 @@ async function checks() {
         {
           passed: true,
           vscode: vscode.version,
+          compactMedianRowHeight: wide.medianRowHeight,
           checks: [
             "packaged command and rendered settings",
-            "card grid, top filters, sorting and retained drafts",
+            "compact catalogue rows, top filters, sorting and retained drafts",
+            "individual expansion, list editor, hover help and show all details",
+            "explained choices with keyboard save",
             "keyboard workspace toggle and reset",
             "user override precedence",
-            "folder-scoped character preference",
+            "shared mod character preference and available private paths",
             "stale draft rejected",
             "invalid value rejected",
             "unsaved unrelated settings preserved",

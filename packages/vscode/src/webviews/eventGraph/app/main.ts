@@ -62,6 +62,7 @@ let renderedCluster: string | null = null;
 const hiddenKinds = new Set<string>();
 
 let history = new GraphHistory({ focus: {}, positions: {}, pending: [] });
+let saving = false;
 
 // ---------------------------------------------------------------------------
 // Panels
@@ -138,6 +139,7 @@ const inspector = new Inspector($("inspector"), {
   onOpen: (file, line) => send({ type: "open", file, line }),
   onValueOptions: fetchValueOptions,
   onEdit: (label, edit) => {
+    if (saving) return;
     history.pushEdit(label, edit);
     afterHistoryChange();
     // The inspector redraws so the row shows the unsaved value it now holds.
@@ -342,6 +344,7 @@ function openNewEventForm(anchor: HTMLElement): void {
     "plus",
     "Adds the event to your unsaved changes; Save writes the file and its localization",
     () => {
+      if (saving) return;
       const id = idInput.value.trim();
       if (!/^[A-Za-z0-9_]+\.[0-9]+$/.test(id)) {
         toast("An event id looks like namespace.123 (letters, digits and _ before the dot).", "destructive");
@@ -382,7 +385,7 @@ function openNewEventForm(anchor: HTMLElement): void {
 
 function afterHistoryChange(mirror = true): void {
   const count = history.pendingCount;
-  saveEl.disabled = count === 0;
+  saveEl.disabled = saving || count === 0;
   saveEl.dataset.tip =
     count === 0
       ? "No changes to save yet. Edits stay in this view until you save them"
@@ -394,8 +397,9 @@ function afterHistoryChange(mirror = true): void {
       ? "No changes yet. Edits stay in this view until you save them"
       : `List the ${count} unsaved change${count === 1 ? "" : "s"}, newest last`;
   if (count === 0 && isPopoverAnchor(changesEl)) closePopover();
-  undoEl.disabled = !history.canUndo;
-  redoEl.disabled = !history.canRedo;
+  undoEl.disabled = saving || !history.canUndo;
+  redoEl.disabled = saving || !history.canRedo;
+  $("inspector").inert = saving;
   undoEl.dataset.tip = history.canUndo ? `Undo ${history.undoLabel}` : "Nothing to undo";
   redoEl.dataset.tip = history.canRedo ? `Redo ${history.redoLabel}` : "Nothing to redo";
   if (mirror) send({ type: "state", state: history.state, dirty: count });
@@ -421,21 +425,28 @@ function sameFocus(a: EventGraphParams, b: EventGraphParams): boolean {
 }
 
 undoEl.onclick = () => {
+  if (saving) return;
   const state = history.undo();
   if (state) applyState(state);
 };
 redoEl.onclick = () => {
+  if (saving) return;
   const state = history.redo();
   if (state) applyState(state);
 };
 saveEl.onclick = () => {
+  if (saving) return;
+  (document.activeElement as HTMLElement | null)?.blur();
   if (history.pendingCount === 0) return;
-  saveEl.disabled = true;
+  closePopover();
+  saving = true;
+  afterHistoryChange(false);
   send({ type: "save", edits: history.pending });
 };
 
 /** Walk undo back until edit `index` and everything after it is gone. */
 function undoTo(index: number): void {
+  if (saving) return;
   let state: GraphState | null = null;
   while (history.pendingCount > index && history.canUndo) state = history.undo();
   if (state) applyState(state);
@@ -483,6 +494,7 @@ window.addEventListener("keydown", (ev) => {
   const typing = target === queryEl || target.tagName === "INPUT" || target.tagName === "TEXTAREA";
   if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === "s") {
     ev.preventDefault();
+    (document.activeElement as HTMLElement | null)?.blur();
     saveEl.click();
     return;
   }
@@ -1054,6 +1066,7 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
       view.setBannerUrl(msg.result.theme, msg.url);
       return;
     case "saved":
+      saving = false;
       if (msg.error) {
         toast(msg.error, "destructive", 5200);
         // The edits that DID land leave the history, so a retry saves only
@@ -1076,6 +1089,10 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
       return;
     case "graph":
       currentParams = msg.params ?? {};
+      if (currentParams.connectedOnly !== undefined) {
+        ui = { ...ui, connectedOnly: currentParams.connectedOnly };
+        $("toolConnected").setAttribute("aria-pressed", String(ui.connectedOnly));
+      }
       currentGraph = msg.graph;
       if (msg.graph?.suggestions) {
         catalog = msg.graph.suggestions;

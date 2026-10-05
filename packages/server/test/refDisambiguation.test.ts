@@ -101,24 +101,23 @@ describe("semantic-token ref-field disambiguation", () => {
     return out;
   }
 
-  const ENUM_MEMBER = 6; // TOKEN_TYPES order in semanticTokens.ts
-  const VARIABLE = 2;
+  const TYPE = 9; // Database references use the standard type token.
 
-  it("theme = faith colors as event theme (enumMember), not event target (variable)", () => {
+  it("theme = faith colors as a database type, not a scope link", () => {
     const data = makeData();
     const doc = TextDocument.create(uri(), "paradox", 1, "my.1 = {\n\ttheme = faith\n}");
     const tokens = decode(provideSemanticTokens(data, doc, schema.refFields).data);
     const faith = tokens.find((t) => t.line === 1 && t.length === 5);
     expect(faith).toBeDefined();
-    expect(faith!.type).toBe(ENUM_MEMBER);
+    expect(faith!.type).toBe(TYPE);
   });
 
-  it("without ref fields the engine token still wins (previous behavior)", () => {
+  it("without ref fields scalar values prefer an indexed definition to an engine name", () => {
     const data = makeData();
     const doc = TextDocument.create(uri(), "paradox", 1, "my.1 = {\n\ttheme = faith\n}");
     const tokens = decode(provideSemanticTokens(data, doc).data);
     const faith = tokens.find((t) => t.line === 1 && t.length === 5);
     expect(faith).toBeDefined();
-    expect(faith!.type).toBe(VARIABLE);
+    expect(faith!.type).toBe(TYPE);
   });
 });

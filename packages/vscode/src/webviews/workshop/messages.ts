@@ -62,6 +62,8 @@ export interface WorkshopModInfo {
   legacyKey: string | null;
   legacyVersions: { key: string; supportedVersion: string }[];
   legacyContent: "new" | "creating" | "ready" | "submitted" | "published" | null;
+  /** ZIP filename for a saved archive source; absent for existing/current-project listings. */
+  legacyArchive?: string | null;
   visibility: WorkshopVisibility | null;
   gameName: string;
   /** True when the mod has no descriptor at all: nothing can upload. */
@@ -150,7 +152,14 @@ export interface LiveTranslation {
   description: string;
 }
 
+export interface EncodedPreview {
+  mime: "image/png" | "image/jpeg";
+  data: string;
+}
+
 type HostMessage =
+  | { type: "legacyZipPicked"; request: string; archive: { id: string; name: string } | null; error?: string }
+  | { type: "preparePreview"; id: string; dataUri: string; maxBytes: number }
   | { type: "init"; mods: ModChoice[]; active: string | null; info: WorkshopModInfo | null }
   | { type: "info"; active: string; info: WorkshopModInfo | null }
   | { type: "liveBegin" }
@@ -180,9 +189,12 @@ export type ProgressJob = "upload" | "download";
 export type DlcSource = "game" | "steam" | "none";
 
 type WorkshopAction =
+  | { type: "previewPrepared"; id: string; image: EncodedPreview; error?: never }
+  | { type: "previewPrepared"; id: string; image?: never; error: string }
   | { type: "ready" }
   | { type: "selectListing"; key: string | null }
-  | { type: "createLegacy" }
+  | { type: "pickLegacyZip"; request: string }
+  | { type: "createLegacy"; version: string; archive?: string }
   | { type: "stopWaiting" }
   | { type: "setVisibility"; value: WorkshopVisibility }
   | { type: "selectMod"; path: string }

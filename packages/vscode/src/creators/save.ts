@@ -20,6 +20,7 @@ import type { PxConfig } from "../config";
 import { readModName } from "@px-lsp/protocol/modName";
 import { writeLocSmart, type LocLookup } from "../locCommands";
 import { scaffoldPrefix } from "../scaffold/command";
+import { effectiveLocConfig, localizationRoots } from "../localizationProject";
 import {
   BOM,
   defaultDefinitionFileName,
@@ -300,24 +301,26 @@ export async function applyDefinitionEdits(
 }
 
 /**
- * The loc file a creator's NEW keys go to: named after the script file the
- * definition was written to, in the same mod (`common/traits/mymod_traits.txt`
- * -> `localization/<lang>/mymod_traits_l_<lang>.yml`). It used to be "the
- * mod's largest loc file", which put a trait's name into a calendar file
- * where nobody looked for it. From the second save on the keys are found in
- * place, so the file is only ever created by the first.
+ * Source-derived fallback for a creator's new localization keys. Author
+ * defaults and meaningful sibling matches take priority in writeLocSmart.
  */
 export function creatorLocFile(cfg: PxConfig, target: { modPath: string; file: string }): string {
+  cfg = effectiveLocConfig({ ...cfg, modPath: target.modPath });
   const stem = target.file.replace(/\.txt$/i, "");
-  return path.join(target.modPath, "localization", cfg.locLanguage, `${stem}_l_${cfg.locLanguage}.yml`);
+  return path.join(
+    target.modPath,
+    localizationRoots(cfg)[0],
+    cfg.locLanguage,
+    `${stem}_l_${cfg.locLanguage}.yml`
+  );
 }
 
 /**
  * Write a creator's loc values through the normal loc writer: a key the mod
  * already has is rewritten in place, a vanilla-only key goes to
- * `localization/replace/`, a brand-new key goes to `creatorLocFile(target)`
- * (or, with no target, the mod file holding its siblings). Returns the files
- * written, in order.
+ * an override destination, and a brand-new key follows the mod's author
+ * defaults and sibling layout before the source-derived fallback. Returns
+ * the files written, in order.
  */
 export async function writeLocValues(
   cfg: PxConfig,
@@ -326,10 +329,18 @@ export async function writeLocValues(
   target?: { modPath: string; file: string }
 ): Promise<string[]> {
   const files: string[] = [];
+  cfg = effectiveLocConfig(target ? { ...cfg, modPath: target.modPath } : cfg);
   const newKeyFile = target ? creatorLocFile(cfg, target) : undefined;
+  const relatedKeys = pairs.map(({ key }) => key);
   for (const { key, value } of pairs) {
     if (key.trim() === "") continue;
-    files.push(await writeLocSmart(cfg, lookup, key, value, newKeyFile));
+    files.push(
+      await writeLocSmart(cfg, lookup, key, value, {
+        sourcePath: target?.file,
+        relatedKeys,
+        fallbackPath: newKeyFile,
+      })
+    );
   }
   return files;
 }

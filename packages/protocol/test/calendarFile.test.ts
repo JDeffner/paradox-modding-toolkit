@@ -43,6 +43,25 @@ describe("readCalendarFile", () => {
     expect(readCalendarFile(root, NAMES)?.file).toBe(file);
   });
 
+  it("still reads the legacy calendar beside an unrelated current artifact", () => {
+    const root = tmp();
+    const file = write(root, ".ck3modding", JSON.stringify(CAL));
+    fs.mkdirSync(path.join(root, ".px-toolkit"));
+    fs.writeFileSync(path.join(root, ".px-toolkit/schema.json"), "{}");
+    expect(readCalendarFile(root, NAMES)).toEqual({ file, calendar: CAL });
+    expect(fs.readFileSync(file, "utf8")).toBe(JSON.stringify(CAL));
+  });
+
+  it("does not fall back from an invalid current declaration to a usable legacy one", () => {
+    const root = tmp();
+    write(root, ".ck3modding", JSON.stringify(CAL));
+    const file = write(root, ".px-toolkit", "broken");
+    expect(readCalendarFile(root, NAMES)).toMatchObject({
+      file,
+      error: expect.stringContaining("not valid JSON"),
+    });
+  });
+
   it("tells an unparsable file apart from an unusable calendar, both without a calendar", () => {
     const root = tmp();
     write(root, ".px-toolkit", "{ epoch: 4000 ");
@@ -57,13 +76,33 @@ describe("readCalendarFile", () => {
 });
 
 describe("writeCalendarFile", () => {
-  it("writes into the current config dir, renaming a legacy one first", () => {
+  it("writes into the current config dir and leaves the legacy directory in place", () => {
     const root = tmp();
     fs.mkdirSync(path.join(root, ".ck3modding"));
     const file = writeCalendarFile(root, NAMES, CAL);
     expect(file).toBe(path.join(root, ".px-toolkit", "calendar.json"));
-    expect(fs.existsSync(path.join(root, ".ck3modding"))).toBe(false);
+    expect(fs.existsSync(path.join(root, ".ck3modding"))).toBe(true);
     expect(readCalendarFile(root, NAMES)?.calendar).toEqual(CAL);
+  });
+
+  it("preserves legacy extensions and leaves the legacy bytes unchanged", () => {
+    const root = tmp();
+    const original = JSON.stringify({ ...CAL, future: { label: "keep" } });
+    const legacy = write(root, ".ck3modding", original);
+    const current = writeCalendarFile(root, NAMES, { epoch: 2, after: "New" });
+    expect(JSON.parse(fs.readFileSync(current, "utf8"))).toEqual({
+      epoch: 2,
+      after: "New",
+      future: { label: "keep" },
+    });
+    expect(fs.readFileSync(legacy, "utf8")).toBe(original);
+  });
+
+  it("refuses to overwrite invalid current JSON", () => {
+    const root = tmp();
+    const file = write(root, ".px-toolkit", "invalid");
+    expect(() => writeCalendarFile(root, NAMES, CAL)).toThrow();
+    expect(fs.readFileSync(file, "utf8")).toBe("invalid");
   });
 });
 

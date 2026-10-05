@@ -12,10 +12,12 @@ import type { PxConfig } from "../config";
 import { escapeRegExp } from "@px-lsp/protocol/regex";
 import { hasKindStyle, kindStyle } from "@px-lsp/protocol/kinds";
 import type { ScaffoldTemplate } from "@px-lsp/server/games/profile";
-import { renderScaffold, type ScaffoldFile, type ScaffoldResult } from "./templates";
+import { renderScaffold, type ScaffoldFile, type ScaffoldResult } from "@px-lsp/server/games/renderScaffold";
 import { templatesForFolder, samePath, containsPath } from "../commandTargets";
 import { metaFor } from "../meta";
 import { readDocument, writeDocument } from "../documentWrite";
+import { writeLocSmart } from "../locCommands";
+import { effectiveLocConfig } from "../localizationProject";
 
 /** Remembers the last-used prefix within a session so repeat scaffolds are quick. */
 let lastPrefix: string | null = null;
@@ -188,6 +190,21 @@ async function materialize(
   let cursorTarget: { absPath: string; line: number; character: number } | null = null;
 
   for (const file of result.files) {
+    if (/_l_[a-z_]+\.yml$/i.test(file.relPath)) {
+      const pairs = [...file.content.matchAll(/^[ \t]*([A-Za-z0-9_.\-']+):\d*[ \t]*"(.*)"[ \t]*(?:#.*)?$/gm)];
+      const relatedKeys = pairs.map((match) => match[1]);
+      for (const match of pairs) {
+        const written = await writeLocSmart(cfg, async () => [], match[1], match[2], {
+          sourcePath: path.join(cfg.modPath!, result.cursor.relPath),
+          relatedKeys,
+          fallbackPath: path.join(cfg.modPath!, file.relPath),
+        });
+        onFileChanged(written);
+        const rel = path.relative(cfg.modPath!, written).replace(/\\/g, "/");
+        if (!appended.includes(rel)) appended.push(rel);
+      }
+      continue;
+    }
     const outcome = await materializeFile(cfg.modPath!, file);
     onFileChanged(outcome.absPath);
     if (outcome.action === "created") created.push(file.relPath);
@@ -226,6 +243,7 @@ export async function newContentCommand(
   onFileChanged: (fsPath: string) => void,
   destination?: string
 ): Promise<void> {
+  cfg = effectiveLocConfig(cfg);
   if (!cfg.modPath) {
     void vscode.window.showWarningMessage(
       "Paradox Modding Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."

@@ -25,7 +25,10 @@ async function render(bytes: Uint8Array): Promise<string> {
     ExtensionMode: { Development: 2 },
     workspace: {
       fs: { readFile: async () => bytes },
-      getConfiguration: () => ({ get: (_key: string, fallback: unknown) => fallback }),
+      getConfiguration: () => ({
+        get: (_key: string, fallback: unknown) => fallback,
+        inspect: () => undefined,
+      }),
       onDidChangeConfiguration: () => disposable,
     },
   };

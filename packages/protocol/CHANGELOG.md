@@ -6,9 +6,29 @@ the shared helpers change. Before the split it moved inside the extension's
 version (up to 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
+## Unreleased
+
+- Add optional `EventDetail.sourceHash` to identify the decoded text used for event coordinates. Older servers remain supported through client source checks.
+
+- Extend the pxtk command contract with preparation operations, preview tokens, exact reference sites and focused validation coverage.
+
+- Add the versioned `pxtk` JSON result contract in `agentTools`. Share Steam discovery, Tiger configuration, dependency blocks, and bounded process handling with the standalone CLI.
+- Add opt-in strict Tiger report parsing. Preserve the existing tolerant parser default; process integrations reject incomplete reports instead of reporting a false pass.
+
+- Add the shared localization policy: validated author defaults, deterministic destination suggestions, generated-file detection, and edits that preserve headers, comments, line endings and entry versions.
+
 ## 0.2.7
 
-Ships with the toolkit's 0.5.2 prerelease.
+Ships with the toolkit's 0.5.2 release.
+
+- Extend version-1 machine settings with private patch bindings keyed by portable project and source IDs. Preserve unknown fields and relocate bindings with Move Mod. This adds no LSP methods.
+
+- Add version-1 portable project rules and a per-game personal-path model. Resolve config artifacts independently, reject unsafe paths and escaped links, preserve unknown settings, and include `project.json` in index watches. Keep whole-directory helpers as deprecated compatibility exports.
+
+- Add the shared localization policy: validated author defaults, deterministic destination suggestions, generated-file detection, and edits that preserve headers, comments, line endings and entry versions.
+
+- Add `@px-lsp/protocol/migration` types for exact-build contributions, compatibility notes, version routes and per-entry completions. Version-2 sessions retain routes, reference builds, answers and manual notes. This adds no LSP methods or client capabilities.
+- Add SDK 2 selective input capture, frozen discovery selections and optional question groups, while retaining SDK 1 contribution support.
 
 - Add optional `DynastyCharacter.deathReason` for the first dated death block. Clarify that character names can be localization keys.
 

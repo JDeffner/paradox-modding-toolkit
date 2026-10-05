@@ -30,6 +30,7 @@ const PRESENTATION: Record<string, [string, string, ("folder" | "file")?]> = {
   "diagnostics.vanilla": ["Validation", "Validate vanilla files"],
   "diagnostics.requireDescriptor": ["Validation", "Require a mod descriptor"],
   indexAssets: ["Advanced", "Index graphics assets"],
+  experimentalFeatures: ["Advanced", "Experimental features"],
   calendar: ["Advanced", "Fallback calendar"],
   enableForWorkspace: ["Advanced", "Enable Paradox language modes"],
   "sidebar.hidden": ["Advanced", "Hidden Project actions"],
@@ -41,6 +42,7 @@ const PRESENTATION: Record<string, [string, string, ("folder" | "file")?]> = {
 export function settingsCatalog(sections: { properties: Record<string, SettingSchema> }[]) {
   return sections
     .flatMap(({ properties }) => Object.entries(properties))
+    .filter(([id]) => id !== "px.machinePaths")
     .map(([id, schema]) => {
       const key = id.replace(/^px\./, "");
       const [group, label, browse] = PRESENTATION[key] ?? ["Advanced", key];
@@ -85,11 +87,25 @@ export function scopedValue(inspected: InspectedSetting, target: SettingsTarget,
     .slice(index + 1)
     .reverse()
     .find((level) => level.value !== undefined);
+  const effective = override ?? inherited;
+  const reset = levels
+    .slice(0, index)
+    .reverse()
+    .find((level) => level.value !== undefined)!;
   return {
     value: inherited.value as SettingRow["value"],
     explicit: own !== undefined,
     source: inherited.name,
     stamp: valueStamp(own),
+    effectiveValue: effective.value as SettingRow["value"],
+    effectiveSource: effective.name,
+    resetLabel:
+      target === "user"
+        ? "Remove personal default"
+        : target === "workspace"
+          ? "Remove workspace override"
+          : "Remove folder override",
+    resetValue: (override ?? reset).value as SettingRow["value"],
     override: override
       ? `Overridden by ${override.name.toLowerCase()}: ${valueStamp(override.value)}`
       : undefined,
