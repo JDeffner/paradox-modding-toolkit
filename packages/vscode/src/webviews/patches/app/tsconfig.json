@@ -1,0 +1,13 @@
+{
+  "extends": "../../../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2023", "DOM"],
+    "types": [],
+    "paths": {
+      "@px-lsp/protocol/*": ["../../../../../protocol/src/*"],
+      "@px-lsp/server/*": ["../../../../../server/src/*"]
+    }
+  },
+  "include": ["."]
+}

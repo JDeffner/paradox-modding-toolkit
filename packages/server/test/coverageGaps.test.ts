@@ -73,7 +73,7 @@ describe("implicit definitions: flags, lists, trait groups, aliases", () => {
 
 describe("semantic coloring: enums and namespaces", () => {
   const ENUM_MEMBER = 6;
-  const EVENT = 5;
+  const NAMESPACE = 11;
 
   function tokensOf(text: string) {
     const data = new ServerData();
@@ -97,9 +97,11 @@ describe("semantic coloring: enums and namespaces", () => {
     ).toBe(true);
   });
 
-  it("namespace values color as events", () => {
+  it("namespace values color as namespace declarations", () => {
     const tokens = tokensOf("namespace = mymod\n");
-    expect(tokens.some((t) => t.line === 0 && t.length === "mymod".length && t.type === EVENT)).toBe(true);
+    expect(tokens.some((t) => t.line === 0 && t.length === "mymod".length && t.type === NAMESPACE)).toBe(
+      true
+    );
   });
 });
 

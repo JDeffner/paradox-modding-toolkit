@@ -1,6 +1,7 @@
 # G3: the webview GUI editor, v1 (VSCode-first, Studio-ready)
 
-The plan of record is docs/gui-editor-consolidation.md; this details its G3 phase.
+Historical design notes for the G3 webview phase. Current responsibilities are documented in the [GUI editor README](../../packages/vscode/src/webviews/guiEditor/README.md); current engine behavior is in [spec.md](spec.md).
+
 Everything G3 stands on is DONE and probe-settled: the layout engine (G2 + the
 2026-08-02 probe, zero disputed rows), the source writer and its op API
 (`paradox/guiSourceEdit`, G1), the fixture corpus and invariant sweeps (G0/G1), and

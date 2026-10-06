@@ -80,10 +80,12 @@ ${uiCss}
   #page h2 { font-size: 1.25em; margin: 26px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--px-border); }
   #page h3 { font-size: 1.05em; margin: 18px 0 6px; }
   #page p, #page ul { margin: 8px 0; }
+  #page .article-revision { color: var(--px-muted-fg); font-size: var(--px-text-sm); margin: 4px 0 16px; }
   #page ul { padding-left: 20px; }
   #page li { margin: 3px 0; }
   #page .lede { color: var(--px-muted-fg); margin: 0 0 18px; }
   #page code { font-family: var(--px-font-mono); font-size: 0.92em; background: var(--px-muted); border-radius: var(--px-radius-sm); padding: 1px 5px; }
+  #page :not(pre) > code { overflow-wrap: anywhere; }
   #page pre {
     margin: 10px 0; padding: 8px 10px; overflow-x: auto; background: var(--px-muted);
     border-radius: var(--px-radius-md);

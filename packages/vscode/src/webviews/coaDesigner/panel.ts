@@ -27,6 +27,7 @@ import {
 import { writeFlagFile } from "../flagBuilder/save";
 import type { FlagDatabase, FlagTarget, TextureKind } from "../flagBuilder/messages";
 import { coaLibraryDir, type PxConfig } from "../../config";
+import { inspectMachineSetting, readMachineSetting, writeMachineSetting } from "../../machineSettings";
 import { scaffoldPrefix } from "../../scaffold/command";
 import { defaultTargetFileName, isPlainScriptFileName, vanillaNameClash } from "../../creators/saveTargets";
 import { libraryFileName, libraryHas, readLibrary, writeLibraryFile } from "./library";
@@ -179,8 +180,13 @@ export class CoaDesignerPanel {
    * nobody picked is worth saying out loud before a design is written into it.
    */
   private libraryState(): LibraryState {
-    const set = (vscode.workspace.getConfiguration("px").get<string>("coaLibraryDir") ?? "").trim();
-    return { dir: coaLibraryDir(this.options.meta) ?? "", chosen: set !== "" };
+    const resource = this.libraryResource();
+    const set = (readMachineSetting<string>("coaLibraryDir", this.options.meta.id, resource) ?? "").trim();
+    return { dir: coaLibraryDir(this.options.meta, resource) ?? "", chosen: set !== "" };
+  }
+
+  private libraryResource(): vscode.Uri | undefined {
+    return this.options.cfg.modPath ? vscode.Uri.file(this.options.cfg.modPath) : undefined;
   }
 
   /**
@@ -381,18 +387,22 @@ export class CoaDesignerPanel {
           this.post({ type: "toast", message: "No mod folder to save into." });
           return;
         }
-        const file = await writeFlagFile({
-          name: message.name,
-          script: message.script,
-          modPath: choice.modPath,
-          stageRoot: this.options.meta.stageRoots?.[0],
-          file: choice.file,
-        });
-        this.post(
-          file
-            ? { type: "toast", message: `Saved ${message.name} to ${file}.` }
-            : { type: "toast", message: `Could not write ${choice.file}. Pick another file.` }
-        );
+        try {
+          const file = await writeFlagFile({
+            name: message.name,
+            script: message.script,
+            modPath: choice.modPath,
+            stageRoot: this.options.meta.stageRoots?.[0],
+            file: choice.file,
+          });
+          this.post(
+            file
+              ? { type: "toast", message: `Saved ${message.name} to ${file}.` }
+              : { type: "toast", message: `Could not write ${choice.file}. Pick another file.` }
+          );
+        } catch (error) {
+          this.post({ type: "toast", message: `Could not save ${message.name}: ${String(error)}` });
+        }
         return;
       }
       case "paste": {
@@ -415,7 +425,7 @@ export class CoaDesignerPanel {
         await this.openExisting();
         return;
       case "libraryList": {
-        const dir = coaLibraryDir(this.options.meta);
+        const dir = coaLibraryDir(this.options.meta, this.libraryResource());
         this.post({ type: "library", dir: dir ?? "", items: dir ? readLibrary(dir) : [] });
         return;
       }
@@ -423,7 +433,21 @@ export class CoaDesignerPanel {
         await this.exportToLibrary(message.name, message.script);
         return;
       case "libraryDir": {
-        const current = coaLibraryDir(this.options.meta);
+        const resource = this.libraryResource();
+        const current = coaLibraryDir(this.options.meta, resource);
+        const source = inspectMachineSetting(
+          "coaLibraryDir",
+          this.options.meta.id,
+          "default",
+          resource
+        ).source;
+        const scope =
+          source === "folder" || source === "legacyFolder"
+            ? "folder"
+            : source === "workspace" || source === "legacyWorkspace"
+              ? "workspace"
+              : "default";
+        const inspected = inspectMachineSetting("coaLibraryDir", this.options.meta.id, scope, resource);
         const picked = await vscode.window.showOpenDialog({
           canSelectFolders: true,
           canSelectFiles: false,
@@ -434,11 +458,15 @@ export class CoaDesignerPanel {
         });
         const dir = picked?.[0]?.fsPath;
         if (!dir) return;
-        // Machine scoped, like the setting itself: the library is a folder on
-        // this computer, not a fact about the workspace.
-        await vscode.workspace
-          .getConfiguration("px")
-          .update("coaLibraryDir", dir, vscode.ConfigurationTarget.Global);
+        // Update the active private binding so a narrower override cannot hide the choice.
+        await writeMachineSetting(
+          "coaLibraryDir",
+          dir,
+          this.options.meta.id,
+          scope,
+          inspected.stamp,
+          resource
+        );
         this.post({ type: "libraryDir", ...this.libraryState() });
         this.post({ type: "toast", message: `Library folder: ${dir}` });
         return;
@@ -455,7 +483,7 @@ export class CoaDesignerPanel {
    * rather than a modal: the panel stays usable while the question stands.
    */
   private async exportToLibrary(name: string, script: string): Promise<void> {
-    const dir = coaLibraryDir(this.options.meta);
+    const dir = coaLibraryDir(this.options.meta, this.libraryResource());
     if (!dir) {
       this.post({ type: "toast", message: "No library folder. Set px.coaLibraryDir." });
       return;

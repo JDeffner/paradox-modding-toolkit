@@ -229,13 +229,18 @@ export interface ItemJson {
   visibility?: number;
 }
 
-/** `<workshopDir>/item.json`, or null when absent/unreadable. */
+/** `<workshopDir>/item.json`, or null when absent. Invalid existing records are errors. */
 export function readItemJson(workshopDir: string): ItemJson | null {
   try {
-    const raw = JSON.parse(fs.readFileSync(path.join(workshopDir, "item.json"), "utf8")) as unknown;
-    return typeof raw === "object" && raw !== null ? (raw as ItemJson) : null;
-  } catch {
-    return null;
+    const raw = JSON.parse(
+      fs.readFileSync(path.join(workshopDir, "item.json"), "utf8").replace(/^\uFEFF/, "")
+    ) as unknown;
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+      throw new Error("Workshop item settings must be an object");
+    return raw as ItemJson;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
   }
 }
 
@@ -309,7 +314,7 @@ export function readPreviews(workshopDir: string): Previews | null {
   const byName = names
     .filter((n) => PREVIEW_EXTS.has(path.extname(n).toLowerCase()))
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  const order = readLines(path.join(dir, ORDER_FILE)).filter((n) => byName.includes(n));
+  const order = [...new Set(readLines(path.join(dir, ORDER_FILE)).filter((n) => byName.includes(n)))];
   const images = [...order, ...byName.filter((n) => !order.includes(n))].map((n) => path.join(dir, n));
   return { images, videos: readLines(path.join(dir, VIDEOS_FILE)) };
 }

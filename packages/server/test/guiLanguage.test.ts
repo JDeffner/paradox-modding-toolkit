@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { TextDocument } from "vscode-languageserver-textdocument";
 import { provideGuiCompletion, provideGuiHover } from "../src/features/guiLanguage";
 import { ServerData } from "../src/serverData";
+import { parseDataTypesDump } from "../src/data/dataTypes";
 
 let uriCounter = 0;
 const uri = () => `file:///mod/gui/fixture-${uriCounter++}.gui`;
@@ -39,6 +40,23 @@ function provideAt(data: ServerData, text: string, marker = "|") {
 }
 
 describe("GUI completion", () => {
+  it("completes a multiline binding member on its own line and leaves closed expressions alone", () => {
+    const data = makeData();
+    data.dataTypes = parseDataTypesDump("Character.GetName\nDefinition type: Function\nReturn type: CString");
+    const { items } = provideAt(
+      data,
+      'widget = { text = "[ObjectsEqual(\n Character.G|,\n GetPlayer()\n)]" }'
+    );
+    const item = items.find((item) => item.label === "GetName");
+    expect(item).toBeDefined();
+    expect(item!.textEdit).toEqual({
+      range: { start: { line: 1, character: 11 }, end: { line: 1, character: 12 } },
+      newText: "GetName",
+    });
+    expect(
+      provideAt(data, 'widget = { text = "[Character.GetName]\n Character.G|" }').items
+    ).not.toContainEqual(expect.objectContaining({ label: "GetName" }));
+  });
   it("inside a widget block: properties of that type lead, from the vanilla harvest", () => {
     const { items } = provideAt(makeData(), "widget = {\n\t|\n}");
     const labels = items.map((i) => i.label);
@@ -129,6 +147,22 @@ describe("GUI completion", () => {
 });
 
 describe("GUI hover", () => {
+  it("shows a later-line datafunction member with a line-local hover range", () => {
+    const data = makeData();
+    data.dataTypes = parseDataTypesDump("Character.GetName\nDefinition type: Function\nReturn type: CString");
+    const text = 'widget = { text = "[ObjectsEqual(\n Character.GetName,\n GetPlayer()\n)]" }';
+    const document = TextDocument.create(uri(), "paradox-gui", 1, text);
+    const hover = provideGuiHover(data, document, { line: 1, character: 14 });
+    expect(hover?.range).toEqual({ start: { line: 1, character: 11 }, end: { line: 1, character: 18 } });
+    expect((hover!.contents as { value: string }).value).toContain("Character.GetName");
+    const outside = TextDocument.create(
+      uri(),
+      "paradox-gui",
+      1,
+      'text = "[Character.GetName]\n Character.GetName"'
+    );
+    expect(provideGuiHover(data, outside, { line: 1, character: 14 })).toBeNull();
+  });
   it("widget type hover shows usage and common properties", () => {
     const text = 'flowcontainer = {\n\tname = "x"\n}';
     const doc = TextDocument.create(uri(), "paradox-gui", 1, text);

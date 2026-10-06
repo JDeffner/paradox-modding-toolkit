@@ -13,6 +13,7 @@
  * Provenance strings for hover are the `.info` folder name (see STRUCTURE_SOURCES).
  */
 import type { KeySpec, StructureSpec } from "../../schema/types";
+import { RELIGION_STRUCTURES } from "./religionStructures";
 // Bundled full harvest of every _*.info schema doc (scripts/build-structures-json.ts):
 // ~70 kinds, ~1300 documented keys with vanilla usage counts. Merged UNDER the
 // hand-curated specs below, curated docs always win on key collisions.
@@ -31,6 +32,9 @@ export const STRUCTURE_SOURCES: Record<string, string> = {
   decision: "decisions",
   event: "events",
   on_action: "on_action",
+  faith: "faith_types",
+  rite: "rite_types",
+  tenet: "tenet_types",
 };
 
 // --- dynamic description nodes (events/_events.info "Descriptions") ---
@@ -806,6 +810,7 @@ const MODIFIER_DEFINITION_FORMAT: StructureSpec = {
 };
 
 const CURATED: Record<string, StructureSpec> = {
+  ...RELIGION_STRUCTURES,
   character_interaction: CHARACTER_INTERACTION,
   decision: DECISION,
   event: EVENT,

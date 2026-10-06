@@ -143,7 +143,22 @@ function boot(): Booted {
     runScripts: "dangerously",
     beforeParse(window) {
       (window as unknown as { acquireVsCodeApi: () => unknown }).acquireVsCodeApi = () => ({
-        postMessage: (msg: Record<string, unknown>) => posted.push(msg),
+        postMessage: (msg: Record<string, unknown>) => {
+          posted.push(msg);
+          if (msg.type === "target" && msg.character) {
+            const character = TREE.characters.find((c) => c.id === msg.character)!;
+            window.dispatchEvent(
+              new window.MessageEvent("message", {
+                data: {
+                  type: "characterSource",
+                  id: character.id,
+                  file: character.file,
+                  form: { ...character, deathReason: "" },
+                },
+              })
+            );
+          }
+        },
       });
       // jsdom has no layout, so the menu's keyboard scrolling needs a stand-in.
       window.Element.prototype.scrollIntoView = () => undefined;
@@ -184,6 +199,48 @@ function sideButton(app: Booted, label: string): HTMLButtonElement {
 }
 
 describe("the Dynasty Tree app", () => {
+  it("sends explicit quotation choices and a custom death reason, retaining the draft after a failed save", () => {
+    const app = boot();
+    app.send({ type: "tree", tree: TREE, ms: 1 });
+    app.send({
+      type: "options",
+      sets: { culture: [], religion: [], trait: [], deathReason: [{ value: "death_natural_causes" }] },
+    });
+    click(app, card(app, "1").querySelector('.cact[data-act="edit"]')!);
+    const doc = app.window.document;
+    const reason = doc.querySelector<HTMLInputElement>('input[aria-label="Death reason"]')!;
+    expect(doc.querySelector("datalist option")?.getAttribute("value")).toBe("death_natural_causes");
+    reason.value = "death_mod_custom";
+    reason.dispatchEvent(new app.window.Event("input"));
+    sideButton(app, "Save").click();
+    expect(app.posted.some((m) => m.type === "saveCharacter")).toBe(false);
+    const died = doc.querySelectorAll<HTMLInputElement>("input.year")[1];
+    died.value = "1050";
+    died.dispatchEvent(new app.window.Event("input"));
+    const select = doc.querySelector<HTMLSelectElement>('select[aria-label="Name quotation marks"]')!;
+    select.value = "false";
+    select.dispatchEvent(new app.window.Event("change"));
+    sideButton(app, "Save").click();
+    expect(app.posted.find((m) => m.type === "saveCharacter")).toMatchObject({
+      form: { deathReason: "death_mod_custom", death: "1050.1.1", quotes: { name: false } },
+    });
+    expect(sideButton(app, "Save").disabled).toBe(true);
+    app.window.dispatchEvent(new app.window.KeyboardEvent("keydown", { key: "Escape" }));
+    expect(sideButton(app, "Cancel").disabled).toBe(true);
+    expect(doc.querySelector<HTMLElement>("#sideBody .sec")?.inert).toBe(true);
+    app.send({ type: "characterSaveFailed", message: "The character changed. Reopen it." });
+    expect(sideButton(app, "Save").disabled).toBe(false);
+    expect(doc.querySelector<HTMLInputElement>('input[aria-label="Death reason"]')!.value).toBe(
+      "death_mod_custom"
+    );
+    app.send({ type: "saved", name: "1", file: "c.txt", line: 0 });
+    // A success for another operation must not discard a draft after a failed save.
+    expect(doc.querySelector('input[aria-label="Death reason"]')).not.toBeNull();
+    sideButton(app, "Save").click();
+    app.send({ type: "saved", name: "1", file: "c.txt", line: 0 });
+    expect(doc.querySelector('input[aria-label="Death reason"]')).toBeNull();
+  });
+
   it("lists dynasties and turns a click into an open request", () => {
     const app = boot();
     // Nothing is drawn until the host answers, so the app asks as it boots.
@@ -268,7 +325,12 @@ describe("the Dynasty Tree app", () => {
     click(app, card(app, "2").querySelector('.cact[data-act="edit"]')!);
     expect(app.window.document.querySelector("#sideBody h2")?.textContent).toBe("Override 2 in your mod");
     // The override goes where a new character goes, not into the game file.
-    expect(app.posted.at(-1)).toEqual({ type: "target" });
+    expect(app.posted.at(-1)).toEqual({
+      type: "target",
+      file: undefined,
+      character: "2",
+      sourceFile: "v.txt",
+    });
     app.window.document.querySelector<HTMLButtonElement>("#sideBody button")?.click();
     click(app, card(app, "1").querySelector('.cact[data-act="spouse"]')!);
     const side = app.window.document.getElementById("sideBody")!;
@@ -359,7 +421,7 @@ describe("the Dynasty Tree app", () => {
     expect(sent.file).toBe("c.txt");
     // Editing an existing character re-asks where a save would land, so the
     // top bar names the file that character is already in.
-    expect(app.posted).toContainEqual({ type: "target", file: "c.txt" });
+    expect(app.posted).toContainEqual({ type: "target", file: "c.txt", character: "1", sourceFile: "c.txt" });
   });
 
   it("names the era once on a card whose ends share it, even a two-word era", () => {

@@ -1,7 +1,7 @@
 /**
  * The Wiki panel (px.openWiki): the hub for the toolkit's reference
  * knowledge. Its front page is a set of cards, one per destination: the
- * other reference views (Examples Wiki, Format Docs, Credits) and the pages
+ * other reference views (Examples Wiki, Credits) and the pages
  * the wiki holds itself (Image Guidelines, Diagnostics, Mod Report, Modding
  * Tools).
  *
@@ -28,6 +28,7 @@ import { creditsPage } from "../credits/credits";
 import { GAME_METAS } from "../../gameDetect";
 import { MODDING_TOOLS, moddingToolsPage } from "./moddingTools";
 import { moddingGuidesPage } from "./moddingGuides";
+import { LAUNCH_OPTIONS_ARTICLE, readLaunchOptions } from "./launchOptions";
 import { wikiHtml } from "./html";
 import type { AppToHost, HostToApp, WikiArticle, WikiHubEntry } from "./messages";
 import { makeNonce } from "../nonce";
@@ -41,6 +42,8 @@ export const IMAGE_GUIDELINES_ARTICLE = "image-guidelines";
 export interface WikiDeps {
   /** The mod report as markdown, for the focused mod. */
   modReport: () => Promise<string>;
+  /** Resolved game data directory, using the current settings or install detection. */
+  gamePath: (meta: GameMeta) => string | null;
 }
 
 export class WikiPanel {
@@ -50,10 +53,12 @@ export class WikiPanel {
   private readonly panel: vscode.WebviewPanel;
   private readonly context: vscode.ExtensionContext;
   private deps: WikiDeps;
-  private readonly game: string;
+  private game: string;
   private select: string | null;
   private disposables: vscode.Disposable[] = [];
   private disposed = false;
+  private ready = false;
+  private launchWatchers = new Map<string, vscode.FileSystemWatcher>();
 
   private constructor(
     context: vscode.ExtensionContext,
@@ -95,6 +100,13 @@ export class WikiPanel {
       this.disposables
     );
     this.panel.onDidDispose(() => this.dispose(), undefined, this.disposables);
+    this.panel.onDidChangeViewState(
+      () => {
+        if (this.panel.visible) this.refreshLaunchOptions();
+      },
+      undefined,
+      this.disposables
+    );
   }
 
   /** Opens the hub, at `select` when a page id is given. */
@@ -107,17 +119,66 @@ export class WikiPanel {
     const existing = WikiPanel.instance;
     if (existing) {
       existing.deps = deps;
+      existing.refreshWorkspace(meta);
       existing.panel.reveal(vscode.ViewColumn.Active);
+      existing.refreshLaunchOptions();
       if (select) existing.post({ type: "select", id: select });
       return;
     }
     WikiPanel.instance = new WikiPanel(context, meta, deps, select);
   }
 
+  /** Called after the extension resolves changed game paths or workspace folders. */
+  static refresh(meta?: GameMeta): void {
+    const existing = WikiPanel.instance;
+    if (!existing) return;
+    if (meta) existing.refreshWorkspace(meta);
+    existing.refreshLaunchOptions();
+  }
+
+  private refreshWorkspace(meta: GameMeta): void {
+    if (this.game === meta.id) return;
+    this.game = meta.id;
+    if (this.ready) this.post({ type: "hub", hub: hub(meta) });
+  }
+
+  private launchArticles(): WikiArticle[] {
+    const sources = new Set<string>();
+    const articles = Object.values(GAME_METAS).map((meta) => {
+      const dir = meta.launchOptionsFile ? this.deps.gamePath(meta) : null;
+      if (dir && meta.launchOptionsFile) sources.add(path.join(dir, meta.launchOptionsFile));
+      return readLaunchOptions(meta, dir);
+    });
+    for (const [source, watcher] of this.launchWatchers) {
+      if (sources.has(source)) continue;
+      watcher.dispose();
+      this.launchWatchers.delete(source);
+    }
+    for (const source of sources) {
+      if (this.launchWatchers.has(source)) continue;
+      const watcher = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(path.dirname(source), path.basename(source))
+      );
+      const refresh = () => this.refreshLaunchOptions();
+      watcher.onDidChange(refresh);
+      watcher.onDidCreate(refresh);
+      watcher.onDidDelete(refresh);
+      this.launchWatchers.set(source, watcher);
+    }
+    return articles;
+  }
+
+  private refreshLaunchOptions(): void {
+    if (this.disposed || !this.ready) return;
+    this.post({ type: "launchOptions", articles: this.launchArticles() });
+  }
+
   private dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     WikiPanel.instance = undefined;
+    for (const watcher of this.launchWatchers.values()) watcher.dispose();
+    this.launchWatchers.clear();
     for (const d of this.disposables.splice(0)) d.dispose();
     this.panel.dispose();
   }
@@ -130,18 +191,32 @@ export class WikiPanel {
   private async onMessage(msg: AppToHost): Promise<void> {
     switch (msg.type) {
       case "ready":
+        this.ready = true;
         this.post({
           type: "content",
-          hub: hub(),
-          articles: readArticles(this.context),
-          games: Object.values(GAME_METAS).map((m) => ({ id: m.id, name: m.name })),
+          hub: hub(GAME_METAS[this.game]),
+          articles: [...readArticles(this.context), ...this.launchArticles()],
+          games: Object.values(GAME_METAS).map((m) => ({ id: m.id, name: m.name, shortName: m.shortName })),
           game: this.game,
           select: this.select,
         });
         this.select = null;
         break;
+      case "refreshLaunchOptions":
+        this.refreshLaunchOptions();
+        break;
       case "run":
-        await vscode.commands.executeCommand(msg.command);
+        if (msg.command === "px.showExamplesWiki") {
+          if (msg.game === undefined) await vscode.commands.executeCommand(msg.command);
+          else if (typeof msg.game === "string" && Object.hasOwn(GAME_METAS, msg.game))
+            await vscode.commands.executeCommand(msg.command, { gameId: msg.game });
+          else void vscode.window.showErrorMessage("Wiki: the selected reference game is not supported.");
+        } else if (
+          hub(GAME_METAS[this.game]).some(
+            (entry) => "command" in entry.target && entry.target.command === msg.command
+          )
+        )
+          await vscode.commands.executeCommand(msg.command);
         break;
       case "modReport": {
         let markdown: string;
@@ -158,18 +233,26 @@ export class WikiPanel {
 }
 
 /** The front-page cards, in reading order, labelled for the active game. */
-function hub(): WikiHubEntry[] {
+function hub(workspaceGame: GameMeta): WikiHubEntry[] {
   return [
     {
       label: "Examples Wiki",
+      selectedGame: true,
       icon: "bookOpen",
       tip: "Search every trigger, effect and datafunction, with real examples out of the game's files.",
       target: { command: "px.showExamplesWiki" },
     },
     {
-      label: "Image Guidelines",
+      label: "Launch Options",
+      selectedGame: true,
+      icon: "play",
+      tip: "Launch flags and descriptions read from the installed game's documentation, updated when the file changes.",
+      target: { page: LAUNCH_OPTIONS_ARTICLE },
+    },
+    {
+      label: "CK3 Image Guidelines",
       icon: "image",
-      tip: "The sizes, formats and file names the game expects for previews, portraits and coats of arms.",
+      tip: "CK3 asset sizes, formats and file names. Requirements for other games have not been verified.",
       target: { page: IMAGE_GUIDELINES_ARTICLE },
     },
     {
@@ -179,9 +262,9 @@ function hub(): WikiHubEntry[] {
       target: { page: "diagnostics" },
     },
     {
-      label: "Mod Report",
+      label: `${workspaceGame.shortName} Mod Report (workspace)`,
       icon: "activity",
-      tip: "Content counts, problems, localization coverage and overrides of the focused mod, built now.",
+      tip: `${workspaceGame.name}. Content counts, problems, localization coverage and overrides of the focused workspace mod, built now. The reference game switch does not change this report.`,
       target: { page: "mod-report" },
     },
     {
@@ -198,12 +281,14 @@ function hub(): WikiHubEntry[] {
     },
     {
       label: "Modding Guides",
+      selectedGame: true,
       icon: "bookOpen",
       tip: "The game wiki's modding pages for the game you mod: events, map, sound, interface, compatibility, with what each covers.",
       target: { page: MODDING_GUIDES_ARTICLE },
     },
     {
       label: "Modding Tools",
+      selectedGame: true,
       icon: "wrench",
       tip: "Tools other modders built for the game you mod: map editors, translators, audio, history converters, with links.",
       target: { page: MODDING_TOOLS_ARTICLE },
@@ -240,14 +325,27 @@ function summary(markdown: string): string | undefined {
 
 function readArticles(context: vscode.ExtensionContext): WikiArticle[] {
   const articles: WikiArticle[] = [];
+  const revisions = readRevisions(context.asAbsolutePath("dist/wiki-revisions.json"));
+  const revision = (source: string) => revisions[source] ?? { uncommitted: false };
   const guidelines = read(context.asAbsolutePath("media/image-guidelines.md"));
   if (guidelines) {
     articles.push({
       id: IMAGE_GUIDELINES_ARTICLE,
-      title: "Image Guidelines",
+      title: "CK3 Image Guidelines",
+      game: "ck3",
       section: "Art & assets",
+      revision: revision("packages/vscode/media/image-guidelines.md"),
       markdown: guidelines,
     });
+    for (const meta of Object.values(GAME_METAS).filter((candidate) => candidate.id !== "ck3")) {
+      articles.push({
+        id: IMAGE_GUIDELINES_ARTICLE,
+        title: "CK3 Image Guidelines",
+        section: "Art & assets",
+        game: meta.id,
+        markdown: `# CK3 Image Guidelines\n\nThis reference contains CK3 asset requirements. No asset requirements have been verified here for ${meta.name}. Select Crusader Kings III to read the CK3 reference. Match a texture from your selected game's installation when replacing its artwork.`,
+      });
+    }
   }
   // The GitHub wiki's page, shipped in the vsix so it reads offline too.
   const steam = read(context.asAbsolutePath("media/steam-workshop-error-codes.md"));
@@ -256,6 +354,7 @@ function readArticles(context: vscode.ExtensionContext): WikiArticle[] {
       id: STEAM_ERRORS_ARTICLE,
       title: "Steam Error Codes",
       section: "Steam Workshop",
+      revision: revision("packages/vscode/media/steam-workshop-error-codes.md"),
       markdown: steam,
     });
   }
@@ -265,10 +364,17 @@ function readArticles(context: vscode.ExtensionContext): WikiArticle[] {
       id: STEAM_BBCODE_ARTICLE,
       title: "Steam BBCode",
       section: "Steam Workshop",
+      revision: revision("packages/vscode/media/steam-bbcode.md"),
       markdown: bbcode,
     });
   }
-  articles.push({ id: CREDITS_ARTICLE, title: "Credits", section: "About", ...creditsPage() });
+  articles.push({
+    id: CREDITS_ARTICLE,
+    title: "Credits",
+    section: "About",
+    revision: revision("packages/vscode/src/webviews/credits/credits.ts"),
+    ...creditsPage(),
+  });
 
   // One page for every game, each card tagged with the games its tool serves.
   // Built here, not read from a file: the list is typed in moddingTools.ts.
@@ -279,12 +385,14 @@ function readArticles(context: vscode.ExtensionContext): WikiArticle[] {
     id: MODDING_TOOLS_ARTICLE,
     title: "Modding Tools",
     section: "Community",
+    revision: revision("packages/vscode/src/webviews/wiki/moddingTools.ts"),
     ...moddingToolsPage(gameNames),
   });
   articles.push({
     id: MODDING_GUIDES_ARTICLE,
     title: "Modding Guides",
     section: "Community",
+    revision: revision("packages/vscode/src/webviews/wiki/moddingGuides.ts"),
     ...moddingGuidesPage(gameNames),
   });
 
@@ -306,10 +414,39 @@ function readArticles(context: vscode.ExtensionContext): WikiArticle[] {
       section: "Diagnostics",
       badge: severity(markdown),
       summary: summary(markdown),
+      revision: revision(`docs/diagnostics/${name}`),
       markdown,
     });
   }
   return articles;
+}
+
+function readRevisions(file: string): Record<string, NonNullable<WikiArticle["revision"]>> {
+  try {
+    const data: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (!data || typeof data !== "object" || Array.isArray(data)) {
+      throw new Error("expected a source-to-revision object");
+    }
+    for (const [source, revision] of Object.entries(data)) {
+      if (
+        !revision ||
+        typeof revision !== "object" ||
+        typeof revision.uncommitted !== "boolean" ||
+        (revision.lastEdited !== undefined &&
+          (typeof revision.lastEdited !== "string" || !Number.isFinite(Date.parse(revision.lastEdited))))
+      ) {
+        throw new Error(`invalid revision for ${source}`);
+      }
+    }
+    return data as Record<string, NonNullable<WikiArticle["revision"]>>;
+  } catch (error) {
+    if (!(error instanceof Error && "code" in error && error.code === "ENOENT")) {
+      console.warn(
+        `Wiki edit metadata could not be read: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    return {};
+  }
 }
 
 function read(file: string): string | undefined {

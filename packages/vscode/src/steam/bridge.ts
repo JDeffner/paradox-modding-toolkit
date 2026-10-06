@@ -45,8 +45,11 @@ function emit(event: BridgeEvent): void {
   process.stdout.write(JSON.stringify(event) + "\n");
 }
 
+// Only errors before the action API call can safely permit another manual attempt.
+let operationStarted = false;
+
 function fail(message: string): never {
-  emit({ type: "error", message });
+  emit({ type: "error", message, operationStarted });
   process.exit(1);
 }
 
@@ -164,6 +167,7 @@ async function main(): Promise<void> {
     fail(`Steam init failed: ${errText(e)}`);
   }
 
+  operationStarted = true;
   switch (job.action) {
     case "create": {
       try {
@@ -207,9 +211,7 @@ async function main(): Promise<void> {
         });
         // Required DLC is its own call; an item with none answers fine, so a
         // failure here is Steam's, not a missing feature.
-        const appDependencies = item
-          ? await steam.workshop.getAppDependencies(item.fileId).catch(() => [])
-          : [];
+        const appDependencies = item ? await steam.workshop.getAppDependencies(item.fileId) : [];
         const translations: Record<string, { title: string; description: string }> = {};
         for (const language of job.languages ?? []) {
           const t = await steam.workshop.getItem(BigInt(job.itemId), {

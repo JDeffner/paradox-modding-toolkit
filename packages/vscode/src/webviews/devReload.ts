@@ -11,6 +11,8 @@ import * as fs from "fs";
 import * as vscode from "vscode";
 import { randomUUID } from "crypto";
 import type { Integration } from "@webview-dev/helper";
+import { readConfig } from "../config";
+import { inspectMachineSetting } from "../machineSettings";
 
 declare const __WEBVIEW_DEV__: boolean;
 
@@ -20,6 +22,7 @@ interface LiveDevelopment {
   builds: Set<string>;
 }
 const liveContexts = new WeakMap<vscode.ExtensionContext, LiveDevelopment>();
+const reportedPathErrors = new Set<string>();
 
 /** Await before registering commands so even the first panel can join the companion. */
 export async function initializeWebviewDevelopment(
@@ -65,7 +68,15 @@ export function webviewSource(context: vscode.ExtensionContext): WebviewSource {
       revision: randomUUID(),
     };
   }
-  const configured = vscode.workspace.getConfiguration("px").get<string>("dev.webviewSource", "");
+  const setting = inspectMachineSetting<string>("dev.webviewSource", readConfig().gameId, "workspace");
+  if (setting.error && !reportedPathErrors.has(setting.error)) {
+    reportedPathErrors.add(setting.error);
+    void vscode.window.showWarningMessage(setting.error, "Open User Settings").then((action) => {
+      if (action) return vscode.commands.executeCommand("workbench.action.openSettingsJson");
+      return undefined;
+    });
+  }
+  const configured = setting.value ?? "";
   if (configured && fs.existsSync(configured)) return { root: vscode.Uri.file(configured), watch: true };
   return {
     root: vscode.Uri.joinPath(context.extensionUri, "dist", "webview"),

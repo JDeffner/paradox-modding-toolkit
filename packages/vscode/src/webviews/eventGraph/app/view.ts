@@ -542,7 +542,7 @@ export class GraphView {
     setSourceContext(group, {
       webviewSection: "px.graphNode",
       pxSourceFile: node.file,
-      pxSourceLine: node.line === undefined ? undefined : Math.max(0, node.line - 1),
+      pxSourceLine: node.line,
       pxDefinitionId: node.id,
       pxDefinitionKind: node.kind,
     });
@@ -561,7 +561,7 @@ export class GraphView {
       node.id +
       (node.title ? ": " + node.title : "") +
       `  [${node.kind} · ${node.source}]` +
-      (node.file ? `\n${node.file}${node.line ? ":" + node.line : ""}` : "") +
+      (node.file ? `\n${node.file}${node.line === undefined ? "" : ":" + (node.line + 1)}` : "") +
       "\nclick: focus and inspect · drag: move · double-click: open source · right-click or Shift+F10: actions";
     rect.appendChild(tip);
     group.appendChild(rect);

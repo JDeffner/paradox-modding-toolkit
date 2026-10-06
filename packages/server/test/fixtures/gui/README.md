@@ -1,6 +1,6 @@
 # PdxGui fixture corpus
 
-Executable truth for the GUI-editor consolidation (`docs/gui-editor-consolidation.md`).
+Executable fixtures for the GUI layout engine and source-preserving writer.
 `layout/` feeds the layout engine (G2), `writer/` feeds the source-preserving writer (G1).
 Every row of `docs/gui-designer/parity-checklist.md` names the fixture that exercises it,
 and every fixture here names its rows in its header comment; `guiFixtureCorpus.test.ts`

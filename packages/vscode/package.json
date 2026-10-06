@@ -2,7 +2,7 @@
   "name": "px-toolkit",
   "displayName": "Paradox Modding Toolkit",
   "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3, Europa Universalis V): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and a visual GUI editor.",
-  "version": "0.5.0",
+  "version": "0.5.5",
   "publisher": "JDeffner",
   "author": {
     "name": "Joël Deffner"
@@ -238,7 +238,80 @@
         "path": "./syntaxes/paradox-datafunction.tmLanguage.json"
       }
     ],
+    "semanticTokenModifiers": [
+      {
+        "id": "px",
+        "description": "A Paradox Toolkit symbol."
+      },
+      {
+        "id": "pxEffect",
+        "description": "An engine or scripted effect."
+      },
+      {
+        "id": "pxTrigger",
+        "description": "An engine or scripted trigger."
+      },
+      {
+        "id": "pxScope",
+        "description": "A saved scope or scope navigation link."
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "scopes": {
+          "method.pxEffect": [
+            "support.function.effect.paradox"
+          ],
+          "macro.pxEffect": [
+            "support.function.effect.paradox"
+          ],
+          "function.pxTrigger": [
+            "keyword.control.trigger.paradox"
+          ],
+          "macro.pxTrigger": [
+            "keyword.control.trigger.paradox"
+          ],
+          "keyword.px": [
+            "keyword.control.paradox"
+          ],
+          "variable.pxScope": [
+            "variable.other.saved-scope.paradox"
+          ],
+          "property.pxScope": [
+            "variable.language.scope.paradox"
+          ],
+          "type.px": [
+            "entity.name.type.paradox"
+          ],
+          "enumMember.px": [
+            "variable.other.constant.script.paradox"
+          ],
+          "event.px": [
+            "entity.name.function.event-id.paradox"
+          ],
+          "function.px": [
+            "entity.name.function.paradox-datafunction"
+          ],
+          "variable.px": [
+            "variable.other.runtime.paradox"
+          ],
+          "variable.px.readonly": [
+            "variable.other.constant.script.paradox"
+          ],
+          "parameter.px": [
+            "variable.parameter.macro.paradox"
+          ]
+        }
+      }
+    ],
     "configurationDefaults": {
+      "editor.semanticTokenColorCustomizations": {
+        "rules": {
+          "*.px.declaration": {
+            "bold": true
+          }
+        }
+      },
       "[paradox-loc]": {
         "editor.quickSuggestions": {
           "strings": "on"
@@ -247,6 +320,166 @@
       "[paradox-gui]": {
         "editor.quickSuggestions": {
           "strings": "on"
+        }
+      },
+      "editor.tokenColorCustomizations": {
+        "[Default Dark Modern][Dark Modern][Default Dark+][Dark+][Visual Studio Dark][Dark 2026]": {
+          "textMateRules": [
+            {
+              "scope": [
+                "support.function.effect.paradox"
+              ],
+              "settings": {
+                "foreground": "#EE9D28"
+              }
+            },
+            {
+              "scope": [
+                "keyword.control.trigger.paradox"
+              ],
+              "settings": {
+                "foreground": "#B180D7"
+              }
+            },
+            {
+              "scope": [
+                "entity.name.function.paradox-datafunction",
+                "support.function.datafunction.paradox-datafunction"
+              ],
+              "settings": {
+                "foreground": "#B180D7"
+              }
+            },
+            {
+              "scope": [
+                "variable.other.runtime.paradox",
+                "variable.other.saved-scope.paradox",
+                "variable.other.reference.paradox"
+              ],
+              "settings": {
+                "foreground": "#75BEFF"
+              }
+            },
+            {
+              "scope": [
+                "variable.language.scope.paradox"
+              ],
+              "settings": {
+                "foreground": "#9CDCFE"
+              }
+            },
+            {
+              "scope": [
+                "entity.name.type.paradox"
+              ],
+              "settings": {
+                "foreground": "#D7BA7D"
+              }
+            },
+            {
+              "scope": [
+                "entity.name.function.event-id.paradox"
+              ],
+              "settings": {
+                "foreground": "#EE9D28"
+              }
+            },
+            {
+              "scope": [
+                "variable.other.constant.script.paradox"
+              ],
+              "settings": {
+                "foreground": "#B5CEA8"
+              }
+            },
+            {
+              "scope": [
+                "variable.parameter.macro.paradox"
+              ],
+              "settings": {
+                "foreground": "#9CDCFE"
+              }
+            }
+          ]
+        },
+        "[Default Light Modern][Light Modern][Default Light+][Light+][Visual Studio Light][Light 2026]": {
+          "textMateRules": [
+            {
+              "scope": [
+                "support.function.effect.paradox"
+              ],
+              "settings": {
+                "foreground": "#935900"
+              }
+            },
+            {
+              "scope": [
+                "keyword.control.trigger.paradox"
+              ],
+              "settings": {
+                "foreground": "#652D90"
+              }
+            },
+            {
+              "scope": [
+                "entity.name.function.paradox-datafunction",
+                "support.function.datafunction.paradox-datafunction"
+              ],
+              "settings": {
+                "foreground": "#652D90"
+              }
+            },
+            {
+              "scope": [
+                "variable.other.runtime.paradox",
+                "variable.other.saved-scope.paradox",
+                "variable.other.reference.paradox"
+              ],
+              "settings": {
+                "foreground": "#006BB3"
+              }
+            },
+            {
+              "scope": [
+                "variable.language.scope.paradox"
+              ],
+              "settings": {
+                "foreground": "#267F99"
+              }
+            },
+            {
+              "scope": [
+                "entity.name.type.paradox"
+              ],
+              "settings": {
+                "foreground": "#795E26"
+              }
+            },
+            {
+              "scope": [
+                "entity.name.function.event-id.paradox"
+              ],
+              "settings": {
+                "foreground": "#935900"
+              }
+            },
+            {
+              "scope": [
+                "variable.other.constant.script.paradox"
+              ],
+              "settings": {
+                "foreground": "#006B45"
+              }
+            },
+            {
+              "scope": [
+                "variable.parameter.macro.paradox"
+              ],
+              "settings": {
+                "foreground": "#006BB3"
+              }
+            }
+          ]
         }
       }
     },
@@ -268,6 +501,26 @@
       {
         "command": "px.editLocalization",
         "title": "PX: Edit Key at Cursor"
+      },
+      {
+        "command": "px.createLocalization",
+        "title": "PX: Create Localization Key"
+      },
+      {
+        "command": "px.overrideLocalization",
+        "title": "PX: Override Localization Key"
+      },
+      {
+        "command": "px.configureLocalizationDefaults",
+        "title": "PX: Configure Localization Defaults"
+      },
+      {
+        "command": "px.addVanillaFile",
+        "title": "PX: Copy Vanilla File to Focus Mod"
+      },
+      {
+        "command": "px.addVanillaDirectory",
+        "title": "PX: Create Vanilla Folder Path in Focus Mod"
       },
       {
         "command": "px.openLocalizationSideBySide",
@@ -637,6 +890,11 @@
         "title": "Create descriptor.mod"
       },
       {
+        "command": "px.migrateToolkitStorage",
+        "category": "Paradox",
+        "title": "Upgrade Toolkit Settings"
+      },
+      {
         "command": "px.openKeybindings",
         "category": "Paradox",
         "title": "Keyboard Shortcuts (this extension)",
@@ -658,8 +916,13 @@
       {
         "command": "px.openSettings",
         "category": "Paradox",
-        "title": "Extension Settings",
+        "title": "Toolkit Settings",
         "icon": "$(settings-gear)"
+      },
+      {
+        "command": "px.openNativeSettings",
+        "category": "Paradox",
+        "title": "Open Native VS Code Settings"
       },
       {
         "command": "px.openBBCodePreview",
@@ -807,6 +1070,277 @@
         "category": "Paradox",
         "title": "Create My First Mod",
         "icon": "$(add)"
+      },
+      {
+        "command": "px.openCompatch",
+        "title": "PX: Open Compatch Workspace",
+        "icon": "$(git-compare)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.newCompatch",
+        "title": "PX: New Compatch Workspace",
+        "icon": "$(add)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.refreshCompatch",
+        "title": "PX: Refresh Compatch Sources",
+        "icon": "$(refresh)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.filterCompatch",
+        "title": "PX: Filter Compatch Entries",
+        "icon": "$(filter)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchActions",
+        "title": "PX: Compatch Entry Actions",
+        "icon": "$(diff)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compareCompatch",
+        "title": "PX: Compare Compatch Entry",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchScanNotes",
+        "title": "PX: Show Compatch Scan Notes",
+        "icon": "$(output)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchLanguage",
+        "title": "PX: Choose Compatch Localization Language",
+        "icon": "$(globe)",
+        "enablement": "config.px.experimentalFeatures && (px.compatchSemanticSupported)"
+      },
+      {
+        "command": "px.compatchPage",
+        "title": "PX: Change Compatch Page",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchFiles",
+        "title": "PX: Browse Compatch Folder Files",
+        "icon": "$(folder-opened)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchGameChanges",
+        "title": "PX: Review Game Version Changes",
+        "icon": "$(git-compare)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchModChanges",
+        "title": "PX: Compare Old Game Version and Mod (Read-Only Reference)",
+        "icon": "$(history)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchPreviewMerge",
+        "title": "PX: Preview Three-Way Merge",
+        "icon": "$(diff)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchApplyMerge",
+        "title": "PX: Apply Clean Game Changes",
+        "icon": "$(check)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchEditorActions",
+        "title": "PX: Compatch: File Actions",
+        "icon": "$(git-compare)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchSourceControl",
+        "title": "PX: Compatch: Review in Source Control",
+        "icon": "$(source-control)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.validateCompatchTarget",
+        "title": "PX: Compatch: Validate Against New Game Data",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchOverride",
+        "title": "PX: Start Compatch from These Sources",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.updateThisMod",
+        "title": "PX: Update This Mod for New Game Version",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.updateModForGame",
+        "title": "PX: Update Mod for New Game Version",
+        "icon": "$(versions)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchSessions",
+        "title": "PX: Resume Compatch Session",
+        "icon": "$(history)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchRenameSession",
+        "title": "PX: Rename Compatch Session",
+        "icon": "$(edit)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchQueue",
+        "title": "PX: Filter Compatch Review Status",
+        "icon": "$(list-filter)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchLens",
+        "title": "PX: Review Compatch by File or Definition",
+        "icon": "$(list-tree)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchNext",
+        "title": "PX: Next Unreviewed Compatch Item",
+        "icon": "$(arrow-right)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchRefreshChanged",
+        "title": "PX: Refresh Changed Compatch Sources",
+        "icon": "$(sync)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchRecovery",
+        "title": "PX: Check Compatch Git Recovery",
+        "icon": "$(source-control)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchCoverage",
+        "title": "PX: Show Compatch Coverage and Validation",
+        "icon": "$(info)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchValidate",
+        "title": "PX: Validate Against New Game Data",
+        "icon": "$(checklist)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchRuntimeTest",
+        "title": "PX: Record Compatch Runtime Test",
+        "icon": "$(beaker)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchApplyResolved",
+        "title": "PX: Apply Resolved Result",
+        "icon": "$(check)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchNextConflict",
+        "title": "PX: Next Compatch Conflict",
+        "icon": "$(arrow-down)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchPreviousConflict",
+        "title": "PX: Previous Compatch Conflict",
+        "icon": "$(arrow-up)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchResolutionInputs",
+        "title": "PX: Open Compatch Resolution Inputs",
+        "icon": "$(files)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchMarkReviewed",
+        "title": "PX: Mark Reviewed",
+        "icon": "$(check)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchSkip",
+        "title": "PX: Skip for Now",
+        "icon": "$(debug-step-over)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchReopen",
+        "title": "PX: Reopen Review",
+        "icon": "$(discard)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchReplacement",
+        "title": "PX: Set Replacement Intent",
+        "icon": "$(shield)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchOpen",
+        "title": "PX: Open Comparison",
+        "icon": "$(go-to-file)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchRelocate",
+        "title": "PX: Find Possible Replacement",
+        "icon": "$(search)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchPreviewKey",
+        "title": "PX: Preview This Key",
+        "icon": "$(open-preview)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.compatchApplyKey",
+        "title": "PX: Apply This Key",
+        "icon": "$(check)",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.openMigrations",
+        "title": "Mod Compatibility",
+        "category": "Paradox",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.openCompatibilityPatch",
+        "title": "Compatibility Patch",
+        "category": "Paradox",
+        "enablement": "config.px.experimentalFeatures && px.compatchCompositionSupported"
+      },
+      {
+        "command": "px.loadMigrationRecipe",
+        "title": "PX: Load Compatibility Files",
+        "category": "Paradox",
+        "enablement": "config.px.experimentalFeatures"
+      },
+      {
+        "command": "px.loadMigrationFolder",
+        "title": "PX: Load Compatibility Folder",
+        "category": "Paradox",
+        "enablement": "config.px.experimentalFeatures"
       }
     ],
     "customEditors": [
@@ -923,6 +1457,14 @@
         "title": "Setup",
         "order": 1,
         "properties": {
+          "px.machinePaths": {
+            "type": "object",
+            "default": {
+              "version": 1
+            },
+            "scope": "machine",
+            "markdownDescription": "Personal toolkit paths, stored by game and workspace in this VS Code User profile. Manage these through Toolkit Settings. Shared mod rules belong in `.px-toolkit/project.json`."
+          },
           "px.gamePath": {
             "type": "string",
             "default": "",
@@ -1102,6 +1644,24 @@
             "order": 0,
             "markdownDescription": "How much a hover shows. Longer examples and extra meanings stay reachable from the disclosure inside the hover, so `standard` hides nothing permanently."
           },
+          "px.characterHistory.quoteNames": {
+            "type": "boolean",
+            "default": true,
+            "scope": "resource",
+            "markdownDescription": "Quote names in newly generated character history values. Existing values keep their quotation marks unless changed in the Dynasty Tree form. Names with spaces always need quotes."
+          },
+          "px.characterHistory.quoteCultures": {
+            "type": "boolean",
+            "default": true,
+            "scope": "resource",
+            "markdownDescription": "Quote cultures in newly generated character history values. Existing values keep their quotation marks unless changed in the Dynasty Tree form. Names with spaces always need quotes."
+          },
+          "px.characterHistory.quoteReligions": {
+            "type": "boolean",
+            "default": true,
+            "scope": "resource",
+            "markdownDescription": "Quote religions in newly generated character history values. Existing values keep their quotation marks unless changed in the Dynasty Tree form. Names with spaces always need quotes."
+          },
           "px.texturePreview.background": {
             "type": "string",
             "default": "checkerboard",
@@ -1123,11 +1683,14 @@
             "markdownDescription": "Index definitions and references in graphics `.asset` files for supported games, across mods, dependencies and vanilla. Disable to reduce indexing time and memory. Changing this rebuilds the index automatically. Syntax highlighting, folding and on-demand texture previews remain available."
           },
           "px.calendar": {
-            "type": "object",
+            "type": [
+              "object",
+              "null"
+            ],
             "default": null,
             "order": 6,
             "scope": "window",
-            "markdownDescription": "Fallback for mods without their own calendar file. A mod declares its display calendar in `<mod>/.px-toolkit/calendar.json` (`Paradox: Declare Calendar` writes it): one per mod, committed with it, read wherever the mod is opened, and it wins over this setting. Same shape here: `{ \"epoch\": 4000, \"after\": \"AD\", \"before\": \"BC\" }` makes script year 3000 display as `1000 BC` and 4000 as `1 AD` (inlay hints + hover, `Paradox: Insert Date`). Optional `months` replaces the standard 12: `[{ \"name\": \"Narvinye\", \"days\": 30 }, ...]`. Window-scoped, so it can hold one calendar per window and a `.vscode/settings.json` inside a mod subfolder is ignored by VS Code. `Paradox: Generate Calendar Localization` writes the matching game-side loc (era math + date-format overrides) into the mod.",
+            "markdownDescription": "Fallback for mods without their own calendar file. A mod declares its display calendar in `<mod>/.px-toolkit/calendar.json` (`Paradox: Declare Calendar` writes it): one per mod, committed with it, read wherever the mod is opened, and it wins over this setting.\n\n`{ \"epoch\": 4000, \"after\": \"AD\", \"before\": \"BC\" }` makes script year 3000 display as `1000 BC` and 4000 as `1 AD`. Optional `months` supplies exactly 12 distinct names as an array of strings. Month lengths stay fixed by the game.\n\nThis setting applies to the whole window. A `.vscode/settings.json` inside an unopened mod subfolder is ignored by VS Code. `Paradox: Generate Calendar Localization` writes the matching game-side localization into the mod.",
             "properties": {
               "epoch": {
                 "type": "integer",
@@ -1144,21 +1707,31 @@
               },
               "months": {
                 "type": "array",
-                "description": "Custom month names and day counts, first month first. Omit for the standard 12 months. The names must be distinct.",
+                "description": "Exactly 12 distinct month names, first month first. The game uses fixed month lengths. Omit for the standard names.",
+                "minItems": 12,
+                "maxItems": 12,
                 "items": {
-                  "type": "object",
-                  "properties": {
-                    "name": {
-                      "type": "string"
+                  "anyOf": [
+                    {
+                      "type": "string",
+                      "minLength": 1
                     },
-                    "days": {
-                      "type": "integer",
-                      "minimum": 1
+                    {
+                      "type": "object",
+                      "description": "Legacy format. Only the name is used; days never changes the game's month length.",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        "days": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "name"
+                      ]
                     }
-                  },
-                  "required": [
-                    "name",
-                    "days"
                   ]
                 }
               }
@@ -1224,6 +1797,12 @@
             "default": "",
             "order": 6,
             "markdownDescription": "**Toolkit development only.** Absolute path to a toolkit checkout's `packages/vscode/dist/webview` folder. When set, panels load their app bundles from there instead of the installed extension and reload themselves when a bundle is rebuilt (`pnpm run watch:webviews` in the checkout). Leave empty unless you are working on the toolkit itself."
+          },
+          "px.experimentalFeatures": {
+            "type": "boolean",
+            "default": false,
+            "scope": "window",
+            "markdownDescription": "Enable experimental features, including Compatch. These tools are still in development. Disabling this setting keeps saved sessions and files but blocks Compatch actions."
           }
         }
       }
@@ -1233,6 +1812,13 @@
         {
           "id": "px",
           "title": "PX Toolkit",
+          "icon": "media/px-view.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "px-review",
+          "title": "Paradox Review",
           "icon": "media/px-view.svg"
         }
       ]
@@ -1325,6 +1911,16 @@
           "icon": "media/px-view.svg",
           "visibility": "hidden",
           "when": "px.isCk3Workspace"
+        }
+      ],
+      "px-review": [
+        {
+          "id": "px.compatch",
+          "name": "Compatch",
+          "contextualTitle": "Compatch",
+          "icon": "media/px-view.svg",
+          "visibility": "visible",
+          "when": "config.px.experimentalFeatures"
         }
       ]
     },
@@ -1713,6 +2309,210 @@
         {
           "command": "px.addModToWorkspace",
           "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.openCompatch",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.newCompatch",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.refreshCompatch",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.filterCompatch",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.compatchActions",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compareCompatch",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compatchScanNotes",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.compatchLanguage",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace && px.compatchSemanticSupported)"
+        },
+        {
+          "command": "px.compatchPage",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compatchFiles",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compatchGameChanges",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compatchModChanges",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compatchPreviewMerge",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compatchApplyMerge",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compatchEditorActions",
+          "when": "config.px.experimentalFeatures && (px.compatchEditor)"
+        },
+        {
+          "command": "px.compatchSourceControl",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.validateCompatchTarget",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compatchOverride",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.updateThisMod",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.updateModForGame",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.compatchSessions",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.compatchRenameSession",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.compatchQueue",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.compatchLens",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.compatchNext",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.compatchRefreshChanged",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.compatchRecovery",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.compatchCoverage",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.compatchValidate",
+          "when": "config.px.experimentalFeatures && (px.compatchCanValidate)"
+        },
+        {
+          "command": "px.compatchRuntimeTest",
+          "when": "config.px.experimentalFeatures && (px.isCk3Workspace)"
+        },
+        {
+          "command": "px.compatchApplyResolved",
+          "when": "config.px.experimentalFeatures && (px.compatchResolution)"
+        },
+        {
+          "command": "px.compatchNextConflict",
+          "when": "config.px.experimentalFeatures && (px.compatchResolution)"
+        },
+        {
+          "command": "px.compatchPreviousConflict",
+          "when": "config.px.experimentalFeatures && (px.compatchResolution)"
+        },
+        {
+          "command": "px.compatchResolutionInputs",
+          "when": "config.px.experimentalFeatures && (px.compatchResolution)"
+        },
+        {
+          "command": "px.compatchMarkReviewed",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compatchSkip",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compatchReopen",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compatchReplacement",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compatchOpen",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compatchRelocate",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compatchPreviewKey",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.compatchApplyKey",
+          "when": "config.px.experimentalFeatures && (false)"
+        },
+        {
+          "command": "px.openMigrations",
+          "when": "config.px.experimentalFeatures"
+        },
+        {
+          "command": "px.openCompatibilityPatch",
+          "when": "config.px.experimentalFeatures && px.compatchCompositionSupported"
+        },
+        {
+          "command": "px.loadMigrationRecipe",
+          "when": "config.px.experimentalFeatures"
+        },
+        {
+          "command": "px.loadMigrationFolder",
+          "when": "config.px.experimentalFeatures"
+        },
+        {
+          "command": "px.createLocalization",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.overrideLocalization",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.configureLocalizationDefaults",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.addVanillaFile",
+          "when": "px.isCk3Workspace"
+        },
+        {
+          "command": "px.addVanillaDirectory",
+          "when": "px.isCk3Workspace"
         }
       ],
       "view/title": [
@@ -1800,6 +2600,86 @@
           "command": "px.getStarted",
           "when": "view == px.tools",
           "group": "2_tools"
+        },
+        {
+          "command": "px.newCompatch",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && !px.compatchSession)",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.refreshCompatch",
+          "when": "config.px.experimentalFeatures && (view == px.compatch)",
+          "group": "1_actions"
+        },
+        {
+          "command": "px.filterCompatch",
+          "when": "config.px.experimentalFeatures && (view == px.compatch)",
+          "group": "1_actions"
+        },
+        {
+          "command": "px.compatchScanNotes",
+          "when": "config.px.experimentalFeatures && (view == px.compatch)",
+          "group": "2_notes"
+        },
+        {
+          "command": "px.compatchLanguage",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && px.compatchSemanticSupported)",
+          "group": "2_language"
+        },
+        {
+          "command": "px.compatchSourceControl",
+          "when": "config.px.experimentalFeatures && (view == px.compatch)",
+          "group": "1_actions"
+        },
+        {
+          "command": "px.compatchSessions",
+          "when": "config.px.experimentalFeatures && (view == px.compatch)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchRenameSession",
+          "when": "config.px.experimentalFeatures && (view == px.compatch)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchQueue",
+          "when": "config.px.experimentalFeatures && (view == px.compatch)",
+          "group": "1_actions"
+        },
+        {
+          "command": "px.compatchLens",
+          "when": "config.px.experimentalFeatures && (view == px.compatch)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchNext",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && px.compatchSession)",
+          "group": "navigation@1"
+        },
+        {
+          "command": "px.compatchRefreshChanged",
+          "when": "config.px.experimentalFeatures && (view == px.compatch)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchRecovery",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && px.compatchUpdate)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchCoverage",
+          "when": "config.px.experimentalFeatures && (view == px.compatch)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchValidate",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && px.compatchCanValidate)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchRuntimeTest",
+          "when": "config.px.experimentalFeatures && (view == px.compatch)",
+          "group": "compatch"
         }
       ],
       "view/item/context": [
@@ -1917,6 +2797,76 @@
           "command": "px.copyNameFromView",
           "when": "view == px.overrides && viewItem =~ /^px\\.override/",
           "group": "paradox@1"
+        },
+        {
+          "command": "px.compatchOverride",
+          "when": "config.px.experimentalFeatures && (view == px.overrides && viewItem == px.overrideSource)",
+          "group": "paradox@1"
+        },
+        {
+          "command": "px.compatchActions",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && viewItem =~ /^px\\.compatchEntry/)",
+          "group": "inline@2"
+        },
+        {
+          "command": "px.compatchOpen",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && viewItem =~ /^px\\.compatchEntry/)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchMarkReviewed",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && viewItem =~ /^px\\.compatchEntry/)",
+          "group": "inline@1"
+        },
+        {
+          "command": "px.compatchSkip",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && viewItem =~ /^px\\.compatchEntry/)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchReopen",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.reviewed/)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchGameChanges",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.update/)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchReplacement",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.update/ && viewItem =~ /\\.file/)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchModChanges",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.update/)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchPreviewMerge",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.merge/)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchApplyMerge",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.merge/)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchRelocate",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.(missing|linked)/)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchPreviewKey",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.key/ && viewItem =~ /\\.update/)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchApplyKey",
+          "when": "config.px.experimentalFeatures && (view == px.compatch && viewItem =~ /^px\\.compatchEntry/ && viewItem =~ /\\.key/ && viewItem =~ /\\.update/)",
+          "group": "compatch"
         }
       ],
       "editor/context": [
@@ -1926,13 +2876,23 @@
           "group": "px_toolkit@2"
         },
         {
+          "command": "px.createLocalization",
+          "when": "px.isCk3Workspace && (px.localizationReference || px.localizationDefinition) && !px.localizationExists",
+          "group": "px_toolkit@2"
+        },
+        {
           "command": "px.editLocalization",
-          "when": "(px.isCk3Workspace && (editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ || px.localizationReference || px.localizationDefinition)) && (px.localizationReference)",
+          "when": "px.isCk3Workspace && (px.localizationReference || px.localizationDefinition) && px.localizationOwned",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.overrideLocalization",
+          "when": "px.isCk3Workspace && (px.localizationReference || px.localizationDefinition) && px.localizationExists && !px.localizationOwned",
           "group": "px_toolkit@2"
         },
         {
           "command": "px.openLocalizationSideBySide",
-          "when": "(px.isCk3Workspace && (editorLangId =~ /^paradox(-(ck3|vic3|eu5))?$/ || px.localizationReference || px.localizationDefinition)) && (px.localizationReference)",
+          "when": "px.isCk3Workspace && (px.localizationReference || px.localizationDefinition) && px.localizationExists",
           "group": "px_toolkit@2"
         },
         {
@@ -2018,11 +2978,6 @@
         {
           "command": "px.translateNext",
           "when": "px.isCk3Workspace && resourceFilename =~ /_l_[a-z_]+\\.yml$/",
-          "group": "px_toolkit@2"
-        },
-        {
-          "command": "px.editLocalization",
-          "when": "px.localizationDefinition",
           "group": "px_toolkit@2"
         },
         {
@@ -2123,9 +3078,49 @@
           "command": "px.showGuiTree",
           "when": "resourceExtname == .gui && px.isCk3Workspace && !px.guiEditorSupported",
           "group": "navigation@1"
+        },
+        {
+          "command": "px.compatchEditorActions",
+          "when": "config.px.experimentalFeatures && (px.compatchEditor && !px.compatchResolution)",
+          "group": "navigation"
+        },
+        {
+          "command": "px.compatchApplyResolved",
+          "when": "config.px.experimentalFeatures && (px.compatchResolution)",
+          "group": "navigation"
+        },
+        {
+          "command": "px.compatchNextConflict",
+          "when": "config.px.experimentalFeatures && (px.compatchResolution)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchPreviousConflict",
+          "when": "config.px.experimentalFeatures && (px.compatchResolution)",
+          "group": "compatch"
+        },
+        {
+          "command": "px.compatchResolutionInputs",
+          "when": "config.px.experimentalFeatures && (px.compatchResolution)",
+          "group": "compatch"
         }
       ],
       "explorer/context": [
+        {
+          "command": "px.addVanillaFile",
+          "when": "px.isCk3Workspace && resourceScheme == file && !explorerResourceIsFolder && resourceDirname in px.vanillaFolders",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.addVanillaDirectory",
+          "when": "px.isCk3Workspace && resourceScheme == file && explorerResourceIsFolder && resourcePath in px.vanillaFolders",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.configureLocalizationDefaults",
+          "when": "px.isCk3Workspace && resourceScheme == file && resourcePath in px.indexedModResources",
+          "group": "px_toolkit@2"
+        },
         {
           "command": "px.openGuiEditor",
           "when": "px.isCk3Workspace && resourceScheme == file && resourceExtname == .gui && px.guiEditorSupported",
@@ -2230,6 +3225,21 @@
           "command": "px.openVanillaExamples",
           "when": "px.isCk3Workspace && resourceScheme == file && resourceFilename =~ /^_.*\\.info$/i",
           "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.updateThisMod",
+          "when": "config.px.experimentalFeatures && (resourcePath in px.indexedModResources) && resourceScheme == file && resourcePath in px.indexedModResources",
+          "group": "px_toolkit@2"
+        },
+        {
+          "command": "px.loadMigrationRecipe",
+          "when": "config.px.experimentalFeatures && resourceScheme == file && (resourceExtname == .cjs || resourceExtname == .js || resourceExtname == .json)",
+          "group": "paradox"
+        },
+        {
+          "command": "px.loadMigrationFolder",
+          "when": "config.px.experimentalFeatures && resourceScheme == file && explorerResourceIsFolder",
+          "group": "paradox"
         }
       ],
       "webview/context": [
@@ -2416,6 +3426,15 @@
     ],
     "jsonValidation": [
       {
+        "fileMatch": [
+          "**/.px-toolkit/project.json",
+          "**/.ck3modding/project.json",
+          "**/.vic3modding/project.json",
+          "**/.eu5modding/project.json"
+        ],
+        "url": "./schemas/project.schema.json"
+      },
+      {
         "fileMatch": "**/.metadata/metadata.json",
         "url": "./schemas/pdx-metadata.schema.json"
       },
@@ -2499,6 +3518,11 @@
         "command": "px.exportSnippets",
         "key": "ctrl+alt+shift+i",
         "when": "px.isCk3Workspace"
+      },
+      {
+        "command": "px.openCompatch",
+        "key": "ctrl+alt+m",
+        "when": "config.px.experimentalFeatures && (px.isCk3Workspace && !inputFocus)"
       }
     ],
     "viewsWelcome": [
@@ -2517,6 +3541,11 @@
       {
         "view": "px.dependencies",
         "contents": "Choose a definition in Mod Overview and use Show Dependencies from its menu.\n[Show Dependencies at Cursor](command:px.showDependencies)"
+      },
+      {
+        "view": "px.compatch",
+        "contents": "Compare source versions and review each change. To update a mod, select its old and new game data.\n[Update Mod for New Game Version](command:px.updateModForGame)\n[Compare Folders](command:px.newCompatch)\n[Resume Session](command:px.compatchSessions)\n[Mod Compatibility](command:px.openMigrations)",
+        "when": "config.px.experimentalFeatures"
       }
     ],
     "submenus": []
@@ -2533,15 +3562,18 @@
   "devDependencies": {
     "@px-lsp/protocol": "workspace:*",
     "@px-lsp/server": "workspace:*",
+    "@types/pngjs": "6.0.5",
     "@types/vscode": "^1.90.0"
   },
   "dependencies": {
     "ignore": "7.0.5",
+    "pngjs": "7.0.0",
     "steamwand.js": "^0.4.0",
     "vscode-languageclient": "^10.1.0",
     "vscode-languageserver": "^10.1.0",
     "vscode-languageserver-textdocument": "^1.0.12",
-    "vscode-uri": "^3.1.0"
+    "vscode-uri": "^3.1.0",
+    "yauzl": "^3.4.0"
   },
   "icon": "media/icon.png",
   "keywords": [

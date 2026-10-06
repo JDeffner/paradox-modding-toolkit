@@ -13,8 +13,8 @@ import * as fs from "fs";
 import * as path from "path";
 import type { PxConfig } from "../config";
 import { metaFor } from "../meta";
-import { migrateConfigDir } from "@px-lsp/protocol/configDir";
-import { renderLoadModBlocks } from "./loadMods";
+import { canonicalConfigPath, resolveConfigPath } from "@px-lsp/protocol/configDir";
+import { renderLoadModBlocks } from "@px-lsp/protocol/tigerLoadMods";
 
 export async function generateTigerConfCommand(cfg: PxConfig): Promise<void> {
   const meta = metaFor(cfg.gameId);
@@ -31,11 +31,13 @@ export async function generateTigerConfCommand(cfg: PxConfig): Promise<void> {
     return;
   }
   const confName = meta.tiger.confName;
-  const configDir = migrateConfigDir(cfg.modPath, meta);
-  const confFile = path.join(configDir, confName);
+  const confFile = canonicalConfigPath(cfg.modPath, meta, confName);
+  const configDir = path.dirname(confFile);
   // A root conf wins for tiger's own lookup, so an existing one either place is
   // the conf in force: open it instead of writing a second one.
-  const existing = [confFile, path.join(cfg.modPath, confName)].find((f) => fs.existsSync(f));
+  const existing = [resolveConfigPath(cfg.modPath, meta, confName), path.join(cfg.modPath, confName)].find(
+    (f) => fs.existsSync(f)
+  );
   if (existing) {
     const doc = await vscode.workspace.openTextDocument(existing);
     await vscode.window.showTextDocument(doc);
@@ -65,7 +67,7 @@ export async function generateTigerConfCommand(cfg: PxConfig): Promise<void> {
     "",
   ].join("\n");
   fs.mkdirSync(configDir, { recursive: true });
-  fs.writeFileSync(confFile, content, "utf8");
+  fs.writeFileSync(confFile, content, { encoding: "utf8", flag: "wx" });
   const doc = await vscode.workspace.openTextDocument(confFile);
   await vscode.window.showTextDocument(doc);
   const depNote = deps.loaded.length > 0 ? `, ${deps.loaded.length} dependency mod(s) declared` : "";

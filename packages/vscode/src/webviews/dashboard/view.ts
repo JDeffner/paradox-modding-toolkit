@@ -1,9 +1,10 @@
+import { experimentalFeaturesEnabled } from "../../experimental";
 import * as vscode from "vscode";
 import * as path from "path";
 import { readModName } from "@px-lsp/protocol/modName";
 import { allWorkspaceModCandidates, type PxConfig } from "../../config";
 import { resolveWorkshopDir } from "../../steam/workshopFiles";
-import { resolveConfigDir } from "@px-lsp/protocol/configDir";
+import { resolveConfigPath } from "@px-lsp/protocol/configDir";
 import { metaFor } from "../../meta";
 import type { FocusMod } from "../../views";
 import type { ErrorLogWatcher } from "../../errorLog";
@@ -12,6 +13,8 @@ import { icon, ICON_NAMES, PATHS, type IconName } from "../shared/icons";
 import { actionGroups, visibleActionGroups, type ActionGroup } from "./actions";
 import { makeNonce } from "../nonce";
 import { tipScript } from "../shared/tips";
+import { inspectMachineSetting, writeMachineSetting } from "../../machineSettings";
+import { isMachineSetting } from "@px-lsp/protocol/machineSettings";
 
 export const DASHBOARD_SECTIONS = {
   "px.tools": "Project",
@@ -185,7 +188,12 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
     const focusLabel = focusRoot
       ? `${pinned && normKey(pinned) === normKey(focusRoot) ? "Pin" : "Follow"}: ${readModName(focusRoot)}`
       : "No mod selected";
-    const actions = visibleActionGroups(meta, this.deps.errorLog.problemCount, hiddenRows());
+    const actions = visibleActionGroups(
+      meta,
+      this.deps.errorLog.problemCount,
+      hiddenRows(),
+      experimentalFeaturesEnabled()
+    );
     return {
       focusLabel,
       gameName: meta.name,
@@ -221,7 +229,8 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
       case "run": {
         const allowed = actionGroups(
           metaFor(this.deps.getCfg().gameId),
-          this.deps.errorLog.problemCount
+          this.deps.errorLog.problemCount,
+          experimentalFeaturesEnabled()
         ).flatMap((group) => group.items.map((item) => item.command));
         if (![...allowed, "px.createDescriptor", "px.addModToWorkspace"].includes(msg.command)) return;
         await runDashboardAction(msg.command, this.deps);
@@ -235,9 +244,7 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
         const key = normKey(msg.root);
         const next = this.deps.getCfg().excludedMods.filter((p) => normKey(p) !== key);
         if (msg.excluded) next.push(msg.root);
-        await vscode.workspace
-          .getConfiguration("px")
-          .update("excludedMods", next, vscode.ConfigurationTarget.Workspace);
+        await writeMachineSetting("excludedMods", next, this.deps.getCfg().gameId, "workspace");
         this.refresh();
         return;
       }
@@ -270,7 +277,7 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
         this.refresh();
         return;
       case "openSettings":
-        // The same Workspace-scoped @ext view the overflow menu opens.
+        // The same settings tab the command palette and walkthrough open.
         await vscode.commands.executeCommand("px.openSettings");
         return;
       case "pickPath": {
@@ -292,7 +299,13 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
         });
         const value = picked?.[0]?.fsPath;
         if (!value) return;
-        await updateSetting(msg.setting.replace(/^px\./, ""), value);
+        const key = msg.setting.replace(/^px\./, "");
+        if (!isMachineSetting(key)) return;
+        const resource = key === "workshop.dir" && cfg.modPath ? vscode.Uri.file(cfg.modPath) : undefined;
+        const current = inspectMachineSetting(key, cfg.gameId, "workspace", resource);
+        const scope =
+          current.source === "folder" || current.source === "legacyFolder" ? "folder" : "workspace";
+        await writeMachineSetting(key, value, cfg.gameId, scope, undefined, resource);
         this.refresh();
         return;
       }
@@ -321,22 +334,36 @@ class DashboardViewProvider implements vscode.WebviewViewProvider {
  * Documents, the workspace); "downloaded" = the tiger copy we manage.
  */
 function collectPaths(cfg: PxConfig, hasTiger: boolean): PathRow[] {
-  const raw = vscode.workspace.getConfiguration("px");
-  const isSet = (key: string) => (raw.get<string>(key) ?? "").trim() !== "";
+  const settingFor = (key: string) =>
+    isMachineSetting(key)
+      ? inspectMachineSetting<string>(
+          key,
+          cfg.gameId,
+          "workspace",
+          key === "workshop.dir" && cfg.modPath ? vscode.Uri.file(cfg.modPath) : undefined
+        )
+      : undefined;
+  const isSet = (key: string) => (settingFor(key)?.value ?? "").trim() !== "";
   const row = (label: string, setting: string, value: string | null, detectedAs = "detected"): PathRow => ({
     label,
     setting,
     value,
-    source: value === null ? "not found" : isSet(setting.replace(/^px\./, "")) ? "set" : detectedAs,
+    source: settingFor(setting.replace(/^px\./, ""))?.error
+      ? "invalid personal paths"
+      : value === null
+        ? "not found"
+        : isSet(setting.replace(/^px\./, ""))
+          ? "set"
+          : detectedAs,
   });
-  const projectsDir = (raw.get<string>("modProjectsDir") ?? "").trim() || null;
+  const projectsDir = (settingFor("modProjectsDir")?.value ?? "").trim() || null;
   // The Workshop listing folder is per mod (px.workshop.dir resolves against
   // the mod root), so without a mod there is no value.
   const workshopDir = cfg.modPath
     ? resolveWorkshopDir(
         cfg.modPath,
-        raw.get<string>("workshop.dir"),
-        resolveConfigDir(cfg.modPath, metaFor(cfg.gameId))
+        settingFor("workshop.dir")?.value,
+        path.dirname(resolveConfigPath(cfg.modPath, metaFor(cfg.gameId), "workshop"))
       )
     : null;
   const rows = [
@@ -347,13 +374,23 @@ function collectPaths(cfg: PxConfig, hasTiger: boolean): PathRow[] {
       label: "Mod projects",
       setting: "px.modProjectsDir",
       value: projectsDir,
-      source: projectsDir ? "set" : "not set",
+      source: settingFor("modProjectsDir")?.error
+        ? "invalid personal paths"
+        : projectsDir
+          ? "set"
+          : "not set",
     },
     {
       label: "Workshop listing",
       setting: "px.workshop.dir",
       value: workshopDir,
-      source: workshopDir === null ? "not found" : isSet("workshop.dir") ? "set" : "default",
+      source: settingFor("workshop.dir")?.error
+        ? "invalid personal paths"
+        : workshopDir === null
+          ? "not found"
+          : isSet("workshop.dir")
+            ? "set"
+            : "default",
     },
   ];
   if (hasTiger) rows.push(row("Tiger", "px.tigerPath", cfg.tigerPath, "downloaded"));
@@ -426,7 +463,11 @@ export function registerDashboardView(
   const refresh = () => providers.forEach((provider) => provider.refresh());
   context.subscriptions.push(
     vscode.commands.registerCommand("px.allTools", async () => {
-      const groups = actionGroups(metaFor(deps.getCfg().gameId), deps.errorLog.problemCount);
+      const groups = actionGroups(
+        metaFor(deps.getCfg().gameId),
+        deps.errorLog.problemCount,
+        experimentalFeaturesEnabled()
+      );
       const items = groups.flatMap((group) =>
         group.items.map((item) => ({
           label: item.label,
@@ -531,7 +572,15 @@ ${uiCss}
   .path-row .path-value.none { direction: ltr; font-family: inherit; font-style: italic; }
   .mod-row.excluded .px-item-label, .mod-row.missing .px-item-label { color: var(--px-muted-fg); }
   .mod-row.missing .px-item-label { text-decoration: line-through; }
-  #body-mods { max-height: calc(5 * var(--px-h-sm) + 8px); overflow-y: auto; }
+  #body-mods {
+    /* Three mods plus Follow, including list padding and row gaps. */
+    max-height: calc(4 * var(--px-h-sm) + 11px); overflow-y: auto;
+    scrollbar-gutter: stable; overscroll-behavior-y: contain;
+    scrollbar-color: var(--vscode-scrollbarSlider-background, var(--px-muted-fg)) transparent;
+  }
+  #body-mods:focus-visible { outline-offset: -2px; }
+  #body-mods::-webkit-scrollbar-thumb { background: var(--vscode-scrollbarSlider-background, var(--px-muted-fg)); }
+  #body-mods::-webkit-scrollbar-thumb:hover { background: var(--vscode-scrollbarSlider-hoverBackground, var(--px-fg)); }
   #body-mods > .px-item { flex: 0 0 var(--px-h-sm); }
   #troubleshoot-actions { display: flex; flex-direction: column; gap: 1px; }
   #troubleshoot-actions:empty { display: none; }
@@ -576,11 +625,11 @@ ${
 ${
   section === "px.tools"
     ? `<details class="project-group" id="section-mods" open>
-  <summary>${icon("chevronDown")}Workspace Mods<span class="mod-actions">
+  <summary>${icon("chevronDown")}Workspace Mods<span id="mod-count" class="px-muted px-xs" hidden></span><span class="mod-actions">
     <button type="button" class="px-btn" data-variant="ghost" data-size="icon-sm" data-mod-command="px.createMod" aria-label="New Mod" data-tip="New Mod">${icon("plus")}</button>
     <button type="button" class="px-btn" data-variant="ghost" data-size="icon-sm" data-mod-command="px.addModToWorkspace" aria-label="Add Existing Mod to Workspace" data-tip="Add Existing Mod to Workspace">${icon("folderOpen")}</button>
   </span></summary>
-  <div class="section-body px-list" id="body-mods"></div>
+  <div class="section-body px-list" id="body-mods" role="region" aria-label="Workspace mods" tabindex="0"></div>
 </details>
 ${PROJECT_GROUPS.map(
   (
@@ -806,6 +855,11 @@ function radio(on, tipText, onClick) {
 }
 function renderMods() {
   const box = document.getElementById("body-mods");
+  const count = document.getElementById("mod-count");
+  count.hidden = !state.mods.length;
+  count.textContent = state.mods.length ? String(state.mods.length) : "";
+  count.setAttribute("data-tip", state.mods.length + " workspace mods. Scroll the list to reach more mods.");
+  box.setAttribute("aria-label", "Workspace mods (" + state.mods.length + "). Use the mouse wheel or arrow keys to scroll.");
   const focusedId = box.contains(document.activeElement) ? document.activeElement.id : null;
   const scrollTop = box.scrollTop;
   box.textContent = "";

@@ -15,10 +15,12 @@
  */
 import * as path from "path";
 import * as fs from "fs";
+import { randomUUID } from "node:crypto";
 import * as vscode from "vscode";
 import type { GuiTextureCache } from "../webviews/guiEditor/textureCache";
 import type { CreatorImagesRequest } from "../webviews/shared/creatorMessages";
-import { CONVERTIBLE_IMAGE_EXT, convertImageToDds } from "../ddsConvert";
+import { CONVERTIBLE_IMAGE_EXT, pickDdsEncoding } from "../ddsConvert";
+import { ImageCodec } from "../imageCodec";
 
 /** One place assets are looked up in: the game folder, or a mod's root. */
 export interface ImageRoot {
@@ -141,7 +143,7 @@ export interface ImportedPicture {
 
 /**
  * The folder the modder chose the last time they did not take the default,
- * per game folder, for the session: a modder keeping their art under one
+ * per mod and game folder, for the session: a modder keeping their art under one
  * folder of their own should not have to browse to it for every picture.
  */
 const chosenDirs = new Map<string, string>();
@@ -160,6 +162,10 @@ const chosenDirs = new Map<string, string>();
  * the write failed (the caller toasts it).
  */
 export async function importPicture(o: ImportPictureOptions): Promise<ImportedPicture | null> {
+  if (!safeRelative(o.folder) || !/^[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(o.name))
+    throw new Error("The picture needs a relative folder and a plain file name.");
+  const modRoot = fs.realpathSync(o.modPath);
+  const memoryKey = `${pathKey(modRoot)}\0${o.folder}`;
   const picked = await vscode.window.showOpenDialog({
     canSelectMany: false,
     filters: { Images: IMPORT_IMAGE_EXT },
@@ -170,7 +176,9 @@ export async function importPicture(o: ImportPictureOptions): Promise<ImportedPi
 
   const defaultDir = path.join(o.modPath, ...o.folder.split("/"));
   const OTHER = "$(folder-opened) Another folder in the mod…";
-  const remembered = chosenDirs.get(o.folder);
+  const rememberedRelative = chosenDirs.get(memoryKey);
+  const remembered =
+    rememberedRelative === undefined ? undefined : path.resolve(o.modPath, rememberedRelative);
   const choice = await vscode.window.showQuickPick(
     [
       {
@@ -208,31 +216,108 @@ export async function importPicture(o: ImportPictureOptions): Promise<ImportedPi
     });
     dir = folder?.[0]?.fsPath ?? "";
     if (!dir) return null;
-    const inside = path.relative(o.modPath, dir);
-    if (inside.startsWith("..") || path.isAbsolute(inside)) {
-      throw new Error(`${dir} is outside the mod, so the game could never load it.`);
-    }
-    chosenDirs.set(o.folder, dir);
   }
 
   const target = path.join(dir, `${o.name}.dds`);
-  fs.mkdirSync(dir, { recursive: true });
+  assertDestination(o.modPath, modRoot, target);
   const ext = path.extname(source).toLowerCase();
+  let encoded: Uint8Array;
   if (ext === ".dds") {
-    if (path.resolve(source) !== path.resolve(target)) fs.copyFileSync(source, target);
-  } else if (ext === ".tga") {
-    const png = o.textures.resolveFile(source, 0);
-    if (!png) throw new Error(`${path.basename(source)} could not be decoded.`);
-    await convertImageToDds(vscode.Uri.file(png), vscode.Uri.file(target));
+    if (fs.existsSync(target) && pathKey(fs.realpathSync(source)) === pathKey(fs.realpathSync(target)))
+      return { abs: target, rel: toRel(o.modPath, target), inPlace: pathKey(dir) === pathKey(defaultDir) };
+    encoded = fs.readFileSync(source);
   } else {
-    await convertImageToDds(vscode.Uri.file(source), vscode.Uri.file(target));
+    const choice = await pickDdsEncoding(true);
+    if (!choice) return null;
+    if (
+      choice.referenceFile &&
+      fs.existsSync(target) &&
+      pathKey(fs.realpathSync(choice.referenceFile)) === pathKey(fs.realpathSync(target))
+    )
+      throw new Error("The destination is the reference texture. Choose a different destination.");
+    let input = source;
+    if (ext === ".tga") {
+      const png = o.textures.resolveFile(source, 0);
+      if (!png) throw new Error(`${path.basename(source)} could not be decoded.`);
+      input = png;
+    }
+    const codec = new ImageCodec();
+    try {
+      const image = await codec.decode(fs.readFileSync(input), path.extname(input).toLowerCase());
+      encoded = await codec.encode(image, choice.encoding);
+    } finally {
+      codec.dispose();
+    }
   }
-  if (!fs.existsSync(target)) throw new Error("no picture was written.");
+  assertDestination(o.modPath, modRoot, target);
+  const previous = readExistingPicture(target);
+  if (previous !== null) {
+    const replace = await vscode.window.showWarningMessage(
+      `Replace ${toRel(o.modPath, target)}? The existing picture will be overwritten.`,
+      "Replace Picture",
+      "Cancel"
+    );
+    if (replace !== "Replace Picture") return null;
+  }
+  assertDestination(o.modPath, modRoot, target);
+  fs.mkdirSync(dir, { recursive: true });
+  const temporary = path.join(dir, `.px-image-${randomUUID()}.tmp`);
+  try {
+    fs.writeFileSync(temporary, encoded, { flag: "wx" });
+    assertDestination(o.modPath, modRoot, target);
+    if (previous === null) {
+      // A file created while the importer was open must not be overwritten.
+      fs.copyFileSync(temporary, target, fs.constants.COPYFILE_EXCL);
+    } else {
+      const current = readExistingPicture(target);
+      if (current === null || !current.equals(previous))
+        throw new Error(
+          "The destination picture changed during import. Import it again to review the replacement."
+        );
+      fs.renameSync(temporary, target);
+    }
+  } finally {
+    if (fs.existsSync(temporary)) fs.unlinkSync(temporary);
+  }
+  if (choice.label === OTHER) chosenDirs.set(memoryKey, path.relative(o.modPath, dir));
   return {
     abs: target,
     rel: toRel(o.modPath, target),
-    inPlace: path.resolve(dir) === path.resolve(defaultDir),
+    inPlace: pathKey(dir) === pathKey(defaultDir),
   };
+}
+
+function pathKey(file: string): string {
+  const resolved = path.resolve(file);
+  return process.platform === "win32" ? resolved.toLowerCase() : resolved;
+}
+
+function outside(root: string, file: string): boolean {
+  const relative = path.relative(root, file);
+  return relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative);
+}
+
+/** Check both lexical paths and existing directory aliases, including remembered destinations. */
+function assertDestination(modPath: string, modRoot: string, target: string): void {
+  if (outside(modPath, target) || pathKey(fs.realpathSync(modPath)) !== pathKey(modRoot))
+    throw new Error("The picture destination is outside the selected mod.");
+  let ancestor = path.dirname(target);
+  while (!fs.existsSync(ancestor)) ancestor = path.dirname(ancestor);
+  if (outside(modRoot, fs.realpathSync(ancestor)))
+    throw new Error("The picture destination links to a folder outside the selected mod.");
+  readExistingPicture(target);
+}
+
+function readExistingPicture(target: string): Buffer | null {
+  try {
+    const stat = fs.lstatSync(target);
+    if (!stat.isFile() || stat.isSymbolicLink())
+      throw new Error("The picture destination is not a regular file.");
+    return fs.readFileSync(target);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
 }
 
 function toRel(root: string, abs: string): string {

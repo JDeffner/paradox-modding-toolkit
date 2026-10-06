@@ -5,9 +5,12 @@
 import type { GameMeta } from "../profile";
 import { GITAN_MEASURED_METRICS } from "../../gui/measuredMetrics";
 import { CK3_SCAFFOLDS } from "./scaffolds";
+import WORKSHOP_TAGS from "../../../data/ck3/workshopTags.json";
 
 export const ck3Meta: GameMeta = {
   id: "ck3",
+  // Verified in the installed game's data folder; read live by the Wiki.
+  launchOptionsFile: "_commandline_options.info",
   name: "Crusader Kings III",
   shortName: "CK3",
   engine: "jomini",
@@ -16,9 +19,33 @@ export const ck3Meta: GameMeta = {
   legacyConfigDirName: ".ck3modding",
   docsFolderName: "Crusader Kings III",
   steamAppId: 1158310,
+  workshopTagGroups: WORKSHOP_TAGS.groups,
   // Verified on the 1.19 install: dlc_001.dds .. dlc_029.dds.
   dlcIconDir: "gfx/interface/icons/dlc",
   eventNamespaces: true,
+  // Same folders and top-level event IDs as the installed events/_events.info and schema.
+  compatch: { events: "events", localization: "localization" },
+  compatchComposition: {
+    revision: "ck3-composition-1",
+    scriptFolders: [
+      { path: "events", kind: "event", fields: "direct" },
+      { path: "common/decisions", kind: "definition", fields: "direct" },
+      { path: "common/script_values", kind: "definition", fields: "ordered" },
+      { path: "common/scripted_effects", kind: "definition", fields: "ordered" },
+      { path: "common/scripted_triggers", kind: "definition", fields: "ordered" },
+    ],
+    localizationFolder: "localization",
+    fileRules: [
+      { path: "gui", precedence: "first" },
+      { path: "localization/replace", precedence: "first" },
+    ],
+    eventRules: { namespaceKey: "namespace", priorityKey: "id_override_priority", defaultPriority: 0 },
+    evidence: [
+      "events/_events.info:5-8 declares namespace-qualified event IDs; 76-81 documents literal integer id_override_priority, largest wins and equal priorities are an error.",
+      "common/decisions/_decisions.info and common/script_values/_script_values.info document top-level definitions; the schema identifies scripted effects and triggers as top-level definition folders.",
+      "Whole-file script shadowing is last-in-wins; GUI and localization/replace are first-in-wins. Cross-file ordinary definition precedence and replace_path suppression of earlier mods are not verified.",
+    ],
+  },
   // The engine's own default metrics: they were measured on this game's font,
   // and the layout engine reuses them for games whose probe has not run.
   uiFont: "fonts/Gitan/GitanLatin-Regular.otf",

@@ -297,7 +297,7 @@ export interface ConfirmOptions {
 let cancelConfirmation: (() => void) | null = null;
 
 /** Action toast. A new action dismisses it; only its confirmation button authorizes the action. */
-export function confirmDialog(o: ConfirmOptions): Promise<boolean> {
+export function confirmAction(o: ConfirmOptions): Promise<boolean> {
   cancelConfirmation?.();
   return new Promise((resolve) => {
     const previousFocus = document.activeElement;

@@ -16,6 +16,10 @@ import { makeNonce } from "../nonce";
 import { tabIcon } from "../tabIcons";
 import { bundleUri, watchBundle, webviewSource, type WebviewSource } from "../devReload";
 import { isUnder } from "../../config";
+import { eventSourceHash } from "@px-lsp/server/overview/eventSourceHash";
+import { planFieldEdits, type FieldEdit } from "./fieldEdits";
+import { readDocument, writeDocument } from "../../documentWrite";
+import { decode } from "@px-lsp/server/parser";
 
 const UI_KEY = "px.eventGraph.ui";
 
@@ -69,6 +73,11 @@ export class EventGraphPanel {
   /** The app's session as of its last message; empty until it sends one. */
   private session: GraphState = { focus: {}, positions: {}, pending: [] };
   private disposed = false;
+  private saving = false;
+  /** A rejected save leaves the applied edit dirty; a retry saves it without inserting twice. */
+  private unsavedFields = new Map<string, { edits: string; text: string; disk: Buffer }>();
+  /** Old source identities remain valid only through this panel's own successful edits. */
+  private scriptSources = new Map<string, Map<string, { text: string; disk: Buffer }>>();
   private readonly source: WebviewSource;
 
   private constructor(
@@ -178,14 +187,16 @@ export class EventGraphPanel {
     );
     if (answer === "Save") {
       const result = await this.applyEdits(pending);
-      if (result.error) void vscode.window.showErrorMessage(`Event Graph: ${result.error}`);
-      return;
+      if (!result.error) return;
+      void vscode.window.showErrorMessage(`Event Graph: ${result.error}`);
     }
     if (answer === "Discard") return;
     // Cancel (or dismissed): put the graph back exactly as it was.
     const session = this.session;
     const reopened = EventGraphPanel.show(this.context, this.fetchGraph, this.lastParams, this.actions);
     reopened.session = session;
+    reopened.unsavedFields = this.unsavedFields;
+    reopened.scriptSources = this.scriptSources;
   }
 
   /** Fetch a graph and push it (or an error) to the webview. */
@@ -256,8 +267,14 @@ export class EventGraphPanel {
         break;
       }
       case "save": {
-        const result = await this.applyEdits(msg.edits);
-        this.post({ type: "saved", applied: result.applied, error: result.error });
+        if (this.saving) break;
+        this.saving = true;
+        try {
+          const result = await this.applyEdits(msg.edits);
+          this.post({ type: "saved", applied: result.applied, error: result.error });
+        } finally {
+          this.saving = false;
+        }
         break;
       }
       case "uiState":
@@ -275,35 +292,83 @@ export class EventGraphPanel {
   private async applyEdits(edits: PendingEdit[]): Promise<{ applied: number[]; error?: string }> {
     if (!this.actions) return { applied: [], error: "this graph is read-only" };
     const applied: number[] = [];
+    const fieldsWritten = new Set<string>();
+    const finish = (error?: string) => {
+      const done = new Set(applied.map((index) => JSON.stringify(edits[index])));
+      this.session = {
+        ...this.session,
+        pending: this.session.pending.filter((edit) => !done.has(JSON.stringify(edit))),
+      };
+      return { applied, ...(error ? { error } : {}) };
+    };
     for (const { edit, index } of writeOrder(edits)) {
       // The batch is text from a webview: an edit may only touch a file of the
       // mod (or another workspace folder), wherever its path points.
       const target = edit.file ?? null;
       if (target !== null && !this.editableFile(target)) {
-        return { applied, error: `${describe(edit)} refused: ${target} is not a file of this mod` };
+        return finish(`${describe(edit)} refused: ${target} is not a file of this mod`);
       }
       try {
         if (edit.kind === "editLoc") {
           await this.actions.editLoc(edit.key, edit.value, edit.file, edit.line);
         } else if (edit.kind === "addOption") {
+          await this.checkSource(edit.file, edit.sourceHash);
           await this.actions.addOption(edit.id, edit.file, edit.endLine, edit.count);
+          await this.advanceSource(edit.file);
         } else if (edit.kind === "createEvent") {
+          for (const pending of edits) {
+            if ((pending.kind === "setField" || pending.kind === "addOption") && pending.file === edit.file)
+              await this.checkSource(pending.file, pending.sourceHash);
+          }
           await this.actions.createEvent(edit.id, edit.file, edit.type, edit.title, edit.desc, edit.options);
+          if (edit.file) await this.advanceSource(edit.file);
         } else {
-          await this.setField(edit);
+          if (fieldsWritten.has(edit.file)) continue;
+          const group = edits.flatMap((candidate, candidateIndex) =>
+            candidate.kind === "setField" && candidate.file === edit.file
+              ? [{ edit: candidate, index: candidateIndex }]
+              : []
+          );
+          await this.setFields(group.map((item) => item.edit));
+          applied.push(...group.map((item) => item.index));
+          fieldsWritten.add(edit.file);
+          continue;
         }
         applied.push(index);
       } catch (err) {
-        return { applied, error: `${describe(edit)} failed: ${message(err)}` };
+        let failure = message(err);
+        if (
+          (edit.kind === "addOption" || edit.kind === "createEvent") &&
+          edit.file &&
+          err instanceof Error &&
+          "scriptText" in err &&
+          typeof err.scriptText === "string"
+        ) {
+          try {
+            const sources = this.scriptSources.get(edit.file);
+            const disk = fs.readFileSync(edit.file);
+            if (sources)
+              for (const [hash, expected] of sources) {
+                if (
+                  disk.equals(expected.disk) ||
+                  eventSourceHash(decode(disk).text) === eventSourceHash(err.scriptText)
+                )
+                  sources.set(hash, { text: err.scriptText, disk });
+              }
+          } catch (sourceError) {
+            failure += `; cannot verify the source after this failure: ${message(sourceError)}`;
+          }
+        }
+        return finish(`${describe(edit)} failed: ${failure}`);
       }
     }
-    this.session = { ...this.session, pending: [] };
-    return { applied };
+    return finish();
   }
 
   /** True when `file` sits under the mod root or a workspace folder — the only
    * places a graph edit may write. */
   private editableFile(file: string): boolean {
+    if (isUnder(this.actions?.textureRoots().gamePath ?? null, file)) return false;
     if (isUnder(this.actions?.textureRoots().modPath ?? null, file)) return true;
     return (vscode.workspace.workspaceFolders ?? []).some((f) => isUnder(f.uri.fsPath, file));
   }
@@ -312,25 +377,72 @@ export class EventGraphPanel {
    * Rewrite one `key = value` statement, or insert it. A rewrite keeps the
    * line's own indentation: the file's style is the author's, not ours.
    */
-  private async setField(edit: Extract<PendingEdit, { kind: "setField" }>): Promise<void> {
-    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(edit.file));
-    const workspaceEdit = new vscode.WorkspaceEdit();
-    if (edit.line === null) {
-      const at = Math.min(Math.max(0, edit.insertLine), doc.lineCount);
-      workspaceEdit.insert(
-        doc.uri,
-        new vscode.Position(at, 0),
-        `${"\t".repeat(edit.indent)}${edit.key} = ${edit.value}\n`
-      );
+  private async setFields(edits: FieldEdit[]): Promise<void> {
+    const file = edits[0].file;
+    const snapshot = await readDocument(file);
+    const doc = snapshot.document;
+    const signature = JSON.stringify(edits);
+    const unsaved = this.unsavedFields.get(file);
+    if (unsaved) {
+      if (
+        signature !== unsaved.edits ||
+        doc.getText() !== unsaved.text ||
+        !snapshot.disk.equals(unsaved.disk)
+      )
+        throw new Error(
+          "source or pending fields changed after a failed save; save the source and refresh the graph"
+        );
+      if (!(await doc.save()))
+        throw new Error("save rejected; changes remain in the source editor and in the graph");
     } else {
-      if (edit.line >= doc.lineCount) throw new Error(`line ${edit.line + 1} is past the end of the file`);
-      const line = doc.lineAt(edit.line);
-      const indent = /^[\t ]*/.exec(line.text)?.[0] ?? "";
-      workspaceEdit.replace(doc.uri, line.range, `${indent}${edit.key} = ${edit.value}`);
+      for (const edit of edits) await this.checkSource(file, edit.sourceHash);
+      const text = doc.getText();
+      let body = text;
+      for (const replacement of planFieldEdits(text, edits).sort((a, b) => b.start - a.start))
+        body = body.slice(0, replacement.start) + replacement.text + body.slice(replacement.end);
+      try {
+        await writeDocument(snapshot, body, true);
+      } catch (error) {
+        if (doc.getText() !== text && doc.getText().replace(/^\uFEFF/, "") === body.replace(/^\uFEFF/, ""))
+          this.unsavedFields.set(file, { edits: signature, text: doc.getText(), disk: snapshot.disk });
+        throw error;
+      }
     }
-    if (!(await vscode.workspace.applyEdit(workspaceEdit))) throw new Error("edit rejected");
-    await doc.save();
-    this.actions?.notifyChanged(edit.file);
+    this.unsavedFields.delete(file);
+    for (const edit of edits) {
+      const sources = this.scriptSources.get(file) ?? new Map<string, { text: string; disk: Buffer }>();
+      sources.set(edit.sourceHash!, { text: doc.getText(), disk: fs.readFileSync(file) });
+      this.scriptSources.set(file, sources);
+    }
+    await this.advanceSource(file);
+    this.actions?.notifyChanged(file);
+  }
+
+  private async checkSource(file: string, sourceHash?: string): Promise<void> {
+    if (!sourceHash) throw new Error("source identity is missing; refresh the graph with the current server");
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+    const text = doc.getText();
+    const disk = fs.readFileSync(file);
+    const expected = this.scriptSources.get(file)?.get(sourceHash);
+    if (
+      expected !== undefined
+        ? text !== expected.text || !disk.equals(expected.disk)
+        : eventSourceHash(text) !== sourceHash || eventSourceHash(decode(disk).text) !== sourceHash
+    )
+      throw new Error(
+        "source changed since this form was loaded; save the source and refresh the graph before editing"
+      );
+    const sources = this.scriptSources.get(file) ?? new Map<string, { text: string; disk: Buffer }>();
+    sources.set(sourceHash, { text, disk });
+    this.scriptSources.set(file, sources);
+  }
+
+  private async advanceSource(file: string): Promise<void> {
+    const sources = this.scriptSources.get(file);
+    if (!sources) return;
+    const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+    const disk = fs.readFileSync(file);
+    for (const key of sources.keys()) sources.set(key, { text: doc.getText(), disk });
   }
 
   private async sendDetail(id: string, as: "detail" | "sim", file?: string): Promise<void> {
@@ -367,7 +479,7 @@ export class EventGraphPanel {
   private async openDocument(file: string, line?: number): Promise<void> {
     try {
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
-      const zero = Math.max(0, (line ?? 1) - 1);
+      const zero = Math.max(0, line ?? 0);
       const position = new vscode.Position(Math.min(zero, Math.max(0, doc.lineCount - 1)), 0);
       // Open in the OTHER editor group so the graph tab stays visible; reuse an
       // existing text group when there is one.
@@ -415,30 +527,13 @@ export class EventGraphPanel {
   }
 }
 
-/**
- * The order the edits have to be WRITTEN in, which is not the order they were
- * made in. Every edit carries the line numbers of the file as it was when the
- * user made it, and an insertion moves every line under it. So: replacements
- * first (they move nothing), then insertions from the bottom of each file
- * upwards, so an earlier insertion cannot invalidate a later one's line. Two
- * insertions at the same point are written back to front, which leaves them in
- * the file in the order they were added.
- */
+/** Field coordinates refer to the loaded source; option writers resolve the current AST. */
 function writeOrder(edits: PendingEdit[]): Array<{ edit: PendingEdit; index: number }> {
-  const at = (edit: PendingEdit): number | null => {
-    if (edit.kind === "addOption") return edit.endLine;
-    if (edit.kind === "setField" && edit.line === null) return edit.insertLine;
-    return null;
-  };
-  const keep: Array<{ edit: PendingEdit; index: number }> = [];
-  const inserts: Array<{ edit: PendingEdit; line: number; index: number }> = [];
-  edits.forEach((edit, index) => {
-    const line = at(edit);
-    if (line === null) keep.push({ edit, index });
-    else inserts.push({ edit, line, index });
-  });
-  inserts.sort((a, b) => b.line - a.line || b.index - a.index);
-  return [...keep, ...inserts.map(({ edit, index }) => ({ edit, index }))];
+  const ordered = edits.map((edit, index) => ({ edit, index }));
+  return [
+    ...ordered.filter(({ edit }) => edit.kind === "setField"),
+    ...ordered.filter(({ edit }) => edit.kind !== "setField"),
+  ];
 }
 
 function describe(edit: PendingEdit): string {

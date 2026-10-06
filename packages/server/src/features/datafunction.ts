@@ -29,8 +29,7 @@ import * as path from "path";
 
 /**
  * The expression text when `linePrefix` ends inside an unclosed [ ... ], else
- * null. Datafunction expressions never span lines, so the line prefix is
- * enough context.
+ * null. Document providers supply the full expression prefix for multiline bindings.
  */
 export function datafunctionExprAt(linePrefix: string): string | null {
   let open = -1;
@@ -204,9 +203,10 @@ export function provideDataFnCompletion(
   usage: DataFnUsage,
   linePrefix: string,
   index?: DefinitionIndex,
-  cursor?: DataFnCursor
+  cursor?: DataFnCursor,
+  expressionPrefix = datafunctionExprAt(linePrefix)
 ): CompletionResult | null {
-  const expr = datafunctionExprAt(linePrefix);
+  const expr = expressionPrefix;
   if (expr === null) return null;
 
   /** finalize + anchor each survivor to replace exactly the typed `partial`. */
@@ -563,11 +563,11 @@ export function provideDataFnHover(
   usage: DataFnUsage,
   lineText: string,
   character: number,
-  gameRoot: string | null = null
+  gameRoot: string | null = null,
+  expressionPrefix = datafunctionExprAt(lineText.slice(0, character))
 ): DataFnHoverInfo | null {
   // Inside an expression? The [ must be open where the cursor sits.
-  const prefix = lineText.slice(0, character);
-  if (datafunctionExprAt(prefix) === null && lineText[character] !== "[") return null;
+  if (expressionPrefix === null && lineText[character] !== "[") return null;
 
   // The dotted chain around the cursor.
   const isWord = (ch: string) => /[A-Za-z0-9_.]/.test(ch);
@@ -724,10 +724,10 @@ export function provideDataFnSignature(
   data: DataTypesData,
   usage: DataFnUsage,
   lineText: string,
-  character: number
+  character: number,
+  expressionPrefix = datafunctionExprAt(lineText.slice(0, character))
 ): SignatureHelp | null {
-  const prefix = lineText.slice(0, character);
-  const expr = datafunctionExprAt(prefix);
+  const expr = expressionPrefix;
   if (expr === null) return null;
   const call = openCallAt(expr);
   if (!call) return null;

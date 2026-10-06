@@ -9,6 +9,9 @@ import * as fs from "fs";
 import * as path from "path";
 import type { PxConfig } from "./config";
 import { listFiles } from "@px-lsp/protocol/fsWalk";
+import { readDocument, writeDocument } from "./documentWrite";
+import { assertLocalizationPath, effectiveLocConfig, localizationRoots } from "./localizationProject";
+import { assertLocalizationHeader, generatedLocalizationSource } from "@px-lsp/protocol/localizationPolicy";
 import {
   LOC_LANGUAGES,
   buildTranslation,
@@ -18,9 +21,9 @@ import {
 } from "@px-lsp/protocol/translationCore";
 
 /** Languages that actually occur in the mod's localization folder. */
-function languagesInMod(locDir: string): string[] {
+function languagesInMod(locFiles: string[]): string[] {
   const langs = new Set<string>();
-  for (const file of listFiles(locDir, ".yml")) {
+  for (const file of locFiles) {
     const lang = detectLocFileLanguage(file);
     if (lang) langs.add(lang);
   }
@@ -28,25 +31,30 @@ function languagesInMod(locDir: string): string[] {
 }
 
 export async function createTranslationCommand(cfg: PxConfig, log: (msg: string) => void): Promise<void> {
+  cfg = effectiveLocConfig(cfg);
   if (!cfg.modPath) {
     void vscode.window.showWarningMessage(
       "Paradox Modding Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."
     );
     return;
   }
-  const locDir = path.join(cfg.modPath, "localization");
-  const present = fs.existsSync(locDir) ? languagesInMod(locDir) : [];
+  const roots = localizationRoots(cfg).map((root) => path.join(cfg.modPath!, root));
+  const locFiles = roots.flatMap((root) => (fs.existsSync(root) ? listFiles(root, ".yml") : []));
+  const present = languagesInMod(locFiles);
   if (present.length === 0) {
     const language = await vscode.window.showQuickPick([...LOC_LANGUAGES], {
       title: `Add language to ${path.basename(cfg.modPath)}`,
       placeHolder: "Choose the first localization language",
     });
     if (!language) return;
+    const locDir = roots.find((root) => fs.existsSync(root)) ?? roots[0];
     const file = path.join(locDir, language, `mod_l_${language}.yml`);
     try {
-      fs.mkdirSync(path.dirname(file), { recursive: true });
-      fs.writeFileSync(file, `\uFEFFl_${language}:\n`, { encoding: "utf8", flag: "wx" });
-      await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file));
+      assertLocalizationPath(cfg, file, language);
+      const snapshot = await readDocument(file, true);
+      if (!snapshot.created) throw new Error("Localization file already exists");
+      await writeDocument(snapshot, `l_${language}:\n`, true);
+      await vscode.window.showTextDocument(snapshot.document);
     } catch (error) {
       void vscode.window.showErrorMessage(`Could not add localization: ${String(error)}`);
     }
@@ -79,44 +87,52 @@ export async function createTranslationCommand(cfg: PxConfig, log: (msg: string)
     if (!target) return;
   }
 
-  const sourceFiles = listFiles(locDir, ".yml").filter((f) => detectLocFileLanguage(f) === source);
+  const sourceFiles = locFiles.filter((f) => detectLocFileLanguage(f) === source);
   let created = 0;
   let updated = 0;
   let addedKeys = 0;
   let firstFile: string | null = null;
+  let failed = 0;
 
   for (const src of sourceFiles) {
     const dst = retargetLocPath(src, source, target);
     if (!dst) continue;
-    let content: string;
     try {
-      content = fs.readFileSync(src, "utf8");
-    } catch {
-      continue;
-    }
-    try {
-      if (fs.existsSync(dst)) {
-        const merged = mergeTranslation(fs.readFileSync(dst, "utf8"), content, source);
+      assertLocalizationPath(cfg, dst, target);
+      const sourceSnapshot = await readDocument(src);
+      const destination = await readDocument(dst, true);
+      if (!destination.created) {
+        assertLocalizationHeader(destination.text, target);
+        const generated = generatedLocalizationSource(destination.text);
+        if (generated)
+          throw new Error(`This localization is generated. Edit its source template instead. ${generated}`);
+        const merged = mergeTranslation(destination.text, sourceSnapshot.text, source);
         if (merged.added > 0) {
-          fs.writeFileSync(dst, merged.content, "utf8");
+          await writeDocument(destination, merged.content, true, [sourceSnapshot]);
           updated++;
           addedKeys += merged.added;
           firstFile = firstFile ?? dst;
         }
       } else {
-        fs.mkdirSync(path.dirname(dst), { recursive: true });
-        fs.writeFileSync(dst, buildTranslation(content, target, source), "utf8");
+        await writeDocument(destination, buildTranslation(sourceSnapshot.text, target, source), true, [
+          sourceSnapshot,
+        ]);
         created++;
         firstFile = firstFile ?? dst;
       }
     } catch (err) {
       log(`translation: failed for ${dst}: ${String(err)}`);
+      failed++;
+      void vscode.window.showErrorMessage(
+        `Could not add translation for ${path.basename(src)}: ${String(err)}`
+      );
+      break;
     }
   }
 
   const summary = `Paradox Modding Toolkit: ${target} translation — ${created} file(s) created, ${updated} updated (${addedKeys} entries appended).`;
   log(summary);
-  void vscode.window.showInformationMessage(summary);
+  if (!failed) void vscode.window.showInformationMessage(summary);
   if (firstFile) {
     const doc = await vscode.workspace.openTextDocument(firstFile);
     await vscode.window.showTextDocument(doc);

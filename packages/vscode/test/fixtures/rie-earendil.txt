@@ -1,0 +1,34 @@
+lineofanarion8 = {
+    name = E_a_arendil # King of Gondor
+
+    dynasty = dynasty_anarion
+    religion = faith_edain
+    culture = gondorian
+
+    father = lineofanarion7
+    mother = lineofalatar13sister
+
+
+    trait = generous
+    trait = compassionate
+    trait = gregarious
+    trait = education_diplomacy_3
+
+
+    trait = blood_of_numenor_10
+    4081.4.4 = {
+        birth = yes
+        effect = {
+            learn_language = language_quenya
+        }
+    }
+
+    4163.7.1 = {
+        add_spouse = lineofmamandil16sister
+    }
+
+    4357.8.23 = {
+        make_trait_inactive = equipped_crown_of_gondor
+        death = { death_reason = death_natural_causes }
+    }
+}

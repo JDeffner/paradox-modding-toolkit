@@ -16,6 +16,12 @@ import type { CalendarSetting } from "@px-lsp/protocol/calendar";
 import type { CreatorSaveTarget } from "../shared/creatorMessages";
 import type { PreviewInput } from "../traitCreator/app/preview";
 /** The forms the app fills in and blocks.ts turns into script. */
+export interface CharacterQuotes {
+  name: boolean;
+  culture: boolean;
+  religion: boolean;
+}
+
 export interface CharacterForm {
   id: string;
   name: string;
@@ -30,6 +36,10 @@ export interface CharacterForm {
   /** `Y.M.D`; the date of the block that carries `birth = yes`. */
   birth?: string;
   death?: string;
+  /** Undefined preserves a reason an older caller does not model; empty clears it. */
+  deathReason?: string;
+  /** Explicit overrides; omitted fields preserve existing source quotations. */
+  quotes?: Partial<CharacterQuotes>;
   /** `dna = `, the portrait DNA name, without quotes. */
   dna?: string;
   /** Skill key -> value, for the keys the modder gave a number. */
@@ -70,6 +80,7 @@ export interface OptionSets {
   culture: EventVocabularyItem[];
   religion: EventVocabularyItem[];
   trait: EventVocabularyItem[];
+  deathReason?: EventVocabularyItem[];
 }
 
 /** Everything the app needs about one dynasty. */
@@ -108,6 +119,8 @@ export interface TraitStats {
 }
 
 export type HostToApp =
+  | { type: "characterSource"; id: string; file: string; form: CharacterForm }
+  | { type: "characterSaveFailed"; message: string }
   | {
       type: "init";
       gameName: string;
@@ -183,6 +196,6 @@ export type AppToHost =
    */
   | { type: "dnaPaste"; character: string }
   /** Recompute the save target: `file` = the file the draft already lives in. */
-  | { type: "target"; file?: string }
+  | { type: "target"; file?: string; character?: string; sourceFile?: string }
   /** The target line was clicked: open the picker. */
   | { type: "changeTarget" };

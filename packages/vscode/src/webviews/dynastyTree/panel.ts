@@ -35,8 +35,12 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import { parseScript } from "@px-lsp/server/parser";
+import { getProjectSetting } from "@px-lsp/protocol/projectSettings";
+import { readProjectAuthoringSettings } from "../../projectConfigFile";
 import { readModName } from "@px-lsp/protocol/modName";
 import type { PxConfig } from "../../config";
+import { readDocument, writeDocument } from "../../documentWrite";
+import { assertModWritePath } from "../../modWrite";
 import { calendarForMod } from "../../calendarInsert";
 import {
   applyDefinitionEdits,
@@ -49,9 +53,9 @@ import {
 } from "../../creators/save";
 import { resolveImage, type ImageRoot } from "../../creators/images";
 import type { LocLookup } from "../../locCommands";
-import { characterBlock, dynastyBlock, houseBlock, unquotableValue } from "./blocks";
+import { characterBlock, characterForm, dynastyBlock, houseBlock, unquotableValue } from "./blocks";
 import { dynastyTreeHtml } from "./html";
-import { WriteJournal } from "./journal";
+import { WriteJournal, type JournalState } from "./journal";
 import { dnaPasteBlock, parseDnaPaste, scanBlocks, uniqueKey, type ScriptBlock } from "./scan";
 import { dnaFiles, gameDnaCopy } from "./dna";
 import type { AppToHost, HostToApp, ModTarget, OptionSets, TraitStats, TraitTip } from "./messages";
@@ -94,6 +98,18 @@ export interface DynastyTreeActions {
   editDefinition(params: DefinitionEditParams): Promise<DefinitionEditResult>;
   /** writeLocSmart: the one entry point for a loc value (locCommands.ts). */
   writeLoc(key: string, value: string): Promise<string>;
+  /** Resolve the destination once for both the write and its undo pre-image. */
+  prepareLoc?(
+    key: string,
+    modRoot?: string | null
+  ): Promise<
+    | {
+        file: string;
+        language: string;
+        apply(value: string): Promise<string>;
+      }
+    | undefined
+  >;
   /**
    * Where `writeLoc` WOULD write a key, resolved without writing, so the
    * panel can keep the file's pre-image for undo. Optional: a client that
@@ -139,6 +155,8 @@ export class DynastyTreePanel {
   private pending: string | undefined;
   /** The file the character being edited lives in; it decides the default target. */
   private draftFile: string | undefined;
+  private draftSource: { file: string; id: string; text: string } | undefined;
+  private sourceRequest = 0;
   /** The dynasty currently drawn, so a save can reload the same tree. */
   private current: string | undefined;
   /** The target the modder picked, which outranks the default until reset. */
@@ -154,8 +172,8 @@ export class DynastyTreePanel {
   private readonly files = new Map<string, { mtimeMs: number; blocks: Map<string, ScriptBlock> }>();
   /** Every write this panel made, newest last: what undo puts back. */
   private readonly journal = new WriteJournal({
-    read: (file) => this.docText(file),
-    write: (file, text) => this.replaceDocument(file, text),
+    read: (file) => this.journalState(file),
+    write: (file, text, expected) => this.replaceDocument(file, text, expected),
     refuse: (message) => this.post({ type: "toast", message, variant: "destructive" }),
   });
 
@@ -302,31 +320,85 @@ export class DynastyTreePanel {
         // in decides the default again: an old pick must not follow it.
         this.chosen = null;
         this.draftFile = msg.file;
+        this.draftSource = undefined;
         this.postTarget();
+        {
+          const request = ++this.sourceRequest;
+          if (msg.character && msg.sourceFile) {
+            try {
+              const text = await this.previousBlock(msg.sourceFile, msg.character);
+              const form = characterForm(text);
+              if (request !== this.sourceRequest) return;
+              this.draftSource = { file: msg.sourceFile, id: msg.character, text };
+              this.post({ type: "characterSource", id: msg.character, file: msg.sourceFile, form });
+            } catch (err) {
+              if (request === this.sourceRequest)
+                this.post({ type: "characterSaveFailed", message: message(err) });
+            }
+          }
+        }
         return;
       case "changeTarget":
         await this.changeTarget();
         return;
       case "saveCharacter": {
-        if (this.refuseQuote(msg.form)) return;
-        const block = characterBlock(msg.form, await this.previousBlock(msg.file, msg.form.id));
-        for (const note of block.notes) this.post({ type: "toast", message: note });
-        // No question at save time: the target has been in the top bar since
-        // the form opened, and it is what the write uses.
-        await this.write(TARGETS.character, msg.form.id, block.text, msg.file, this.targetChoice());
+        try {
+          const source = this.draftSource;
+          if ((msg.file && !source) || (source && source.id !== msg.form.id)) {
+            throw new Error("Reload the character before saving. Its source is no longer available.");
+          }
+          if (source) await this.checkCharacterSource(source);
+          const choice = this.targetChoice();
+          const config = vscode.workspace.getConfiguration(
+            "px",
+            choice ? vscode.Uri.file(choice.modPath) : undefined
+          );
+          const project = choice
+            ? readProjectAuthoringSettings(choice.modPath, this.options.meta, this.options.cfg.gameId)
+            : undefined;
+          const quote = (
+            key:
+              | "characterHistory.quoteNames"
+              | "characterHistory.quoteCultures"
+              | "characterHistory.quoteReligions"
+          ) =>
+            (project && (getProjectSetting(project, key) as boolean | undefined)) ??
+            config.get<boolean>(key, true);
+          const block = characterBlock(msg.form, source?.text, {
+            name: quote("characterHistory.quoteNames"),
+            culture: quote("characterHistory.quoteCultures"),
+            religion: quote("characterHistory.quoteReligions"),
+          });
+          const saved = await this.write(
+            TARGETS.character,
+            msg.form.id,
+            block.text,
+            msg.file,
+            choice,
+            source,
+            true
+          );
+          if (!saved)
+            this.post({
+              type: "characterSaveFailed",
+              message: "Character not saved. Check the error message and try again.",
+            });
+        } catch (err) {
+          this.post({ type: "characterSaveFailed", message: message(err) });
+        }
         return;
       }
       case "saveDynasty": {
         if (this.refuseQuote(msg.form)) return;
         const written = await this.write(TARGETS.dynasty, msg.form.id, dynastyBlock(msg.form), msg.file);
-        if (written) await this.writeName(msg.form.nameKey, msg.name);
+        if (written) await this.writeName(msg.form.nameKey, msg.name, written.modPath);
         if (written && msg.openTree) await this.loadTree(msg.form.id);
         return;
       }
       case "saveHouse": {
         if (this.refuseQuote(msg.form)) return;
         const written = await this.write(TARGETS.house, msg.form.id, houseBlock(msg.form), msg.file);
-        if (written) await this.writeName(msg.form.nameKey, msg.name);
+        if (written) await this.writeName(msg.form.nameKey, msg.name, written.modPath);
         return;
       }
     }
@@ -407,6 +479,12 @@ export class DynastyTreePanel {
       }
     }
     await this.labelTraits(sets.trait);
+    try {
+      const reasons = await this.actions.fetchForm?.({ kind: "death_reason", modRoot: this.options.modRoot });
+      sets.deathReason = reasons?.existing.map((d) => ({ value: d.name, label: d.label })) ?? [];
+    } catch {
+      sets.deathReason = [];
+    }
     this.post({ type: "options", sets });
   }
 
@@ -859,6 +937,7 @@ export class DynastyTreePanel {
       mine.map((file) => ({ file, count: this.fileBlocks(file).size })).sort((a, b) => b.count - a.count)[0]
         ?.file ?? path.join(dir, `${sanitizeFileName(path.basename(modPath))}_dna.txt`);
     try {
+      assertModWritePath({ ...this.options.cfg, modPath }, target);
       if (!fs.existsSync(target)) {
         fs.mkdirSync(path.dirname(target), { recursive: true });
         // Script `.txt` is UTF-8 WITH BOM; the game reads a headerless file
@@ -877,7 +956,13 @@ export class DynastyTreePanel {
         this.post({ type: "toast", message: refused, variant: "destructive" });
         return;
       }
-      if (!(await applyDefinitionEdits(target, text, result.edits, { reveal: false }))) return;
+      if (
+        (await applyDefinitionEdits(target, text, result.edits, {
+          cfg: { ...this.options.cfg, modPath },
+          reveal: false,
+        })) !== "saved"
+      )
+        return;
       await this.remember(target, text);
     } catch (err) {
       this.post({ type: "toast", message: message(err), variant: "destructive" });
@@ -935,33 +1020,23 @@ export class DynastyTreePanel {
    * Read through the editor, so the text is the one on screen (unsaved edits
    * included) and the encoding is VS Code's, not an assumed UTF-8.
    */
-  private async previousBlock(file: string | undefined, name: string): Promise<string | undefined> {
-    if (!file) return undefined;
-    let text: string;
-    try {
-      text = (await vscode.workspace.openTextDocument(vscode.Uri.file(file))).getText();
-    } catch {
-      return undefined;
+  private async previousBlock(file: string, name: string): Promise<string> {
+    const text = (await vscode.workspace.openTextDocument(vscode.Uri.file(file))).getText();
+    const block = scanBlocks(text).get(name);
+    if (!block) throw new Error(`Could not find ${name} in its source file. Reload the tree before editing.`);
+    return block.text;
+  }
+
+  private async checkCharacterSource(source: { file: string; id: string; text: string }): Promise<void> {
+    if ((await this.previousBlock(source.file, source.id)) !== source.text) {
+      throw new Error(
+        "The character changed since this form opened. Reopen it to load the latest edits before saving."
+      );
     }
-    // The block runs from its key to the matching close brace; the writer only
-    // needs the text, and the tolerant parser inside blocks.ts does the rest.
-    const start = new RegExp(`^${escapeRegExp(name)}[ \\t]*=[ \\t]*\\{`, "m").exec(text);
-    if (!start) return undefined;
-    let depth = 0;
-    for (let i = start.index; i < text.length; i++) {
-      const ch = text[i];
-      if (ch === "{") depth++;
-      else if (ch === "}") {
-        depth--;
-        if (depth === 0) return text.slice(start.index, i + 1);
-      }
-    }
-    return undefined;
   }
 
   /**
-   * Write one block into a `.txt` of the mod's folder. Returns true when
-   * something was written.
+   * Write one block into a `.txt` of the mod's folder and retain its owner.
    *
    * The target, the offsets and the application are the shared creator flow:
    * `pickSaveTarget` opens the file and hands back the text the server must
@@ -973,13 +1048,18 @@ export class DynastyTreePanel {
     name: string,
     script: string,
     previousFile?: string,
-    choice?: SaveTargetChoice | null
-  ): Promise<boolean> {
+    choice?: SaveTargetChoice | null,
+    source?: { file: string; id: string; text: string },
+    character = false
+  ): Promise<{ modPath: string } | false> {
     const stage = this.options.meta.stageRoots?.[0];
     const folder = stage ? `${stage}/${target.folder}` : target.folder;
     const where = await this.saveTarget(folder, target.kind, previousFile, choice);
     if (!where) return false;
     const { abs, text } = where;
+    if (character && scanBlocks(text).has(name) && (!source || !samePath(source.file, abs))) {
+      throw new Error(`The target already contains ${name}. Open that character before editing it.`);
+    }
 
     let result: DefinitionEditResult;
     try {
@@ -1000,12 +1080,19 @@ export class DynastyTreePanel {
     // `reveal: false`: a panel that saves on every field change must not throw
     // an editor over the tree each time. The inspector says what was written
     // and offers the link instead.
-    if (!(await applyDefinitionEdits(abs, text, result.edits, { reveal: false }))) return false;
+    if (source) await this.checkCharacterSource(source);
+    if (
+      (await applyDefinitionEdits(abs, text, result.edits, {
+        cfg: { ...this.options.cfg, modPath: where.modPath },
+        reveal: false,
+      })) !== "saved"
+    )
+      return false;
     await this.remember(abs, text);
 
     this.post({ type: "saved", name, file: abs, line: await this.blockLine(abs, name) });
     this.reloadSoon();
-    return true;
+    return { modPath: where.modPath };
   }
 
   /**
@@ -1015,7 +1102,8 @@ export class DynastyTreePanel {
    */
   private async remember(abs: string, text: string, join = false): Promise<void> {
     const after = await this.docText(abs);
-    if (after !== null) this.journal.record({ file: abs, before: text, after }, join);
+    if (after !== null)
+      this.journal.record({ file: abs, before: text, after, disk: fs.readFileSync(abs) }, join);
     this.postJournal();
   }
 
@@ -1042,14 +1130,29 @@ export class DynastyTreePanel {
     }
   }
 
-  /** Put a whole file back, as one edit, the way every other write here lands. */
-  private async replaceDocument(file: string, text: string): Promise<boolean> {
+  private async journalState(file: string): Promise<JournalState | null> {
     try {
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
-      const edit = new vscode.WorkspaceEdit();
-      edit.replace(doc.uri, new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), text);
-      if (!(await vscode.workspace.applyEdit(edit))) return false;
-      await doc.save();
+      const snapshot = await readDocument(file);
+      return { text: snapshot.text, disk: snapshot.disk };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Put a whole file back, as one edit, the way every other write here lands. */
+  private async replaceDocument(file: string, text: string, expected?: JournalState): Promise<boolean> {
+    try {
+      const modPath = this.options.mods.find((mod) => isInside(mod.path, file))?.path;
+      const cfg = { ...this.options.cfg, modPath: modPath ?? null };
+      assertModWritePath(cfg, file);
+      const snapshot = await readDocument(file);
+      if (
+        expected &&
+        (snapshot.text !== expected.text || (expected.disk && !snapshot.disk.equals(expected.disk)))
+      )
+        throw new Error(`${path.basename(file)} changed during the history step. Try again.`);
+      assertModWritePath(cfg, file);
+      await writeDocument(snapshot, text, true);
       return true;
     } catch (err) {
       this.post({ type: "toast", message: message(err), variant: "destructive" });
@@ -1078,13 +1181,15 @@ export class DynastyTreePanel {
     kind: string,
     previousFile?: string,
     choice?: SaveTargetChoice | null
-  ): Promise<{ abs: string; text: string } | null> {
-    const inMod = previousFile && this.options.mods.some((m) => isInside(m.path, previousFile));
+  ): Promise<{ modPath: string; abs: string; text: string } | null> {
+    const owner = previousFile ? this.options.mods.find((m) => isInside(m.path, previousFile)) : undefined;
+    const inMod = !!owner;
     const wanted = choice ? path.join(choice.modPath, ...folder.split("/"), choice.file) : null;
     if (inMod && (!wanted || samePath(wanted, previousFile!))) {
       try {
+        assertModWritePath({ ...this.options.cfg, modPath: owner!.path }, previousFile!);
         const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(previousFile!));
-        return { abs: previousFile!, text: doc.getText() };
+        return { modPath: owner!.path, abs: previousFile!, text: doc.getText() };
       } catch (err) {
         this.post({ type: "toast", message: message(err), variant: "destructive" });
         return null;
@@ -1092,10 +1197,10 @@ export class DynastyTreePanel {
     }
     if (choice) {
       const opened = await openSaveTarget(this.options.cfg, folder, choice);
-      return opened ? { abs: opened.abs, text: opened.text } : null;
+      return opened;
     }
     const picked = await pickSaveTarget(this.options.cfg, folder, { kind });
-    return picked ? { abs: picked.abs, text: picked.text } : null;
+    return picked;
   }
 
   /** The line the block ended up on, so the file opens where it was written. */
@@ -1125,26 +1230,40 @@ export class DynastyTreePanel {
     return true;
   }
 
-  /**
-   * The display name of a dynasty or house: a loc key, written through
-   * writeLocSmart. The loc writer picks the file itself, so its pre-image is
-   * taken from the file it SAYS it will write (`locTarget`); a write that then
-   * lands somewhere else, or in a file that did not exist, is not journalled
-   * rather than journalled wrongly.
-   */
-  private async writeName(key: string, value: string): Promise<void> {
+  /** The prepared destination is also the source of the undo pre-image. */
+  private async writeName(key: string, value: string, modPath: string): Promise<void> {
     if (!key || !value) return;
-    let predicted: string | null = null;
-    let before: string | null = null;
     try {
-      predicted = (await this.actions.locTarget?.(key)) ?? null;
-      if (predicted) before = await this.docText(predicted);
-    } catch {
-      /* an unpredictable target only costs this write its undo */
-    }
-    try {
-      const file = await this.actions.writeLoc(key, value);
-      if (predicted && before !== null && samePath(predicted, file)) await this.remember(file, before, true);
+      let file: string;
+      if (this.actions.prepareLoc) {
+        const plan = await this.actions.prepareLoc(key, modPath);
+        if (!plan) return;
+        const open = vscode.workspace.textDocuments.find((document) =>
+          samePath(document.uri.fsPath, plan.file)
+        );
+        let before = open?.getText();
+        if (before === undefined) {
+          try {
+            await fs.promises.stat(plan.file);
+            before = (await vscode.workspace.openTextDocument(vscode.Uri.file(plan.file))).getText();
+          } catch (err) {
+            if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+          }
+        }
+        file = await plan.apply(value);
+        // Undo a created file's added keys while retaining a valid empty localization file.
+        before ??= `l_${plan.language}:\n`;
+        const after = (await vscode.workspace.openTextDocument(vscode.Uri.file(plan.file))).getText();
+        this.journal.record({ file: plan.file, before, after, disk: fs.readFileSync(plan.file) }, true);
+        this.postJournal();
+      } else {
+        // Older embedders expose separate prediction and write callbacks.
+        const predicted = (await this.actions.locTarget?.(key)) ?? null;
+        const before = predicted ? await this.docText(predicted) : null;
+        file = await this.actions.writeLoc(key, value);
+        if (predicted && before !== null && samePath(predicted, file))
+          await this.remember(file, before, true);
+      }
       this.post({ type: "toast", message: `Wrote ${key} to ${path.basename(file)}.` });
     } catch (err) {
       this.post({

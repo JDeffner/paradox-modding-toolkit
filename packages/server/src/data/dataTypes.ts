@@ -14,6 +14,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { activeProfile } from "../games/active";
+import type { GameProfile } from "../games/profile";
 
 export interface DataTypeMember {
   /** Return type name; null when unknown (wiki lists some as [unregistered]). */
@@ -65,9 +66,11 @@ function typeMembers(data: DataTypesData, type: string): Map<string, DataTypeMem
   return members;
 }
 
-export function loadBundledDataTypes(): DataTypesData {
+export function loadBundledDataTypes(
+  profile: Pick<GameProfile, "bundledDataTypes"> = activeProfile()
+): DataTypesData {
   const data = emptyDataTypes();
-  const bundled = activeProfile().bundledDataTypes as BundledShape | undefined;
+  const bundled = profile.bundledDataTypes as BundledShape | undefined;
   if (!bundled) return data;
   for (const [name, ret] of Object.entries(bundled.globalPromotes)) {
     data.globals.set(name, { ret, args: null, kind: "promote", src: "wiki" });
@@ -235,9 +238,10 @@ function dumpFilesIn(dir: string): string[] {
  */
 export function loadDataTypes(
   dirs: string | null | Array<string | null>,
-  bundledDir?: string
+  bundledDir?: string,
+  profile: Pick<GameProfile, "bundledDataTypes"> = activeProfile()
 ): DataTypesData {
-  const data = loadBundledDataTypes();
+  const data = loadBundledDataTypes(profile);
   const list = (Array.isArray(dirs) ? dirs : [dirs]).filter((d): d is string => d !== null);
   for (const dir of list) {
     const source = dir === bundledDir ? "bundled dump" : "data_types.log";

@@ -24,6 +24,8 @@ export interface ScopeInference {
 
 /** Extra context for inference (all optional; absence degrades to the old behavior). */
 export interface InferenceContext {
+  /** Shared inference inputs, supplied by inferenceContextFor for derived caches. */
+  cacheVersion?: object;
   /** The file's schema entry: enables per-definition root-scope declarations
    *  (event `scope = X`, custom loc `type = X`, scripted_gui `scope = X`),
    *  structure keys with a documented block scope, and on_action roots. */

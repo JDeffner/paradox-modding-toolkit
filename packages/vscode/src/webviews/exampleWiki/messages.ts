@@ -6,7 +6,7 @@
 import type { ExampleWikiDetail, ExampleWikiIndex, ExampleWikiKind } from "@px-lsp/protocol/protocol";
 
 export type HostToApp =
-  | { type: "loading" }
+  | { type: "loading"; reset?: boolean; gameName?: string }
   | { type: "index"; index: ExampleWikiIndex }
   | { type: "entry"; name: string; kind: ExampleWikiKind; detail: ExampleWikiDetail | null }
   /** A deep link (px.showExamplesWiki with an argument): show this article,

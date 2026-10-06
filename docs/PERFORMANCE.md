@@ -150,9 +150,7 @@ the ~156 schema folders; the reference scan then walked the whole root for
 `.txt` and read it all again, because `extractDefinitions` and
 `extractReferences` each called `parseScript` themselves. 154 of the 156 CK3
 schema entries are `.txt`, so the two file sets overlapped on essentially all
-script. A workspace mod root is now walked once: each file is read once,
-parsed once, and that one CST feeds both extractors, with `classifyFile`
-supplying the schema entry the folder walk would have found it under.
+script. Each physical directory in a workspace mod root is visited once for `.txt` files, with schema folders before the whole-root reference fallback. This preserves the meaning of a linked folder such as `events/` while avoiding duplicate scans through directory aliases. Each file is read once and parsed once, and that one CST feeds both extractors, with `classifyFile` supplying the schema entry the folder walk would have found it under.
 Localization (`.yml`) and `gui` (`.gui`) are not `.txt` and keep the
 schema-folder listing. Dependency parents stay definition-only, and vanilla
 references are still lazy.
@@ -330,6 +328,47 @@ What the rows say:
   changes webviews only; the server is byte-identical in what it does.
 
 Warm completion, hover and semantic tokens remain much cheaper than the first completion after an index change.
+
+### Unpublished 0.5.2 candidate measurement (2026-10-01)
+
+Two sequential runs of the 0.5.2 candidate on `cultivation.code-workspace` indexed 516,170 definitions and 594,086 shared identifiers. Both used CK3 1.20.0.2, a Ryzen 7 5800X, 32 GB RAM and Node 24.18.1. The source roots were the game and five workspace mods: Cultivation Mod, Custom Name Lists, Gesta, Hide Decisions and Mod Testing. Agent Courier remained excluded. The save probe used a separate synthetic mod; the real source roots stayed read-only.
+
+| version | time to indexed | completion, cold | completion, after save | completion, warm | heap after index | peak RSS |
+|---|---|---|---|---|---|---|
+| 0.5.2, median of two runs | 9.61 s | 226 ms | 151 ms | 8.5 ms | 299 MB | 819.5 MB |
+
+The unchanged benchmark driver used minimal completion, English localization, scope hints off, no `script_docs` logs and graphics asset indexing on. It reads workspace roots and exclusions, but it does not load every personal editor preference. The real workspace selected names completion; these request timings used the driver's minimal mode.
+
+Indexing took 11,215 ms and 8,004 ms in the two runs. Heavy agent checks had finished before both measurements; OS file cache and desktop background load were not controlled. Older Cultivation rows used earlier game data and Node versions, while the earlier 0.5.2 pre-release row used AGOT on another machine. These results do not establish a speed change against those rows.
+
+The two raw `0.5.2` rows are in `packages/server/test/perf/history.json`. Local results and server logs are in `.local/artifacts/perf-0.5.2/run1` and `run2`. Readback confirmed that the workspace file, game launcher version file and measured server bundle retained their recorded hashes.
+
+### 0.5.5 preview measurement (2026-10-05)
+
+Two sequential runs of the prepared 0.5.5 build on `cultivation.code-workspace` indexed 516,116 definitions and 597,764 shared identifiers each. The six roots were installed CK3 1.20.0.3 and five workspace mods; Agent Courier remained excluded. The machine used a Ryzen 7 5800X, 32 GB RAM and Node 24.18.1.
+
+| version | time to indexed | completion, cold | completion, after save | completion, warm | heap after index | peak RSS |
+|---|---|---|---|---|---|---|
+| 0.5.5 preview, median of two runs | 8.44 s | 180 ms | 137 ms | 6.5 ms | 302 MB | 879.5 MB |
+
+Indexing took 9,093 ms and 7,785 ms. Test jobs and isolated editor capture hosts had stopped before these samples. OS caches and desktop background load were not controlled. The driver used minimal completion and a synthetic save probe, leaving real mod and game roots read-only. Earlier rows used different game data and workspace contents, so these samples do not establish a speed change against them. The two `0.5.5-preview` rows are in `packages/server/test/perf/history.json`; migration timings are measured separately below.
+
+### Migration input capture (0.5.5 preview)
+
+The 0.5.5 preview captures filesystem metadata in bounded batches of 16. Earlier captures visited each entry serially. File content reads and admission remain ordered, and the host retains every freshness survey, input limit and path check. All operations in a metadata batch settle before an error or cancellation returns.
+
+A CK3 portrait-mask fixture used archived 1.19.0.6 data and an installed 1.20.0.3 target. Sequential before/after runs on Node 24.18.1 measured the actual migration workbench API, including worker execution and journaled writes. No other task builds or tests ran during the timing window. These are single-run results with uncontrolled OS caches, and do not include editor rendering or establish timings for other mods.
+
+| Action | Serial metadata | Bounded metadata | Input surveys |
+|---|---|---|---|
+| Scan | 80.9 s | 28.0 s | 8 |
+| Answer question | 67.9 s | 41.3 s | 8 |
+| Prepare | 84.2 s | 53.0 s | 10 |
+| Apply | 66.4 s | 35.7 s | 8 |
+
+The filesystem call counts, source snapshot hashes, prepared plan hashes and output byte hashes matched before and after for both faith and mask fixtures. Apply followed by Restore reproduced each original mod exactly. Cancellation and failure tests also cover draining an active metadata batch.
+
+Prepare still spent 39.5 of 53.0 seconds in input surveys and 6.1 seconds in workers. Repeated surveys and ordered content reads remain a substantial cost. This change does not remove those checks or establish that a concurrency limit of 16 is optimal.
 
 ### Adding a row
 

@@ -31,6 +31,11 @@ function boot(name: "flagBuilder" | "coaDesigner" | "ddsPreview", error: string 
             meta: "",
             dataUri: "data:image/png;base64,",
             error,
+            mipLevels: [
+              { level: 0, width: 4, height: 4 },
+              { level: 1, width: 2, height: 2 },
+              { level: 2, width: 1, height: 1 },
+            ],
           });
   const bundle = buildSync({
     entryPoints: [path.join(__dirname, "../src/webviews", name, "app/main.ts")],
@@ -148,6 +153,36 @@ describe.each(["flagBuilder", "coaDesigner", "ddsPreview"] as const)("%s viewer 
     expect([...app.posted].reverse().find((m) => m.type === "copy")?.text).toBe(script);
     expect(app.errors).toEqual([]);
   });
+});
+
+it("requests stored mip levels, updates their image and dimensions, and recovers from a failed selection", () => {
+  const app = boot("ddsPreview");
+  const select = app.document.getElementById("mipLevel") as HTMLButtonElement;
+  const save = app.document.getElementById("savePng") as HTMLButtonElement;
+  select.click();
+  expect(app.document.querySelector('[role="option"][aria-selected="true"]')?.textContent).toBe(
+    "0 · 4×4 (base)"
+  );
+  const list = app.document.querySelector('[role="listbox"]')!;
+  list.dispatchEvent(new app.dom.window.KeyboardEvent("keydown", { key: "End", bubbles: true }));
+  list.dispatchEvent(new app.dom.window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  expect(app.document.querySelector('[role="listbox"]')).toBeNull();
+  expect(app.document.activeElement).toBe(select);
+  expect(select.textContent).toBe("2 · 1×1");
+  expect(app.posted.at(-1)).toEqual({ type: "mip", level: 2 });
+  expect(save.disabled).toBe(true);
+  app.push({ type: "mip", level: 2, dataUri: "data:image/png;base64,c3RvcmVk", meta: "1×1 · Mip 2 of 2" });
+  expect(app.document.getElementById("img")!.getAttribute("src")).toBe("data:image/png;base64,c3RvcmVk");
+  expect(app.document.getElementById("stageInfo")!.textContent).toContain("1×1");
+  expect(save.disabled).toBe(false);
+  select.click();
+  app.document.querySelectorAll<HTMLElement>('[role="option"]')[1].click();
+  app.push({ type: "mipError", level: 2, message: "truncated DDS mip level 1" });
+  expect(select.value).toBe("2");
+  expect(select.textContent).toBe("2 · 1×1");
+  expect(app.document.getElementById("mipError")!.textContent).toContain("truncated");
+  expect(save.disabled).toBe(false);
+  expect(app.errors).toEqual([]);
 });
 
 it("DDS decode errors still show the background tools and accept restored preferences", () => {

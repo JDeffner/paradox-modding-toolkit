@@ -33,11 +33,12 @@ installTips();
 
 const DIAGNOSTICS = "diagnostics";
 const MOD_REPORT = "mod-report";
+const LAUNCH_OPTIONS = "launch-options";
 const DIAG_SECTION = "Diagnostics";
 
 let hub: WikiHubEntry[] = [];
 let articles: WikiArticle[] = [];
-let games: { id: string; name: string }[] = [];
+let games: { id: string; name: string; shortName?: string }[] = [];
 /** The game the pages are shown for; the workspace's until the switch moves. */
 let game = "";
 /** null = the front page. */
@@ -76,8 +77,23 @@ function pressable(node: HTMLElement, onOpen: () => void): void {
 }
 
 function open(entry: WikiHubEntry): void {
-  if ("command" in entry.target) send({ type: "run", command: entry.target.command });
+  if ("command" in entry.target)
+    send({ type: "run", command: entry.target.command, ...(entry.selectedGame ? { game } : {}) });
   else select(entry.target.page);
+}
+
+/** Resolve every hub surface against the same selected reference game. */
+function hubEntries(): WikiHubEntry[] {
+  const meta = games.find((candidate) => candidate.id === game);
+  return hub.map((entry) =>
+    entry.selectedGame
+      ? {
+          ...entry,
+          label: `${meta?.shortName ?? meta?.name ?? game} ${entry.label}`,
+          tip: `${meta?.name ?? game}. ${entry.tip}`,
+        }
+      : entry
+  );
 }
 
 function row(iconName: IconName, label: string, tip: string | undefined, onOpen: () => void): HTMLElement {
@@ -126,7 +142,7 @@ function renderToc(nav: HTMLElement): void {
   home.setAttribute("aria-selected", String(selected === null));
   list.appendChild(home);
 
-  for (const entry of hub) {
+  for (const entry of hubEntries()) {
     const node = row(entry.icon, entry.label, entry.tip, () => open(entry));
     const page = "page" in entry.target ? entry.target.page : null;
     node.setAttribute("aria-selected", String(page !== null && page === selected));
@@ -150,7 +166,7 @@ function renderToc(nav: HTMLElement): void {
 
 /** Search results: matching hub entries, then matching pages, flat. */
 function renderSearch(nav: HTMLElement, needle: string): void {
-  const entries = hub.filter((e) => e.label.toLowerCase().includes(needle));
+  const entries = hubEntries().filter((e) => e.label.toLowerCase().includes(needle));
   const pages = visible().filter((a) => matchesArticle(a, needle));
   if (entries.length === 0 && pages.length === 0) {
     const empty = el("div", undefined, "No page matches that.");
@@ -213,7 +229,7 @@ function renderHub(content: HTMLElement): void {
     )
   );
   const cards = el("div", "cards");
-  for (const entry of hub) {
+  for (const entry of hubEntries()) {
     const card = el("button", "card");
     card.setAttribute("type", "button");
     const head = el("div", "head");
@@ -265,7 +281,11 @@ function renderDiagnosticsIndex(content: HTMLElement): void {
 }
 
 function renderModReport(content: HTMLElement): void {
-  renderCrumbs([{ label: "Home", to: null }], "Mod Report");
+  renderCrumbs(
+    [{ label: "Home", to: null }],
+    hubEntries().find((entry) => "page" in entry.target && entry.target.page === MOD_REPORT)?.label ??
+      "Mod Report"
+  );
   if (report === null) {
     const pending = el("div", undefined, "Building the report from the live index…");
     pending.id = "pending";
@@ -292,6 +312,24 @@ function renderArticle(content: HTMLElement, article: WikiArticle): void {
   if (article.section === DIAG_SECTION) trail.push({ label: DIAG_SECTION, to: DIAGNOSTICS });
   renderCrumbs(trail, article.title);
   content.innerHTML = renderMarkdown(article.markdown);
+  if (article.revision) {
+    const { lastEdited, uncommitted } = article.revision;
+    const revision = el("p", "article-revision");
+    if (lastEdited) {
+      revision.append(uncommitted ? "Last committed edit: " : "Last edited: ");
+      const date = el("time", undefined, lastEdited.slice(0, 10));
+      date.setAttribute("datetime", lastEdited);
+      date.title = `Last committed change to this article's source: ${lastEdited}`;
+      revision.append(date);
+    } else {
+      revision.append("Edit date unavailable");
+      revision.title = "This build has no complete Git history for the article's source.";
+    }
+    if (uncommitted) revision.append(" · Uncommitted changes");
+    const heading = content.querySelector("h1");
+    if (heading) heading.after(revision);
+    else content.prepend(revision);
+  }
   if (article.cards) renderCards(content, article.cards);
   if (article.outro) {
     const outro = el("div");
@@ -389,6 +427,7 @@ function select(id: string | null): void {
     report = null;
     send({ type: "modReport" });
   }
+  if (id === LAUNCH_OPTIONS) send({ type: "refreshLaunchOptions" });
   renderNav();
   renderPage();
   $("doc").scrollTop = 0;
@@ -413,6 +452,18 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
     select(msg.select && known(msg.select) ? msg.select : selected);
   } else if (msg.type === "select") {
     if (known(msg.id)) select(msg.id);
+  } else if (msg.type === "hub") {
+    hub = msg.hub;
+    renderNav();
+    renderPage();
+  } else if (msg.type === "launchOptions") {
+    articles = [...articles.filter((article) => article.id !== LAUNCH_OPTIONS), ...msg.articles];
+    renderNav();
+    if (selected === LAUNCH_OPTIONS) {
+      const scroll = $("doc").scrollTop;
+      renderPage();
+      $("doc").scrollTop = scroll;
+    }
   } else if (msg.type === "modReport") {
     report = msg.markdown;
     if (selected === MOD_REPORT) renderPage();
@@ -450,6 +501,10 @@ $("helpBtn").addEventListener("click", () =>
       {
         title: "The pages",
         items: [
+          {
+            lead: "Launch Options",
+            text: "reads launch flags, descriptions and warnings from the installed game's documentation. The page updates when the source file changes and when you open it again.",
+          },
           {
             lead: "Image Guidelines",
             text: "holds the sizes, formats and file names the game expects for previews, portraits, coats of arms and the rest.",

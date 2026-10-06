@@ -154,7 +154,7 @@ export function computeRequiredLocDiagnostics(
   if (patterns.length === 0) return [];
   const out: Diagnostic[] = [];
   for (const def of defs) {
-    if (def.source !== "mod") continue;
+    if (def.source !== "mod" || def.kind !== entry.kind) continue;
     for (const pattern of patterns) {
       const key = pattern.replace(/\$/g, def.name);
       if (data.index.lookup(key).some((d) => d.kind === "loc_key")) continue;

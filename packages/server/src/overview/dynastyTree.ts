@@ -13,7 +13,7 @@
  * (56 465) are NOT character-level keys: they sit inside a dated
  * `880.1.1 = { … }` block, which is also where `add_spouse` lives (6 811 of
  * 6 816). So the date of a birth is the KEY of the block that carries it.
- * Values: `name` is a quoted plain string (never a loc key), `female = yes`
+ * Values: `name` may be quoted or bare, including localization keys; `female = yes`
  * (12 229) with `no` spelled out 68 times, `birth = yes` or `birth = "date"`,
  * `death` additionally as a block (`death = { death_reason = … }`).
  *
@@ -172,8 +172,13 @@ export function readCharacterBlock(
         // A dated block dates its own statements: `birth`/`death` may say `yes`
         // or repeat the date, and `death = { … }` carries a reason.
         if (ikey === "birth") out.birth ??= key;
-        else if (ikey === "death") out.death ??= key;
-        else if (ikey === "add_spouse") {
+        else if (ikey === "death" && out.death === undefined) {
+          out.death = key;
+          const reason = blockOf(inner)?.statements.find(
+            (s) => s.kind === "assignment" && s.key.text === "death_reason"
+          );
+          if (reason) out.deathReason = scalarOf(reason) ?? undefined;
+        } else if (ikey === "add_spouse") {
           const spouse = scalarOf(inner);
           if (spouse) spouses.push(intern(spouse));
         }

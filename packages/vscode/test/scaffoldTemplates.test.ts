@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { renderScaffold, type ScaffoldFile, type ScaffoldResult } from "../src/scaffold/templates";
+import { renderScaffold, type ScaffoldFile, type ScaffoldResult } from "@px-lsp/server/games/renderScaffold";
 import { ck3Meta } from "../../server/src/games/ck3/meta";
 import { vic3Meta } from "../../server/src/games/vic3/meta";
 import { eu5Meta } from "../../server/src/games/eu5/meta";

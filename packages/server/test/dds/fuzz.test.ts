@@ -76,7 +76,7 @@ describe("fuzz / robustness", () => {
     dv.setUint32(80, 0x4, true);
     dv.setUint32(84, fourCC("DXT1"), true);
 
-    expect(ddsFormatInfo(buf)).toEqual({ format: "DXT1", width: 256, height: 256 });
+    expect(ddsFormatInfo(buf)).toEqual({ format: "DXT1", width: 256, height: 256, mipLevelCount: 1 });
     expect(() => decodeDds(buf)).toThrow(/truncated/);
 
     // Truncate the header itself
@@ -122,6 +122,6 @@ describe("fuzz / robustness", () => {
     expect(() => decodeDds(buf)).toThrow(/too large/);
     // The header peek still reports what the file claims, so the caller can say
     // why the preview is missing instead of "not a DDS".
-    expect(ddsFormatInfo(buf)).toEqual({ format: "unsupported", width: 65535, height: 65535 });
+    expect(ddsFormatInfo(buf)).toEqual({ format: "DXT1", width: 65535, height: 65535, mipLevelCount: 1 });
   });
 });

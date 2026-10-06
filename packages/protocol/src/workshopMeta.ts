@@ -31,17 +31,18 @@ export interface WorkshopMeta {
   translations?: Record<string, WorkshopTranslation>;
 }
 
-/** The parsed `<configDir>/workshop.json`, or null when absent/unreadable. */
+/** The parsed record, or null when absent. Invalid existing records are errors. */
 export function readWorkshopMeta(configDir: string): WorkshopMeta | null {
   try {
-    const raw = JSON.parse(fs.readFileSync(path.join(configDir, "workshop.json"), "utf8")) as Record<
-      string,
-      unknown
-    >;
-    if (typeof raw !== "object" || raw === null) return null;
+    const raw = JSON.parse(
+      fs.readFileSync(path.join(configDir, "workshop.json"), "utf8").replace(/^\uFEFF/, "")
+    ) as Record<string, unknown>;
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+      throw new Error("Workshop metadata must be an object");
     return raw as WorkshopMeta;
-  } catch {
-    return null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
   }
 }
 

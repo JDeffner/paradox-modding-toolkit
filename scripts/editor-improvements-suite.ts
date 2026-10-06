@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as vscode from "vscode";
-import { encodeDds, encodePng } from "../packages/server/src/dds";
+import { decodeDds, encodeDds, encodePng } from "../packages/server/src/dds";
 import type { BatchResult } from "../packages/vscode/src/imageBatch";
 import { run as checkBBCode } from "./ux-vscode-suite";
 import { run as checkEncoding } from "./encoding-vscode-suite";
@@ -63,7 +63,7 @@ async function checks(): Promise<void> {
   assert.ok(extension);
   await extension.activate();
   const commands = await vscode.commands.getCommands(true);
-  assert.ok(!commands.includes("px.openCompatch"), "compatch is absent from the packaged extension");
+  assert.ok(commands.includes("px.openCompatch"), "experimental compatch command is registered");
   const cdp = await renderer();
   try {
     await vscode.commands.executeCommand("px.tools.focus");
@@ -76,7 +76,7 @@ async function checks(): Promise<void> {
       assert.ok(initial.result.value.toUpperCase().includes(label), `${label} is visible before opening it`);
     for (const id of ["view", "create", "publish", "info", "settings"])
       assert.ok(!commands.includes(`px.${id}.focus`), `${id} no longer occupies a separate view`);
-    const initialShot = await cdp.send("Page.captureScreenshot", { format: "png" });
+    const initialShot = await cdp.send("Page.captureScreenshot", { format: "png", fromSurface: false });
     await fs.writeFile(path.join(scratch, "initial-sidebar.png"), Buffer.from(initialShot.data, "base64"));
     for (const id of ["tools", "utils", "test", "paths"]) {
       assert.ok(commands.includes(`px.${id}.focus`), `${id} has its own view`);
@@ -84,7 +84,7 @@ async function checks(): Promise<void> {
     }
     await vscode.commands.executeCommand("px.utils.focus");
     await pause(1000);
-    const shot = await cdp.send("Page.captureScreenshot", { format: "png" });
+    const shot = await cdp.send("Page.captureScreenshot", { format: "png", fromSurface: false });
     await fs.writeFile(path.join(scratch, "sidebar.png"), Buffer.from(shot.data, "base64"));
     const text = await cdp.send("Runtime.evaluate", {
       expression: "document.body.innerText",
@@ -101,7 +101,7 @@ async function checks(): Promise<void> {
     });
     await fs.writeFile(path.join(scratch, "moved-view.txt"), moved.result.value);
     assert.match(moved.result.value, /UTILS/i);
-    const movedShot = await cdp.send("Page.captureScreenshot", { format: "png" });
+    const movedShot = await cdp.send("Page.captureScreenshot", { format: "png", fromSurface: false });
     await fs.writeFile(path.join(scratch, "moved-view.png"), Buffer.from(movedShot.data, "base64"));
     const dir = path.join(scratch, "Mod/images");
     await fs.mkdir(dir, { recursive: true });
@@ -189,8 +189,10 @@ async function checks(): Promise<void> {
     await fs.writeFile(input, encodePng(2, 1, pixels));
     const toDds = vscode.commands.executeCommand<BatchResult>("px.convertToDds", vscode.Uri.file(input));
     await pick(3);
+    await pick(0);
     await pick(1);
     assert.equal((await toDds)?.written.length, 1);
+    assert.deepEqual(decodeDds(await fs.readFile(path.join(dir, "other.dds"))).pixels, pixels);
     const corrupt = path.join(dir, "broken.dds");
     await fs.writeFile(corrupt, "bad DDS");
     const failed = vscode.commands.executeCommand<BatchResult>(

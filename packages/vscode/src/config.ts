@@ -11,6 +11,10 @@ import { findGameFolder } from "./steamDetect";
 import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import { detectGameId, GAME_METAS } from "./gameDetect";
+import { inspectMachineSetting, readMachineSetting } from "./machineSettings";
+import type { MachineSettingKey } from "@px-lsp/protocol/machineSettings";
+import { readProjectSettings } from "@px-lsp/protocol/projectSettingsFile";
+import { getProjectSetting, type ProjectSettingKey } from "@px-lsp/protocol/projectSettings";
 
 export interface PxConfig {
   /** Active game profile id: `px.gameId`, or auto-detected from the mod's
@@ -142,6 +146,28 @@ export function gameDocsSubdir(meta: GameMeta, subdir: string): string | null {
   return candidates.find((c) => fs.existsSync(c)) ?? candidates[0] ?? null;
 }
 
+/** Reference browsing may use another game's personal paths, never legacy workspace paths. */
+export function referenceGamePaths(
+  meta: GameMeta,
+  workspace: Pick<PxConfig, "gameId" | "gamePath" | "logsPath">
+): { gamePath: string | null; logsPath: string | null } {
+  if (meta.id === workspace.gameId) return { gamePath: workspace.gamePath, logsPath: workspace.logsPath };
+  const personal = (key: "gamePath" | "logsPath"): string | null => {
+    for (const scope of ["folder", "workspace", "default"] as const) {
+      const setting = inspectMachineSetting<string>(key, meta.id, scope);
+      if (setting.error) throw new Error(setting.error);
+      if (setting.ownValue !== undefined) return setting.ownValue.trim() || null;
+    }
+    return null;
+  };
+  const install = personal("gamePath") ?? findGameFolder(meta.name);
+  return {
+    gamePath: install ? (gameDataDir(install) ?? install) : null,
+    logsPath:
+      personal("logsPath") ?? defaultLogsPath(meta.docsFolderName, meta.steamAppId, meta.scriptDocsSubdir),
+  };
+}
+
 /**
  * Where the Coat of Arms Designer keeps its library, whether or not it exists
  * yet (the first export creates it): `px.coaLibraryDir` when set, else
@@ -154,17 +180,60 @@ export function gameDocsSubdir(meta: GameMeta, subdir: string): string | null {
  */
 export const COA_LIBRARY_SUBDIR = "px-toolkit/coat_of_arms";
 
-export function coaLibraryDir(meta: GameMeta): string | null {
-  const set = (vscode.workspace.getConfiguration("px").get<string>("coaLibraryDir") ?? "").trim();
+export function coaLibraryDir(meta: GameMeta, resource?: vscode.Uri): string | null {
+  const set = (readMachineSetting<string>("coaLibraryDir", meta.id, resource) ?? "").trim();
   return set === "" ? gameDocsSubdir(meta, COA_LIBRARY_SUBDIR) : set;
 }
 
-export function readConfig(): PxConfig {
-  const cfg = vscode.workspace.getConfiguration("px");
+export function readConfig(resource?: vscode.Uri): PxConfig {
+  const cfg = vscode.workspace.getConfiguration("px", resource);
   const warnings: string[] = [];
+  const folders = vscode.workspace.workspaceFolders ?? [];
+  const rootCandidates = folders.flatMap((folder) => expandModContainer(folder.uri.fsPath));
+  const focusedRoot = resource
+    ? rootCandidates.find((root) => root === resource.fsPath || isUnder(root, resource.fsPath))
+    : undefined;
+  const initialRoot =
+    focusedRoot ||
+    (cfg.get<string>("modPath") ?? "").trim() ||
+    rootCandidates[0] ||
+    folders[0]?.uri.fsPath ||
+    null;
+  const explicitGame = (cfg.get<string>("gameId") ?? "auto").trim().toLowerCase();
+  const inferredGame = detectGameId(explicitGame, initialRoot);
+  const preliminaryResource = resource ?? (initialRoot ? vscode.Uri.file(initialRoot) : undefined);
+  const boundMod = inspectMachineSetting<string>(
+    "modPath",
+    inferredGame,
+    "workspace",
+    preliminaryResource
+  ).value?.trim();
+  const detectionRoot = focusedRoot || (boundMod && fs.existsSync(boundMod) ? boundMod : initialRoot);
+  const machineResource = resource ?? (detectionRoot ? vscode.Uri.file(detectionRoot) : undefined);
+  const modSettings = vscode.workspace.getConfiguration("px", machineResource);
+  const project = detectionRoot
+    ? readProjectSettings(detectionRoot, GAME_METAS[inferredGame] ?? ck3Meta)
+    : undefined;
+  if (project?.error) warnings.push(`Project settings: ${project.error}`);
+  const projectGame = project?.settings?.gameId;
+  const gameId = projectGame && Object.hasOwn(GAME_METAS, projectGame) ? projectGame : inferredGame;
+  if (projectGame && !Object.hasOwn(GAME_METAS, projectGame)) {
+    warnings.push(`Project game (${projectGame}) is not supported by this toolkit build.`);
+  }
+  if (project?.settings?.gameId && explicitGame !== "auto" && explicitGame !== gameId) {
+    warnings.push(`Project game (${gameId}) overrides the personal game setting (${explicitGame}).`);
+  }
+  const machine = <T>(key: MachineSettingKey): T | undefined => {
+    const result = inspectMachineSetting<T>(key, gameId, "workspace", machineResource);
+    if (result.error && !warnings.includes(result.error)) warnings.push(result.error);
+    return result.value;
+  };
+  const team = <T>(key: ProjectSettingKey): T | undefined =>
+    ((project?.settings ? getProjectSetting(project.settings, key) : undefined) as T | undefined) ??
+    modSettings.get<T>(key);
 
-  const readPath = (key: string, label: string): string | null => {
-    const value = (cfg.get<string>(key) ?? "").trim();
+  const readPath = (key: MachineSettingKey, label: string): string | null => {
+    const value = (machine<string>(key) ?? "").trim();
     if (value === "") return null;
     if (!fs.existsSync(value)) {
       warnings.push(`${label} ("px.${key}") does not exist: ${value}`);
@@ -194,7 +263,7 @@ export function readConfig(): PxConfig {
   let modPath = readPath("modPath", "Mod path");
 
   // `px.excludedMods`: workspace mods the user opted out of indexing.
-  const excludedMods = sanitizeStringList(cfg.get("excludedMods"))
+  const excludedMods = sanitizeStringList(machine("excludedMods"))
     .map((p) => p.trim())
     .filter((p) => p !== "");
   const excludedKeys = new Set(excludedMods.map(normKey));
@@ -217,7 +286,7 @@ export function readConfig(): PxConfig {
       modPath = children[0];
     }
   }
-  if (modPath === null && (cfg.get<string>("modPath") ?? "").trim() === "") {
+  if (modPath === null && (machine<string>("modPath") ?? "").trim() === "") {
     // Default: the first workspace mod; a non-mod folder keeps the old
     // first-folder fallback so setup warnings stay meaningful. Game installs are
     // never a mod, so they never become the default modPath.
@@ -252,7 +321,7 @@ export function readConfig(): PxConfig {
     seenParents.add(key);
     parentPaths.push(p);
   };
-  for (const raw of sanitizeStringList(cfg.get("parentMods"))) {
+  for (const raw of sanitizeStringList(machine("parentMods"))) {
     const value = raw.trim();
     if (value === "") continue;
     if (!fs.existsSync(value)) {
@@ -269,8 +338,6 @@ export function readConfig(): PxConfig {
   // per-game auto-detection (Steam library for the install, Documents for
   // the logs). Tiger: an explicit px.tigerPath is honored everywhere; games
   // without a tiger (meta.tiger absent) skip tiger entirely downstream.
-  const primaryRoot = modPath ?? workspaceRoots[0] ?? null;
-  const gameId = detectGameId((cfg.get<string>("gameId") ?? "auto").trim().toLowerCase(), primaryRoot);
   const activeMeta = GAME_METAS[gameId] ?? ck3Meta;
   // Auto-detection only describes a workspace that IS a Paradox workspace
   // (perf round 3). `onStartupFinished` activates this extension in every
@@ -292,7 +359,7 @@ export function readConfig(): PxConfig {
     // texture roots, vanilla index) with no vanilla at all.
     gamePath = findGameFolder(activeMeta.name);
   }
-  if (logsPath === null && (cfg.get<string>("logsPath") ?? "").trim() === "") {
+  if (logsPath === null && (machine<string>("logsPath") ?? "").trim() === "") {
     logsPath = defaultLogsPath(activeMeta.docsFolderName, activeMeta.steamAppId, activeMeta.scriptDocsSubdir);
   }
   if (activeMeta.tiger === undefined) tigerPath = null;
@@ -321,10 +388,10 @@ export function readConfig(): PxConfig {
     calendar: sanitizeCalendar(cfg.get("calendar")),
     tigerRunOn,
     enableForWorkspace,
-    diagnosticsIgnore: sanitizeStringList(cfg.get("diagnostics.ignore")),
-    diagnosticsIgnorePatterns: sanitizeStringList(cfg.get("diagnostics.ignorePatterns")),
+    diagnosticsIgnore: sanitizeStringList(team("diagnostics.ignore")),
+    diagnosticsIgnorePatterns: sanitizeStringList(team("diagnostics.ignorePatterns")),
     diagnosticsVanilla: cfg.get<boolean>("diagnostics.vanilla") ?? false,
-    requireDescriptor: cfg.get<boolean>("diagnostics.requireDescriptor") ?? false,
+    requireDescriptor: team<boolean>("diagnostics.requireDescriptor") ?? false,
     tracePerf: cfg.get<boolean>("trace.perf") ?? false,
     isCk3Workspace,
     warnings,

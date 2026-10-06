@@ -19,6 +19,62 @@ const DEF_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 export const EVENT_ID = /^[A-Za-z0-9_-]+\.\d+$/;
 const TITLE_KEY = /^[ekdcb]_[A-Za-z0-9_-]+$/;
 
+/** Database declarations and semantic spans share the profile's entry-mode grammar. */
+export function normalizeDeclarationName(text: string): {
+  name: string;
+  offset: number;
+  entryMode?: string;
+} | null {
+  const entryMode = activeProfile().entryModes?.find((mode) => text.startsWith(`${mode}:`));
+  const offset = entryMode ? entryMode.length + 1 : 0;
+  const name = text.slice(offset);
+  return DEF_NAME.test(name) ? { name, offset, ...(entryMode ? { entryMode } : {}) } : null;
+}
+
+/** Schema markers distinguish databases that share a folder across game versions. */
+export function topLevelDefinitionKind(entry: SchemaEntry, stmt: Statement): string {
+  const rule = entry.kindByField;
+  return rule &&
+    stmt.kind === "assignment" &&
+    stmt.value?.kind === "block" &&
+    stmt.value.statements.some(
+      (child) =>
+        child.kind === "assignment" &&
+        (child.op === "=" || child.op === "?=") &&
+        !child.key.quoted &&
+        child.key.text === rule.field &&
+        child.value?.kind === "scalar"
+    )
+    ? rule.kind
+    : (rule?.otherwise ?? entry.kind);
+}
+
+/** The extractor and symbol resolver must agree about nested declaration sites. */
+export function nestedDefinitionKind(entry: SchemaEntry, path: readonly Statement[]): string | null {
+  const rule = entry.nestedDefinitions;
+  if (!rule || path.length !== rule.path.length + 2) return null;
+  if (entry.kindByField && topLevelDefinitionKind(entry, path[0]) === rule.kind) return null;
+  if (
+    path.some(
+      (s) =>
+        s.kind !== "assignment" ||
+        s.key.quoted ||
+        s.value?.kind !== "block" ||
+        (s.op !== "=" && s.op !== "?=") ||
+        !DEF_NAME.test(s.key.text)
+    )
+  )
+    return null;
+  const last = path.at(-1)!;
+  if (last.kind !== "assignment" || rule.excludedKeys?.includes(last.key.text)) return null;
+  return rule.path.every((key, i) => {
+    const wrapper = path[i + 1];
+    return wrapper.kind === "assignment" && wrapper.key.text === key;
+  })
+    ? rule.kind
+    : null;
+}
+
 export function extractDefinitions(
   content: string,
   entry: SchemaEntry,
@@ -55,9 +111,9 @@ export function extractDefinitionsParsed(
   // Raw lines (split on \n; entries may keep a trailing \r) for encoding-safe
   // leading-comment capture (§E). Computed once per file, near-zero cost.
   const rawLines = content.split("\n");
-  const push = (name: string, offset: number, container?: string) => {
+  const push = (name: string, offset: number, container?: string, kind = entry.kind) => {
     const line = lines.positionAt(offset).line;
-    const def: Definition = { name, kind: entry.kind, file, line, source };
+    const def: Definition = { name, kind, file, line, source };
     if (container !== undefined) def.container = container;
     const block = docForDefinition(rawLines, line);
     if (block) {
@@ -79,11 +135,6 @@ export function extractDefinitionsParsed(
   // `alias = { a b }` (loc [Concept] links). Deduped per file.
   const seenInnerNames = new Set<string>();
 
-  // Database entry modes (`REPLACE:key = { ... }`), for games whose profile
-  // declares them: index under the bare name, keep the mode on the Definition.
-  const entryModes = activeProfile().entryModes;
-  const modePrefix = entryModes?.length ? new RegExp(`^(${entryModes.join("|")}):`) : null;
-
   switch (extraction) {
     case "named-block":
       for (const stmt of root.statements) {
@@ -100,15 +151,10 @@ export function extractDefinitionsParsed(
       for (const stmt of root.statements) {
         if (stmt.kind !== "assignment" || stmt.key.quoted) continue;
         if (stmt.op !== "=" && stmt.op !== "?=") continue;
-        let name = stmt.key.text;
-        let entryMode: string | undefined;
-        const mode = modePrefix?.exec(name);
-        if (mode) {
-          entryMode = mode[1];
-          name = name.slice(mode[0].length);
-        }
-        if (!DEF_NAME.test(name) || name === "namespace") continue;
-        push(name, stmt.key.range.start);
+        const declaration = normalizeDeclarationName(stmt.key.text);
+        if (!declaration || declaration.name === "namespace") continue;
+        const { name, entryMode, offset } = declaration;
+        push(name, stmt.key.range.start + offset, undefined, topLevelDefinitionKind(entry, stmt));
         if (entryMode) defs[defs.length - 1].entryMode = entryMode;
         if (harvestParams) {
           const body = content.slice(stmt.range.start, stmt.range.end);
@@ -267,6 +313,14 @@ export function extractDefinitionsParsed(
       scan(root.statements);
       break;
     }
+  }
+  if (entry.nestedDefinitions) {
+    walkStatements(root, (stmt, ancestors) => {
+      if (stmt.kind !== "assignment") return;
+      const path = ancestors.filter((s) => s.kind === "assignment");
+      const kind = nestedDefinitionKind(entry, [...path, stmt]);
+      if (kind) push(stmt.key.text, stmt.key.range.start, path[0].key.text, kind);
+    });
   }
   // Every string above is a slice of `content` and would pin the whole file for
   // as long as the index holds the definition (§C2).

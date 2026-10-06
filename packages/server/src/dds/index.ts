@@ -6,7 +6,7 @@ import {
   type TexturePreviewBackground,
 } from "@px-lsp/protocol/texturePreview";
 
-export { decodeDds, ddsFormatInfo } from "./decoder";
+export { decodeDds, ddsFormatInfo, ddsMipLevels, type DdsMipLevel } from "./decoder";
 export { encodePng } from "./png";
 export { decodeTga } from "./tga";
 export { encodeDds, hasTransparency, type DdsEncodeFormat } from "./encode";

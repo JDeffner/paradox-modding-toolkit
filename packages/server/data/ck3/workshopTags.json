@@ -1,0 +1,42 @@
+{
+  "source": "https://steamcommunity.com/workshop/browse/?appid=1158310&l=english",
+  "groups": [
+    {
+      "label": "Category",
+      "tags": [
+        "Alternative History",
+        "Balance",
+        "Character Focuses",
+        "Character Interactions",
+        "Culture",
+        "Decisions",
+        "Events",
+        "Fixes",
+        "Gameplay",
+        "Graphics",
+        "Historical",
+        "Map",
+        "Religion",
+        "Sound",
+        "Total Conversion",
+        "Translation",
+        "Utilities",
+        "Warfare",
+        "Interface",
+        "Submod"
+      ]
+    },
+    {
+      "label": "Compatible Version",
+      "tags": [
+        "1.18 'Crane'",
+        "1.17 'Ascendant'",
+        "1.16 'Chamfron'",
+        "1.15 'Crown'",
+        "Older",
+        "1.19 'Scribe'",
+        "1.20 'Crozier'"
+      ]
+    }
+  ]
+}

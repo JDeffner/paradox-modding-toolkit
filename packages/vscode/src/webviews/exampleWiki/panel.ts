@@ -26,7 +26,11 @@ export interface ExampleWikiTarget {
 }
 
 export interface ExampleWikiActions {
-  fetchIndex(): Promise<ExampleWikiIndex>;
+  gameId: string;
+  gameName: string;
+  shortName: string;
+  contextKey: string;
+  fetchIndex(refresh?: boolean): Promise<ExampleWikiIndex>;
   fetchEntry(params: ExampleWikiEntryParams): Promise<ExampleWikiDetail | null>;
 }
 
@@ -35,7 +39,9 @@ export class ExampleWikiPanel {
   private static readonly viewType = "px.exampleWiki";
 
   private readonly panel: vscode.WebviewPanel;
-  private readonly actions: ExampleWikiActions;
+  private actions: ExampleWikiActions;
+  private generation = 0;
+  private ready = false;
   private disposables: vscode.Disposable[] = [];
   private disposed = false;
 
@@ -53,7 +59,7 @@ export class ExampleWikiPanel {
     const source = webviewSource(context);
     this.panel = vscode.window.createWebviewPanel(
       ExampleWikiPanel.viewType,
-      "Examples Wiki",
+      `${actions.shortName} Examples Wiki`,
       vscode.ViewColumn.Active,
       {
         enableScripts: true,
@@ -94,8 +100,21 @@ export class ExampleWikiPanel {
   ): void {
     const existing = ExampleWikiPanel.instance;
     if (existing) {
+      const changed = existing.actions.contextKey !== actions.contextKey;
+      existing.actions = actions;
+      existing.panel.title = `${actions.shortName} Examples Wiki`;
+      if (changed) {
+        existing.generation++;
+        existing.pending = target;
+        if (existing.ready) void existing.loadIndex(true);
+      }
       existing.panel.reveal(vscode.ViewColumn.Active);
-      if (target) existing.post({ type: "reveal", ...target });
+      if (target && !changed) {
+        if (existing.ready) {
+          existing.pending = undefined;
+          existing.post({ type: "reveal", ...target });
+        } else existing.pending = target;
+      }
       return;
     }
     ExampleWikiPanel.instance = new ExampleWikiPanel(context, actions, target);
@@ -114,33 +133,44 @@ export class ExampleWikiPanel {
     void this.panel.webview.postMessage(msg);
   }
 
-  private async loadIndex(): Promise<void> {
-    this.post({ type: "loading" });
+  private async loadIndex(reset = false, refresh = false): Promise<void> {
+    const generation = ++this.generation;
+    const actions = this.actions;
+    this.post({ type: "loading", ...(reset ? { reset: true } : {}), gameName: actions.gameName });
     try {
-      const index = await this.actions.fetchIndex();
+      const index = await actions.fetchIndex(refresh);
+      if (generation !== this.generation || this.disposed) return;
       this.post({ type: "index", index });
       const target = this.pending;
       this.pending = undefined;
       if (target) this.post({ type: "reveal", ...target });
     } catch (err) {
+      if (generation !== this.generation || this.disposed) return;
       this.post({ type: "error", message: message(err) });
     }
   }
 
   private async onMessage(msg: AppToHost): Promise<void> {
     switch (msg.type) {
-      case "refresh":
-        await this.loadIndex();
+      case "refresh": {
+        const refresh = this.ready;
+        this.ready = true;
+        await this.loadIndex(false, refresh);
         break;
+      }
       case "select": {
+        const generation = this.generation;
+        const actions = this.actions;
         let detail: ExampleWikiDetail | null = null;
         try {
-          detail = await this.actions.fetchEntry({ name: msg.name, kind: msg.kind });
+          detail = await actions.fetchEntry({ name: msg.name, kind: msg.kind });
         } catch (err) {
+          if (generation !== this.generation || this.disposed) return;
           this.post({ type: "error", message: message(err) });
           return;
         }
-        this.post({ type: "entry", name: msg.name, kind: msg.kind, detail });
+        if (generation === this.generation && !this.disposed)
+          this.post({ type: "entry", name: msg.name, kind: msg.kind, detail });
         break;
       }
       case "open":

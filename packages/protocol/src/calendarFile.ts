@@ -11,7 +11,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { sanitizeCalendar, type CalendarSetting } from "./calendar";
-import { migrateConfigDir, resolveConfigDir, type ConfigDirNames } from "./configDir";
+import { canonicalConfigPath, resolveConfigPath, type ConfigDirNames } from "./configDir";
 
 export const CALENDAR_FILE = "calendar.json";
 
@@ -26,7 +26,7 @@ export interface CalendarFile {
 
 /** The path the file is read from: the mod's config dir (legacy name included). */
 export function calendarFilePath(modRoot: string, names: ConfigDirNames): string {
-  return path.join(resolveConfigDir(modRoot, names), CALENDAR_FILE);
+  return resolveConfigPath(modRoot, names, CALENDAR_FILE);
 }
 
 /**
@@ -35,12 +35,21 @@ export function calendarFilePath(modRoot: string, names: ConfigDirNames): string
  * client can say so instead of silently showing no dates.
  */
 export function readCalendarFile(modRoot: string, names: ConfigDirNames): CalendarFile | null {
-  const file = calendarFilePath(modRoot, names);
+  let file: string;
+  try {
+    file = calendarFilePath(modRoot, names);
+  } catch (error) {
+    return {
+      file: path.join(modRoot, names.configDirName, CALENDAR_FILE),
+      error: `not readable (${(error as Error).message})`,
+    };
+  }
   let text: string;
   try {
     text = fs.readFileSync(file, "utf8");
-  } catch {
-    return null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    return { file, error: `not readable (${(error as Error).message})` };
   }
   let raw: unknown;
   try {
@@ -60,15 +69,27 @@ export function readCalendarFile(modRoot: string, names: ConfigDirNames): Calend
   return { file, calendar };
 }
 
-/**
- * Write the declaration into the mod (renaming a legacy config dir first,
- * like every other config-dir write). Returns the file path.
- */
+/** Write the current artifact, preserving extensions and leaving the legacy source in place. */
 export function writeCalendarFile(modRoot: string, names: ConfigDirNames, cal: CalendarSetting): string {
-  const dir = migrateConfigDir(modRoot, names);
-  fs.mkdirSync(dir, { recursive: true });
-  const file = path.join(dir, CALENDAR_FILE);
-  fs.writeFileSync(file, JSON.stringify(cal, null, 2) + "\n", "utf8");
+  if (!sanitizeCalendar(cal)) throw new Error("Not a usable calendar");
+  const source = calendarFilePath(modRoot, names);
+  const file = canonicalConfigPath(modRoot, names, CALENDAR_FILE);
+  let current: Record<string, unknown> = {};
+  try {
+    const raw: unknown = JSON.parse(fs.readFileSync(source, "utf8").replace(/^\uFEFF/, ""));
+    if (!raw || typeof raw !== "object" || Array.isArray(raw) || !sanitizeCalendar(raw))
+      throw new Error("Existing calendar declaration is not usable");
+    current = raw as Record<string, unknown>;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+  for (const key of ["epoch", "after", "before", "months"] as const) delete current[key];
+  const content = JSON.stringify({ ...current, ...cal }, null, 2) + "\n";
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, content, {
+    encoding: "utf8",
+    flag: source === file && fs.existsSync(file) ? "w" : "wx",
+  });
   return file;
 }
 

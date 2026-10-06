@@ -20,7 +20,7 @@ to humans too.
 
 ## Setup
 
-Use Node 22.22.2 or later in the Node 22 line, or Node 24.15.0 or later. Use the exact [pnpm](https://pnpm.io) version in the root `packageManager` field (currently 11.25.0). A game install is not required for most work; the test suite skips what it cannot reach. These are development requirements. The standalone server also runs on Node 18.
+Use a Node version accepted by `engines.node` in the root [package.json](package.json). That field is the development runtime contract, including the minimum versions required by the webview test dependencies. Use the exact [pnpm](https://pnpm.io) version in its `packageManager` field. A game install is not required for most work; corpus tests skip when their configured inputs are unavailable. These are development requirements. The standalone server also runs on Node 18, which CI checks separately.
 
 ```bash
 git clone https://github.com/JDeffner/paradox-modding-toolkit.git
@@ -39,8 +39,7 @@ rebuilds everything and opens an Extension Development Host with the toolkit
 loaded. Open a mod folder in that window to try your change;
 `Developer: Reload Window` there picks up a rebuild.
 
-When you want to test the real packaged artifact, `pnpm run package:test`
-builds a .vsix and installs it into your own VS Code. Never commit a .vsix.
+To test the packaged extension, first launch VS Code with `code --new-window --profile "PXTK Development" <test-workspace>` to create the profile. Then `pnpm run package:test` builds a .vsix and installs it into **PXTK Development**. Reload that profile's window and exercise the changed action there. Keep the normal development window separate. Automated extension-host tests also need disposable `--user-data-dir` and `--extensions-dir` folders under `.local/testing/`; a profile alone does not fully isolate a test. Never commit a .vsix.
 
 Working on a webview panel? The dev loops section of
 [docs/webviews.md](docs/webviews.md) has two faster ones: a browser dev
@@ -94,7 +93,7 @@ PRs that fight them stall.
 3. **Files we write must be correct by construction.** The games fail
    silently, so every writer produces the exact encoding and layout the
    engine needs (localization is UTF-8 with BOM, correct header, correct
-   filename; script files start with their `namespace =` line).
+   filename; script `.txt` files use UTF-8 with BOM; event files start with their `namespace =` line).
 4. **No `vscode` imports** in `packages/server` or `packages/protocol`.
    Server and protocol code must run and test in plain Node.
 5. **Naming: `px` is the product, `ck3` is the game.** Settings, commands

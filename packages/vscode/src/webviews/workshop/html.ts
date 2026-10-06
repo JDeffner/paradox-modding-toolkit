@@ -25,10 +25,31 @@ ${uiCss}
   body { overflow: hidden; }
   #app { display: flex; flex-direction: column; height: 100%; }
   #toolbar {
-    display: flex; align-items: center; gap: 6px; flex: 0 0 auto;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 0 0 auto;
     padding: 6px 8px; border-bottom: 1px solid var(--px-border);
   }
   #toolbar .px-grow { flex: 1 1 auto; }
+  #versionControls { display: flex; align-items: center; gap: 4px; }
+  #listing { width: auto; min-width: 150px; max-width: 280px; }
+  #legacyNotice { padding: 12px 20px; border-bottom: 1px solid var(--px-border); font-size: var(--px-text-sm); line-height: 1.55; }
+  #app[data-legacy] { background: color-mix(in oklch, var(--px-bg), var(--px-primary) 6%); }
+  #app[data-legacy] #toolbar { background: color-mix(in oklch, var(--px-bg), var(--px-primary) 18%); }
+  #app[data-legacy] #legacyNotice { background: color-mix(in oklch, var(--px-bg), var(--px-primary) 10%); }
+  #app[data-legacy] .section { background: color-mix(in oklch, var(--px-bg), var(--px-primary) 4%); }
+  #app[data-legacy] #listing { font-weight: 600; }
+  #stopWaiting[hidden], #legacyNotice[hidden], #listing[hidden], #createLegacy[hidden] { display: none; }
+  .legacy-form { order: -1; width: 100%; max-width: 720px; box-sizing: border-box; align-self: flex-start; line-height: 1.6; }
+  .legacy-form h2, .legacy-form p { margin: 0; }
+  .legacy-form .px-dialog-title { font-size: 18px; }
+  .legacy-error { color: var(--px-destructive); }
+  .legacy-error:empty { display: none; }
+  .legacy-sources { border: 0; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .legacy-sources legend { padding: 0; margin-bottom: 6px; }
+  .legacy-source { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .legacy-source input { accent-color: var(--px-primary); margin: 0; }
+  .legacy-zip-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .legacy-zip-row[hidden] { display: none; }
+  .legacy-zip-row button { flex-shrink: 0; }
   /* Indeterminate activity line under the toolbar while the bridge runs. */
   #busy { height: 2px; flex: 0 0 auto; overflow: hidden; visibility: hidden; }
   #busy.on { visibility: visible; }
@@ -259,15 +280,22 @@ ${BBPREV_CSS}
 <div id="app">
   <div id="toolbar">
     <button id="mod" class="px-btn px-dropdown" data-variant="outline" style="width:auto;max-width:420px;min-width:220px" data-tip="Mod this panel manages">${icon("package")}<span class="px-truncate"></span>${icon("chevronDown")}</button>
+    <button id="openPage" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open the item's Workshop page in Steam (in the browser when Steam is not installed)" data-tip-wrap>${icon("externalLink")}</button>
     <button id="refresh" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Fetch the item's live state from Steam">${icon("rotate")}</button>
     <button id="pull" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Download the listing from Steam into the workshop folder as files." data-tip-wrap>${icon("download")}</button>
     <span id="liveState" class="px-muted px-xs"></span>
     <span id="jobProgress" hidden><span class="step"></span><span class="count"></span><span class="bar"><span></span></span></span>
     <span class="px-grow"></span>
-    <button id="openPage" class="px-btn" data-variant="ghost" data-size="icon" data-tip="Open the item's Workshop page in Steam (in the browser when Steam is not installed)" data-tip-wrap>${icon("externalLink")}</button>
-    <button id="upload" class="px-btn" data-variant="default" data-tip="Upload what is checked under Publish">${icon("cloudUpload")} Upload</button>
+    <div id="versionControls">
+      <button id="createLegacy" class="px-btn" data-variant="outline">${icon("plus")} Create legacy version</button>
+      <button id="listing" class="px-btn px-dropdown" data-variant="outline" aria-label="Workshop version" aria-haspopup="listbox" hidden><span class="px-truncate">Live version</span>${icon("chevronDown")}</button>
+      <button id="legacyHelp" class="px-btn" data-variant="ghost" data-size="icon-sm" aria-label="About legacy versions" data-tip="A legacy version is a separate Workshop item for an older game version. Creation copies listing files locally. Choose current mod files or save files from a ZIP for its first upload; later uploads change listing information only. The live item stays unchanged." data-tip-wrap>${icon("circleHelp")}</button>
+    </div>
+    <button id="upload" class="px-btn" data-variant="default" data-tip="Upload what is checked under Publish">${icon("cloudUpload")}<span id="uploadLabel">Upload</span></button>
+    <button id="stopWaiting" class="px-btn" data-variant="outline" hidden>Stop waiting</button>
     <button id="helpBtn" class="px-btn" data-variant="ghost" data-size="icon" data-tip="How this panel works" data-tip-side="left" aria-label="How this panel works">${icon("circleHelp")}</button>
   </div>
+  <div id="legacyNotice" role="status" hidden></div>
   <div id="busy"><div></div></div>
   <div id="main"><div id="page">
 
@@ -280,7 +308,7 @@ ${BBPREV_CSS}
     <div class="cols">
       <div class="col">
       <div class="section" id="itemSection">
-        <div class="px-panel-title">Details
+        <div class="px-panel-title"><span id="detailsHeading">Details</span>
           <span class="px-grow"></span>
           <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
           <label class="hdr-switch" data-tip="Upload the details: title, visibility, tags and the preview image. The description has its own switch." data-tip-wrap data-tip-side="left"><span class="px-switch"><input id="incDetails" type="checkbox" checked /><span></span></span></label>
@@ -357,7 +385,7 @@ ${BBPREV_CSS}
         <div id="previewsHint" class="px-muted px-xs" style="margin-bottom:6px"></div>
         <div id="gallery" class="gallery"></div>
         <div class="hintline" style="margin-top:6px">
-          <button id="addPreviews" class="px-btn" data-variant="outline" data-size="sm" data-tip="Copy images into the previews folder of the listing. Under 1 MB each; Steam shows them in file-name order." data-tip-wrap>${icon("plus")} Add images</button>
+          <button id="addPreviews" class="px-btn" data-variant="outline" data-size="sm" data-tip="Copy images into the previews folder. Upload asks before making smaller copies of large PNG or JPEG images. Originals and copies are kept. GIFs must be under 1 MB." data-tip-wrap>${icon("plus")} Add images</button>
           <button id="openPreviews" class="px-btn" data-variant="ghost" data-size="sm" data-tip="Open the previews folder. Reorder by renaming, remove by deleting." data-tip-wrap>${icon("folderOpen")} Folder</button>
         </div>
         <div class="field" style="margin-top:8px">
@@ -368,7 +396,7 @@ ${BBPREV_CSS}
       </div>
       <div class="col">
       <div class="section" id="publishSection">
-        <div class="px-panel-title">Publish</div>
+        <div class="px-panel-title"><span id="publishHeading">Publish</span></div>
         <div id="checks"></div>
         <div id="publishRows">
           <div id="publishSummary"></div>
@@ -383,13 +411,13 @@ ${BBPREV_CSS}
         </div>
       </div>
       <div class="section" id="modFilesSection">
-        <div class="px-panel-title">Mod files
+        <div class="px-panel-title"><span id="filesHeading">Mod files</span>
           <span class="px-grow"></span>
           <span class="px-badge off-chip" data-variant="outline">Not uploaded</span>
           <label class="hdr-switch" data-tip="Upload every file of the mod, replacing what subscribers have." data-tip-wrap data-tip-side="left"><span class="px-switch"><input id="incContent" type="checkbox" checked /><span></span></span></label>
         </div>
         <div id="modRoot" class="px-truncate"></div>
-        <div class="px-muted px-xs">Everything in the mod folder except the workshop folder and what .pxignore excludes.</div>
+        <div id="contentHint" class="px-muted px-xs">Everything in the mod folder except the workshop folder and what .pxignore excludes.</div>
       </div>
       <div class="section" id="noteSection">
         <div class="px-panel-title">Changenote

@@ -37,6 +37,14 @@ Open **Start Here** in the PX Toolkit sidebar to create a mod or find an existin
 
 ## What you get
 
+The upcoming 0.6.0 update is prepared as the 0.5.5 prerelease. See the [preview release notes](docs/release/0.5.5.md) for its scope and validation limits.
+
+Open **Toolkit Settings** from Project > Settings > All settings to search, filter and reset settings, with an explicit choice of save scope. CK3 character-history edits preserve source formatting and comments. DDS conversion can match a reference texture or write a custom mip chain. Workshop legacy listings keep a separate item for each saved game version; their first upload can use the current project files or a saved mod ZIP, and later uploads change listing information only.
+
+Shared mod rules live in `.px-toolkit/project.json`; personal game and workspace paths stay in the VS Code User profile. Older settings upgrade on trusted startup, preserving legacy files and reporting conflicts. The optional **Mod Compatibility** workflow uses exact game-version routes, reusable notes and recipes, human decisions, reviewed edits and recovery. CK3 faith/rite and portrait mask migrations are experimental and off by default. They do not establish target-game compatibility.
+
+The separate experimental **Compatibility Patch** workflow maintains a patch for an ordered set of CK3 mods. Save how conflicting contributions should combine, review changed decisions after an update, and preserve independent manual output edits. Unsupported rules and assets remain explicit manual work. Both compatibility workflows require `px.experimentalFeatures`, which is off by default.
+
 Create your first mod with the guided tutorial, convert batches of images, and get suggestions and navigation that follow unsaved edits. Problems update when referenced events or required translations change in another file.
 
 Right-click files, definitions, overrides or localization references to act on that source. The Project panel shows the current mod, with **All Tools** and **Customize** in its title bar. BBCode files offer **BBCode Preview** in VS Code's editor selector and can preview unsaved edits beside the source.
@@ -76,8 +84,7 @@ about itself, ranked by real usage count.*
 
 ![Wiki hub](packages/vscode/media/screenshots/wiki-hub.png)
 
-*The wiki hub collects the reference views on one page: Examples Wiki, format
-docs, image guidelines, diagnostics, mod report and credits.*
+*The Wiki hub opens references and examples for the selected game, installed launch-option documentation where available, CK3 image guidelines, diagnostics, the workspace mod report and credits.*
 
 - **Completion that knows the grammar and the scope.** Key positions offer
   triggers and effects, value positions offer traits, events, on_actions and loc
@@ -187,6 +194,8 @@ a separate server process, and everything game-specific sits behind one
 | [`packages/server`](packages/server) | [`@px-lsp/server`](https://www.npmjs.com/package/@px-lsp/server) on npm: parser, index, scope engine, features, per-game profiles, bundled data. Speaks node-ipc and `--stdio`. |
 | [`packages/protocol`](packages/protocol) | [`@px-lsp/protocol`](https://www.npmjs.com/package/@px-lsp/protocol) on npm: the wire contract and the helpers shared between server and clients. |
 
+The `pxtk` command and local MCP tools are maintained in the separate `paradox-toolkit-cli` project, which consumes the shared server and protocol packages.
+
 ## Development
 
 ```bash
@@ -241,3 +250,9 @@ schema import is MIT, and the icons the webviews draw are Lucide (ISC) and VS
 Code codicons (CC BY 4.0), all in
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). No game assets are
 redistributed.
+
+PNG conversion bundles [pngjs](https://github.com/pngjs/pngjs) (MIT) to preserve all mask channels. Its license is included in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+| Source | Use | License |
+|---|---|---|
+| [VS Code language-server libraries](https://github.com/microsoft/vscode-languageserver-node) | LSP transport and bundled server | MIT |

@@ -2,6 +2,8 @@
 
 Agent-facing guide for this repo. `CLAUDE.md` is `@AGENTS.md`.
 
+Keep these public instructions, skills, and supporting references independent of any person's identity. Use "the user" or "the maintainer" instead of the user's personal name. Do not copy personal details from local agent configuration into tracked files. Preserve required repository URLs and package identifiers.
+
 ## What this project is
 
 The **Paradox Modding Toolkit** (`JDeffner.px-toolkit`): a VS Code extension
@@ -60,9 +62,7 @@ localization (`*_l_<lang>.yml`, UTF-8 with BOM).
   `_l_<lang>.yml` filename; script `.txt` = UTF-8 with BOM; event files
   START with their `namespace =` line.
 - **Writers preserve user work.** Use the current editor document when it has unsaved edits; do not overwrite it from a stale disk snapshot. Before applying a preview or merge, check that its source documents and files still match. Reject stale results and require a fresh preview. Preserve unrelated content and keep vanilla and reference inputs read-only. Report write failures as failures.
-- **`localization/replace/` only overrides vanilla keys.** New keys go to
-  the mod loc file holding their siblings (`writeLocSmart` /
-  `upsertNewModLoc` in `packages/vscode/src/locCommands.ts`).
+- **Localization follows the mod.** Existing owned entries stay in place. New keys follow explicit author defaults, meaningful siblings and source files, including established `replace` layouts. Fresh mods use ordinary localization folders; new overrides require a `replace` folder. All writers share `localizationPolicy` through `prepareLocalizationWrite` / `writeLocSmart`. Generated files require their source workflow.
 - **Override rules:** script databases are last-in-wins, `gui/` and
   `localization/replace` are first-in-wins.
 - **No `vscode` imports** in `packages/server` or `packages/protocol`
@@ -70,6 +70,16 @@ localization (`*_l_<lang>.yml`, UTF-8 with BOM).
 - The parse cache (`packages/server/src/parseCache.ts`) is keyed by
   **uri + version**. In tests and scripts, use a fresh URI per document
   text or you get a stale parse.
+
+## Surface missing requirements
+
+The user is not expected to know every modding requirement. Agents must identify and explain relevant shortcomings so the user can make informed product decisions.
+
+- **Report limitations directly when found.** When code, documentation, game data or tests reveal a missing capability or prerequisite relevant to the requested feature or its advertised workflow, tell the user in a progress update. Include any unresolved limitation in the final handoff. A documentation note, TODO or deferred-feature entry alone is not enough.
+- **Explain the practical effect.** State the affected use case, the evidence, what users will experience, and the recommended fix or workaround. Distinguish a quality reduction from output the game cannot use, and confirmed requirements from assumptions that still need verification.
+- **Documentation does not establish acceptance.** Do not treat an existing limitation as an approved scope decision merely because it is documented or inherited from older code. When extending or reusing a feature, compare its known limitations with the intended workflow and the game's requirements.
+- **Resolve gaps within the authorized scope.** Implement requirements needed to complete that workflow. If resolving a gap needs a material scope change or product decision, explain the tradeoff and recommendation to the user while continuing independent work. Do not silently narrow the feature's scope or promise to fit the implementation.
+- **Verify the intended use.** A successful write or preview does not establish that the game can use the output. Check the relevant consumer requirements and report any verification gap. For example, if a texture workflow requires matching mip levels and the converter cannot produce them, surface that incompatibility directly instead of only documenting missing mipmap support.
 
 ## Hit-every-surface checklist
 
@@ -129,6 +139,8 @@ tests skip when a path is unset. The shipped extension reads none of this.
 For real-data compatch tests, set `games.<gameId>.compatchBasePath` and `games.<gameId>.compatchTargetPath`. Both point to game-data folders containing `common/`, `events/`, etc., not the installation root. Environment overrides are `PX_<GAMEID>_COMPATCH_BASE_PATH` and `PX_<GAMEID>_COMPATCH_TARGET_PATH`; read them through `devPath` / `requireDevPath` in `scripts/devPaths.ts`. Each developer chooses their own installations. Keep personal paths in the ignored file.
 
 The default CK3 exercise uses the current installed vanilla data as the base and a saved 1.18 version as the target. This deliberately tests a downgrade. "Base" means the vanilla version the test mod was built against; "target" means the version it must work with. Do not swap them based on version order. Use a scratch mod based on the configured base, keep both game sources read-only, and record their actual versions with the test results because Steam updates change the current installation. This exercise does not replace forward-update coverage or target-version validation. If either path is unset, skip corpus-gated tests with a reason; an explicitly requested real-data run must report the missing setting.
+
+Set `PX_COMPATCH_LARGE_MOD` to a scratch copy under `.local/testing/`, then run `pnpm exec vitest run packages/vscode/test/compatchView.test.ts -t "opens a large real mod"`. The test reads the configured base and target paths and checks the scan, paged commands and selected comparison without writing to the sources.
 
 The base game files are THE source of truth for script syntax. Grep the game
 folder or the `_*.info` docs; never guess names.
@@ -250,6 +262,7 @@ Keep local test projects and compatch fixtures in the ignored `.local/testing/` 
 
 | Script | Output | What it does |
 |---|---|---|
+| `build-workshop-tags.ts [--game]` | `data/<id>/workshopTags.json` | Public tag groups and exact upload strings from the game's Steam Workshop configuration |
 | `build-asset-vocabulary.ts [--game]` | `data/<id>/assetVocabulary.json` | Context-specific graphics properties and usage counts from vanilla `.asset` files; no binaries |
 | `build-structures-json.ts` | `data/ck3/structures.json` | Harvests every `_*.info` doc (CK3-only) |
 | `build-gui-schema.ts [--game]` | `data/<id>/guiSchema.json` | Widget types + property counts from vanilla `gui/` |

@@ -7,9 +7,13 @@
  */
 import type { GameMeta } from "../profile";
 import { EU5_SCAFFOLDS } from "./scaffolds";
+import WORKSHOP_TAGS from "../../../data/eu5/workshopTags.json";
 
 export const eu5Meta: GameMeta = {
   id: "eu5",
+  launchOptionsFile: null,
+  compatch: null,
+  compatchComposition: null,
   name: "Europa Universalis V",
   shortName: "EU5",
   engine: "jomini",
@@ -23,6 +27,7 @@ export const eu5Meta: GameMeta = {
   scriptDocsSubdir: "docs",
   dataTypesCommand: "dump_data_types",
   steamAppId: 3450310,
+  workshopTagGroups: WORKSHOP_TAGS.groups,
   // dlcIconDir deliberately absent: no live install has been checked, so the
   // Workshop panel shows this game's DLC (read from `<gameDir>/dlc/`) with the
   // folder's own thumbnail.png, and falls back to Steam when there is none.

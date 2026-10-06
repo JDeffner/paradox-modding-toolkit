@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import * as path from "node:path";
 import { ImageCodec, IMAGE_MIME, type ImageFormat, type ImageEncoding } from "./imageCodec";
 import { collectImageInputs, convertImageBatch, type BatchResult } from "./imageBatch";
+import { pickDdsEncoding } from "./ddsConvert";
 
 export type ConversionMode = "images" | "toDds" | "fromDds";
 
@@ -59,18 +60,12 @@ export async function convertImagesCommand(
           )?.format;
     if (!format) return;
     const encoding: ImageEncoding = { format: format as ImageFormat, dds: "auto", background: "white" };
+    let referenceFile: string | undefined;
     if (format === "dds") {
-      const choice = await vscode.window.showQuickPick(
-        [
-          { label: "Auto", description: "BC3 with transparency, BC1 otherwise", format: "auto" as const },
-          { label: "BC1 / DXT1", description: "Compressed, no alpha", format: "bc1" as const },
-          { label: "BC3 / DXT5", description: "Compressed with alpha", format: "bc3" as const },
-          { label: "Uncompressed (A8R8G8B8)", description: "Lossless", format: "bgra8" as const },
-        ],
-        { title: "DDS format" }
-      );
+      const choice = await pickDdsEncoding();
       if (!choice) return;
-      encoding.dds = choice.format;
+      Object.assign(encoding, choice.encoding);
+      referenceFile = choice.referenceFile;
     }
     if (format === "jpeg") {
       const choice = await vscode.window.showQuickPick(["White", "Black"], {
@@ -81,6 +76,10 @@ export async function convertImagesCommand(
     }
     const location = await vscode.window.showQuickPick(["Choose output folder", "Beside source files"], {
       title: "Conversion destination",
+      placeHolder:
+        referenceFile && encoding.referenceSize
+          ? `${path.basename(referenceFile)}: ${encoding.referenceSize.width}×${encoding.referenceSize.height}, ${encoding.dds}, ${encoding.mipmaps} mip levels. Source dimensions must match.`
+          : undefined,
     });
     if (!location) return;
     let destination: string | undefined;
@@ -109,7 +108,7 @@ export async function convertImagesCommand(
           );
           return convertImageBatch(
             inputs,
-            { ...encoding, destination, overwrite: false },
+            { ...encoding, destination, referenceFile, overwrite: false },
             {
               decode: (bytes, ext) => codec.decode(bytes, ext, token),
               encode: (image, options) => codec.encode(image, options, token),

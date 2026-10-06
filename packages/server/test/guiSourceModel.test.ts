@@ -425,9 +425,9 @@ describe("gui source model: vanilla sweep (S01, S06)", () => {
     const named = paths.map((p) => ({ name: path.basename(p), text: decode(fs.readFileSync(p)).text }));
     const counts = sweep(named);
     expect(counts.mismatches).toEqual([]);
-    // Baseline recorded 2026-08-01 on the current CK3 install (checklist §G).
-    // A materially different total means a game patch added or removed files.
-    expect(counts.files).toBe(373);
+    // Patches change the file total; every discovered input must be swept.
+    expect(counts.files).toBe(named.length);
+    expect(counts.files).toBeGreaterThan(300);
     expect(counts.entries).toBeGreaterThan(90_000);
     expect(counts.bodies).toBeGreaterThan(30_000);
     console.log(

@@ -10,6 +10,7 @@ import * as os from "os";
 import * as path from "path";
 import { pathToFileURL } from "url";
 import { computeEventDetail } from "../src/overview/eventDetail";
+import { eventSourceHash } from "../src/overview/eventSourceHash";
 import { computeEventGraph } from "../src/overview/eventGraph";
 import { extractReferences } from "../src/index/references";
 import { setActiveProfile } from "../src/games/active";
@@ -186,6 +187,7 @@ describe("computeEventDetail", () => {
   it("resolves the event with type/theme and loc fields", () => {
     const d = computeEventDetail(data, schema, "det.1")!;
     expect(d).not.toBeNull();
+    expect(d.sourceHash).toBe(eventSourceHash(EVENT_TXT));
     expect(d.type).toBe("character_event");
     expect(d.theme).toBe("intrigue");
     expect(d.title?.key).toBe("det.1.t");

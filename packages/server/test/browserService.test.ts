@@ -179,6 +179,15 @@ describe("browser language service", () => {
     expect(JSON.stringify(hover?.contents)).toContain("my_test_effect");
   });
 
+  it("recognizes nested faith declarations in the open browser document", () => {
+    const text = "audit_religion = { faiths = { audit_faith = {} } }";
+    const doc = service().openDocument("common/religion/religion_types/audit.txt", text);
+    const hover = doc.hover(text.indexOf("audit_faith") + 2);
+    expect(JSON.stringify(hover?.contents)).toContain("audit_faith");
+    expect(JSON.stringify(hover?.contents)).toContain("faith");
+    expect(doc.diagnostics()).toEqual([]);
+  });
+
   it("re-parses after an edit instead of serving the stale parse", () => {
     // The parse cache is keyed by uri + version. AGENTS.md records this biting
     // twice; if update() failed to bump the version the second read would still

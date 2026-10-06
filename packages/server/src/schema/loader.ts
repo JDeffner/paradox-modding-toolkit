@@ -6,7 +6,7 @@
  */
 import * as fs from "fs";
 import * as path from "path";
-import { resolveConfigDir } from "@px-lsp/protocol/configDir";
+import { resolveConfigPath } from "@px-lsp/protocol/configDir";
 import { activeProfile } from "../games/active";
 import type { GameProfile } from "../games/profile";
 import type { AmbientScope, SchemaEntry, KeySpec, RefField, SchemaOverlay } from "./types";
@@ -90,12 +90,37 @@ export function loadSchema(modPath: string | string[] | null, log?: (msg: string
   // first, collisions are rare and per-path).
   const roots = modPath === null ? [] : Array.isArray(modPath) ? modPath : [modPath];
   for (const root of roots) {
-    const overlayFile = path.join(resolveConfigDir(root, profile), "schema.json");
+    let overlayFile = path.join(root, profile.configDirName, "schema.json");
     try {
+      overlayFile = resolveConfigPath(root, profile, "schema.json");
       if (!fs.existsSync(overlayFile)) continue;
       const overlay = JSON.parse(fs.readFileSync(overlayFile, "utf8")) as SchemaOverlay;
       for (const e of overlay.entries ?? []) {
         if (typeof e?.path !== "string" || typeof e?.kind !== "string") continue;
+        if (
+          e.kindByField &&
+          [e.kindByField.field, e.kindByField.kind, e.kindByField.otherwise].some(
+            (value) => typeof value !== "string" || !value
+          )
+        ) {
+          log?.(`schema overlay entry ignored (invalid kind field): ${e.path}`);
+          continue;
+        }
+        if (e.nestedDefinitions) {
+          const rule = e.nestedDefinitions;
+          if (
+            typeof rule.kind !== "string" ||
+            !rule.kind ||
+            !Array.isArray(rule.path) ||
+            !rule.path.every((key) => typeof key === "string" && key.length > 0) ||
+            (rule.excludedKeys !== undefined &&
+              (!Array.isArray(rule.excludedKeys) ||
+                !rule.excludedKeys.every((key) => typeof key === "string")))
+          ) {
+            log?.(`schema overlay entry ignored (invalid nested definitions): ${e.path}`);
+            continue;
+          }
+        }
         // The overlay is mod content and e.path steers the indexer's walk
         // (scanRoot joins it under the root): a path that could climb out of
         // the mod is dropped. classifyFile guards the symmetric case already.

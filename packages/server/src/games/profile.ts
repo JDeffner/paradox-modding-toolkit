@@ -14,6 +14,8 @@ import type { KindSkeleton } from "../schema/skeletons";
 import type { PlaceholderSpec } from "../data/modifierTemplates";
 import type { GuiLayoutQuirks, GuiTextMetrics } from "../gui/layoutEngine";
 import type { SaveSchema } from "../gui/saveSchema";
+import type { MigrationEntry } from "../migrations/sdk";
+import type { PatchPolicy } from "../compatch/model";
 
 /**
  * One "New Content" template: the content of a scaffold, as data, so the writer
@@ -90,6 +92,8 @@ export interface GameMeta {
    */
   dataTypesCommand?: string;
   steamAppId: number;
+  /** Declared upload tags harvested from this game's public Steam Workshop page. */
+  workshopTagGroups?: { label: string; tags: string[] }[];
   /**
    * Folder under the game data dir holding one icon per DLC, named after the
    * DLC folder's number (`dlc_003.dds` or `dlc003.dds`). Absent = the install
@@ -98,6 +102,10 @@ export interface GameMeta {
   dlcIconDir?: string;
   /** Whether event files declare `namespace = x` and use `ns.N` event ids. */
   eventNamespaces: boolean;
+  /** Verified identity matching for the client compatch browser. Null = file diffs only. */
+  compatch: { events: string; localization: string } | null;
+  /** Verified maintained-patch composition. Null exposes file comparison only. */
+  compatchComposition: PatchPolicy | null;
   /**
    * Subfolder of docsFolderName the ENGINE writes error.log into. Absent =
    * "logs", which is where both live installs checked (2026-08-12) write it.
@@ -200,6 +208,8 @@ export interface GameMeta {
    * binary; absent = only the shared presets are offered.
    */
   launchPresets?: { id: string; label: string; args: string[] }[];
+  /** Installed launch-option reference, relative to the game data folder. Null/absent = unverified. */
+  launchOptionsFile?: string | null;
   /**
    * Suffix for server-side cache filenames under storageDir ("" keeps the
    * pre-profile names so existing caches survive; non-empty for later games,
@@ -229,6 +239,8 @@ export type ConditionValueSource =
 
 /** A game's full knowledge bundle: meta plus the tables the engine consumes. */
 export interface GameProfile extends GameMeta {
+  /** Reviewed recipes for this game. Empty means no researched migration is available. */
+  migrations: readonly MigrationEntry[];
   /** Folder→definition-kind table (see schema/types.ts). */
   schema: SchemaEntry[];
   /** Assignment keys whose values reference other definitions. */

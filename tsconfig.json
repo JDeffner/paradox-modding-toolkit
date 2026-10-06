@@ -8,6 +8,7 @@
     "types": ["node", "vscode"],
     "paths": {
       "@px-lsp/protocol/*": ["./packages/protocol/src/*"],
+      "@px-lsp/server/migrations": ["./packages/server/src/migrations/sdk.ts"],
       "@px-lsp/server/dds": ["./packages/server/src/dds/index.ts"],
       "@px-lsp/server/parser": ["./packages/server/src/parser/index.ts"],
       "@px-lsp/server/*": ["./packages/server/src/*"]

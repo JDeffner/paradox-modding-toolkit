@@ -119,12 +119,12 @@ describe("translations folder", () => {
 });
 
 describe("preview order and links", () => {
-  it("orders previews by order.txt, then by name", () => {
+  it("orders each preview once by its first order.txt entry, then by name", () => {
     const dir = tmp();
     const previews = path.join(dir, "previews");
     fs.mkdirSync(previews);
     for (const f of ["a.png", "b.png", "c.png"]) fs.writeFileSync(path.join(previews, f), "");
-    writePreviewOrder(dir, ["c.png", "a.png", "gone.png"]);
+    writePreviewOrder(dir, ["c.png", "a.png", "c.png", "gone.png", "a.png"]);
     expect(readPreviews(dir)!.images.map((p) => path.basename(p))).toEqual(["c.png", "a.png", "b.png"]);
   });
 });

@@ -9,7 +9,7 @@
  * editor's stage tools.
  */
 import * as vscode from "vscode";
-import { decodeDds, ddsFormatInfo, encodePng } from "@px-lsp/server/dds";
+import { decodeDds, ddsFormatInfo, ddsMipLevels, encodePng, type DdsMipLevel } from "@px-lsp/server/dds";
 import { makeNonce } from "./webviews/nonce";
 import { ddsPreviewHtml } from "./webviews/ddsPreview/html";
 import { bundleUri, watchBundle, webviewSource } from "./webviews/devReload";
@@ -79,18 +79,49 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
     panel.webview.options = { enableScripts: true, localResourceRoots: [source.root] };
     const name = document.uri.path.split("/").pop() ?? "texture.dds";
     const info = ddsFormatInfo(document.bytes);
+    const mipStatus = info
+      ? info.mipLevelCount > 1
+        ? `Mipmaps: Yes (${info.mipLevelCount} levels including base, declared)`
+        : "Mipmaps: No"
+      : "Mipmaps: Unknown";
     let png: Uint8Array | null = null;
     let dataUri: string | null = null;
     let error: string | null = null;
-    let meta = "";
+    let meta = mipStatus;
+    let mipLevels: DdsMipLevel[] = [];
+    let selectedMip = 0;
+    let mipError = "";
+    const decodeLevel = (level: number): void => {
+      const img = decodeDds(document.bytes, level);
+      const encoded = encodePng(img.width, img.height, img.pixels);
+      png = encoded;
+      selectedMip = level;
+      dataUri = `data:image/png;base64,${Buffer.from(encoded).toString("base64")}`;
+      meta = `${img.width}×${img.height} · ${info!.format} · ${formatBytes(document.bytes.length)} · ${mipStatus}`;
+      if (mipLevels.length) meta += ` · Mip ${level} of ${mipLevels.length - 1}`;
+      const header = new DataView(
+        document.bytes.buffer,
+        document.bytes.byteOffset,
+        document.bytes.byteLength
+      );
+      if (
+        header.getUint32(112, true) & 0xfe00 ||
+        (header.getUint32(84, true) === 0x30315844 &&
+          (header.getUint32(140, true) > 1 || header.getUint32(136, true) & 4))
+      )
+        meta += " · First face / array slice";
+    };
     if (!info) {
-      error = "Not a DDS file (bad magic).";
+      error = "Invalid or truncated DDS header.";
     } else {
-      meta = `${info.width}×${info.height} · ${info.format} · ${formatBytes(document.bytes.length)}`;
+      meta = `${info.width}×${info.height} · ${info.format} · ${formatBytes(document.bytes.length)} · ${mipStatus}`;
       try {
-        const img = decodeDds(document.bytes);
-        png = encodePng(img.width, img.height, img.pixels);
-        dataUri = `data:image/png;base64,${Buffer.from(png).toString("base64")}`;
+        try {
+          mipLevels = ddsMipLevels(document.bytes);
+        } catch (err) {
+          mipError = err instanceof Error ? err.message : String(err);
+        }
+        decodeLevel(0);
       } catch (err) {
         error = `Preview failed: ${err instanceof Error ? err.message : String(err)}`;
       }
@@ -101,6 +132,9 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
         meta,
         dataUri,
         error,
+        mipLevels,
+        selectedMip,
+        mipError,
         nonce: makeNonce(),
         scriptSrc: bundleUri(panel.webview, source, "ddsPreview"),
       });
@@ -124,6 +158,15 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
           case "ready":
             await sendBackground();
             break;
+          case "mip":
+            try {
+              if (!Number.isInteger(msg.level) || !mipLevels[msg.level]) throw new Error("Invalid mip level");
+              decodeLevel(msg.level);
+              await panel.webview.postMessage({ type: "mip", level: selectedMip, dataUri, meta });
+            } catch (err) {
+              await panel.webview.postMessage({ type: "mipError", level: selectedMip, message: String(err) });
+            }
+            break;
           case "background":
             await vscode.workspace
               .getConfiguration("px")
@@ -146,11 +189,13 @@ export class DdsPreviewProvider implements vscode.CustomReadonlyEditorProvider<D
             break;
           case "savePng": {
             if (!png) return;
+            const exportPng = png;
+            const suffix = selectedMip ? `.mip-${selectedMip}.png` : ".png";
             const target = await vscode.window.showSaveDialog({
-              defaultUri: document.uri.with({ path: document.uri.path.replace(/\.dds$/i, ".png") }),
+              defaultUri: document.uri.with({ path: document.uri.path.replace(/\.dds$/i, suffix) }),
               filters: { "PNG image": ["png"] },
             });
-            if (target) await vscode.workspace.fs.writeFile(target, png);
+            if (target) await vscode.workspace.fs.writeFile(target, exportPng);
             break;
           }
         }

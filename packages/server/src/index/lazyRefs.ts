@@ -20,7 +20,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import type { DefSource, Reference } from "@px-lsp/protocol/types";
-import { listFiles } from "@px-lsp/protocol/fsWalk";
+import { iterFilesInRoots, listFiles } from "@px-lsp/protocol/fsWalk";
 import { isStructuralKeyword } from "../contextKeywords";
 import { activeProfile } from "../games/active";
 import { loadSchema, type SchemaData } from "../schema/loader";
@@ -115,7 +115,13 @@ export class LazyReferenceScanner {
   private filesOf(root: string): string[] {
     let files = this.fileLists.get(root);
     if (!files) {
-      files = listFiles(root, ".txt");
+      const scriptRoots = this.schema.entries
+        .filter((entry) => (entry.ext ?? ".txt") === ".txt")
+        .map((entry) => path.join(root, entry.path));
+      files = [];
+      for (const file of iterFilesInRoots([...scriptRoots, root], ".txt")) {
+        if (file !== null) files.push(file);
+      }
       for (const entry of activeProfile().schema) {
         if (!this.indexAssets && entry.ext?.toLowerCase() === ".asset") continue;
         if (entry.extraction === "named-block" && entry.ext && entry.ext !== ".txt") {

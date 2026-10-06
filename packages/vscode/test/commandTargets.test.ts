@@ -1,5 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import * as path from "path";
+import * as fs from "fs";
+import * as os from "os";
 import type { PxConfig } from "../src/config";
 
 const host = vi.hoisted(() => ({
@@ -42,11 +44,13 @@ vi.mock("vscode", () => {
 import * as vscode from "vscode";
 import {
   configForTarget,
+  configForLocalizationTarget,
   targetUri,
   targetDocument,
   targetPosition,
   templatesForFolder,
   writableRoot,
+  vanillaDirectories,
 } from "../src/commandTargets";
 const modA = path.resolve("fixture/mod-a"),
   modB = path.resolve("fixture/mod-b"),
@@ -88,6 +92,32 @@ describe("command targets", () => {
     expect(writableRoot(vscode.Uri.file(path.resolve("fixture/parent/events/x.txt")), cfg)).toBeNull();
     expect(writableRoot(vscode.Uri.file(modB), cfg)).toBe(modB);
     expect(writableRoot(vscode.Uri.file(`${modB}-other/events/x.txt`), cfg)).toBeNull();
+  });
+  it("uses focus for read-only localization sources but preserves explicit ownership", () => {
+    for (const file of [path.join(vanilla, "events/a.txt"), path.join(cfg.parentPaths[0], "events/a.txt")]) {
+      expect(configForLocalizationTarget(cfg, vscode.Uri.file(file), modB).modPath).toBe(modB);
+    }
+    expect(
+      configForLocalizationTarget(cfg, vscode.Uri.file(path.join(modA, "events/a.txt")), modB).modPath
+    ).toBe(modA);
+    expect(
+      configForLocalizationTarget(cfg, vscode.Uri.file(path.resolve("unrelated.txt")), modB).modPath
+    ).toBeNull();
+    expect(configForLocalizationTarget(cfg, {}, modB).modPath).toBeNull();
+    expect(configForLocalizationTarget(cfg, vscode.Uri.file(vanilla), vanilla).modPath).toBeNull();
+  });
+  it("publishes vanilla directory membership without listing file resources", async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), "px-vanilla-menu-"));
+    try {
+      const folder = path.join(root, "main_menu", "events");
+      fs.mkdirSync(folder, { recursive: true });
+      fs.writeFileSync(path.join(folder, "a.txt"), "event = {}");
+      const resources = await vanillaDirectories(root);
+      expect(resources).toEqual([root, path.join(root, "main_menu"), folder]);
+      expect(resources).not.toContain(path.join(folder, "a.txt"));
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
   it("derives a nested scaffold kind from the profile path", () => {
     expect(templatesForFolder(cfg, path.join(modB, "events/nested")).map((t) => t.id)).toEqual(["event"]);

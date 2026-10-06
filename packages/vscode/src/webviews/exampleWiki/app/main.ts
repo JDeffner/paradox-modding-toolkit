@@ -678,11 +678,32 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
   const msg = event.data;
   switch (msg.type) {
     case "loading":
+      if (msg.reset) {
+        entries = [];
+        byName.clear();
+        query = "";
+        input.value = "";
+        filter = "all";
+        selected = null;
+        current = null;
+        currentDetail = null;
+        behind.length = 0;
+        ahead.length = 0;
+        setFilter("all");
+        updateNav();
+        $("detailBody").textContent = "";
+        $("detailBody").hidden = true;
+        $("placeholder").hidden = false;
+        $("sourceLines").textContent = "";
+        $("count").textContent = "";
+      }
+      if (msg.gameName) $("referenceGame").textContent = msg.gameName;
       loading = true;
       loadError = null;
       renderList();
       break;
     case "index":
+      if (msg.index.gameName) $("referenceGame").textContent = msg.index.gameName;
       loading = false;
       loadError = null;
       entries = msg.index.entries;
@@ -702,6 +723,17 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       // The provenance belongs where a reader looks first, not only in a tip.
       $("sourceLines").textContent = sources.join(" ");
       renderList();
+      if (current) {
+        if (findArticle(current.name, current.kind)) show(current);
+        else {
+          current = null;
+          currentDetail = null;
+          selected = null;
+          $("detailBody").textContent = "";
+          $("detailBody").hidden = true;
+          $("placeholder").hidden = false;
+        }
+      }
       break;
     case "entry":
       if (selected === `${msg.kind}:${msg.name}`) renderDetail(msg.detail, msg.name);

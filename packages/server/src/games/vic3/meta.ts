@@ -4,9 +4,13 @@
  */
 import type { GameMeta } from "../profile";
 import { VIC3_SCAFFOLDS } from "./scaffolds";
+import WORKSHOP_TAGS from "../../../data/vic3/workshopTags.json";
 
 export const vic3Meta: GameMeta = {
   id: "vic3",
+  launchOptionsFile: null,
+  compatch: null,
+  compatchComposition: null,
   name: "Victoria 3",
   shortName: "Vic3",
   engine: "jomini",
@@ -20,6 +24,7 @@ export const vic3Meta: GameMeta = {
   scriptDocsSubdir: "docs",
   dataTypesCommand: "dump_data_types",
   steamAppId: 529340,
+  workshopTagGroups: WORKSHOP_TAGS.groups,
   // Verified on the live install: a different folder name from CK3's, and only
   // some DLC have a file there (the rest fall back to their thumbnail.png).
   dlcIconDir: "gfx/interface/icons/dlc_icons",

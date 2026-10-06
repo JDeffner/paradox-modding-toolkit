@@ -165,6 +165,8 @@ export interface EditorHarness {
   rowPointer(node: Element, type: "pointerdown" | "pointermove", at?: { x: number; y: number }): void;
   /** Release the button anywhere, which is what ends a row drag. */
   releasePointer(): void;
+  /** Cancel a canvas or layer pointer sequence without releasing it. */
+  cancelPointer(target?: "stage" | "window"): void;
   /** A pointer event on the WINDOW at a client point, outside the canvas when asked. */
   windowPointer(type: "pointermove" | "pointerup", at: { x: number; y: number }): void;
   paint: PaintLog;
@@ -426,6 +428,10 @@ export function bootEditor(): EditorHarness {
     },
     releasePointer() {
       win.dispatchEvent(new win.PointerEvent("pointerup", { bubbles: true, button: 0, pointerId: 2 }));
+    },
+    cancelPointer(target = "stage") {
+      const node = target === "window" ? win : doc.getElementById("stage")!;
+      node.dispatchEvent(new win.PointerEvent("pointercancel", { bubbles: true, pointerId: 2 }));
     },
     windowPointer(type, at) {
       win.dispatchEvent(

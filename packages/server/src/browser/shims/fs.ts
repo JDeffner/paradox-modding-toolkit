@@ -40,6 +40,10 @@ export function realpathSync(target: unknown): never {
   throw enoent("realpath", String(target));
 }
 
+export function renameSync(source: unknown, _target: unknown): never {
+  throw enoent("rename", String(source));
+}
+
 /** Writers are no-ops: nothing in the browser build has a disk to persist to. */
 export function mkdirSync(_target: unknown, _options?: unknown): undefined {
   return undefined;
@@ -68,6 +72,7 @@ export default {
   statSync,
   lstatSync,
   realpathSync,
+  renameSync,
   mkdirSync,
   writeFileSync,
   appendFileSync,

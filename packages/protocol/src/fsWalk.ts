@@ -23,10 +23,34 @@ export const WALK_TICK = 500;
  * to pace itself against and would block for the whole traversal.
  */
 export function* iterFiles(dir: string, ext: string): Generator<string | null> {
-  // One visited-target set per walk: shared across sibling links so two links
-  // to the same tree cannot index it twice. The walk runs once per schema folder
-  // (tens of times per root), never per directory, so the Set is free.
-  yield* walk(dir, ext, new Set<string>(), { count: 0 });
+  yield* iterFilesInRoots([dir], ext);
+}
+
+/** Visit roots in priority order, sharing canonical-directory deduplication.
+ * A caller can put semantic folders before a containing fallback root so an
+ * alias that supplies the folder's meaning keeps its logical path. */
+export function* iterFilesInRoots(dirs: readonly string[], ext: string): Generator<string | null> {
+  const visited = new Set<string>();
+  const tick = { count: 0 };
+  for (const dir of dirs) {
+    let real: string;
+    try {
+      real = fs.realpathSync(dir);
+    } catch {
+      continue;
+    }
+    const links: Array<{ full: string; host: string }> = [];
+    // Within each root, ordinary paths win over aliases. Deferred links then
+    // use sorted DFS encounter order, so sibling aliases have a stable winner.
+    // Keep dir as the logical root, even when the configured root is itself a link.
+    yield* walk(dir, real, ext, visited, tick, links);
+    for (let i = 0; i < links.length; i++) {
+      // Resolving a long deferred-link queue also does filesystem work, even if
+      // every target was already visited and contributes no directory entries.
+      if (++tick.count % WALK_TICK === 0) yield null;
+      yield* followLink(links[i].full, links[i].host, ext, visited, tick, links);
+    }
+  }
 }
 
 /** All files under `dir` (recursive) with the given extension (lowercase match). */
@@ -44,26 +68,33 @@ export function walkDir(dir: string, ext: string, out: string[]): void {
 
 function* walk(
   dir: string,
+  real: string,
   ext: string,
   visited: Set<string>,
-  tick: { count: number }
+  tick: { count: number },
+  links: Array<{ full: string; host: string }>
 ): Generator<string | null> {
+  const key = norm(real);
+  if (visited.has(key)) return;
+  visited.add(key);
   let entries: fs.Dirent[];
   try {
     entries = fs.readdirSync(dir, { withFileTypes: true });
   } catch {
     return;
   }
+  entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
   for (const entry of entries) {
     // Dot-directories (.git, .claude worktrees, …) are never game content and
     // can hold stale copies of the whole mod — indexing them pollutes results.
     if (entry.name.startsWith(".")) continue;
     if (++tick.count % WALK_TICK === 0) yield null;
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) yield* walk(full, ext, visited, tick);
+    // An ordinary child of a canonical directory needs no additional realpath.
+    if (entry.isDirectory()) yield* walk(full, path.join(real, entry.name), ext, visited, tick, links);
     else if (entry.isFile()) {
       if (entry.name.toLowerCase().endsWith(ext)) yield full;
-    } else if (entry.isSymbolicLink()) yield* followLink(full, ext, visited, tick);
+    } else if (entry.isSymbolicLink()) links.push({ full, host: real });
   }
 }
 
@@ -89,13 +120,15 @@ function isSameOrBelow(outer: string, inner: string): boolean {
  *
  * Two guards keep a malformed tree from looping or double-indexing: a link
  * resolving to the directory it sits in (or one of its ancestors) is skipped
- * outright, and every followed target is remembered for the rest of the walk.
+ * outright, and every visited directory is remembered for the rest of the walk.
  */
 function* followLink(
   full: string,
+  host: string,
   ext: string,
   visited: Set<string>,
-  tick: { count: number }
+  tick: { count: number },
+  links: Array<{ full: string; host: string }>
 ): Generator<string | null> {
   let target: fs.Stats;
   let real: string;
@@ -111,16 +144,6 @@ function* followLink(
   }
   if (!target.isDirectory()) return;
 
-  let host: string;
-  try {
-    host = fs.realpathSync(path.dirname(full));
-  } catch {
-    return;
-  }
   if (isSameOrBelow(real, host)) return; // points back into the tree being walked
-
-  const key = norm(real);
-  if (visited.has(key)) return;
-  visited.add(key);
-  yield* walk(full, ext, visited, tick);
+  yield* walk(full, real, ext, visited, tick, links);
 }

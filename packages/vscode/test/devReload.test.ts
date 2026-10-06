@@ -3,12 +3,37 @@ import { buildSync } from "esbuild";
 import { runInNewContext } from "node:vm";
 import * as path from "node:path";
 import * as crypto from "node:crypto";
+import * as os from "node:os";
 import type * as vscode from "vscode";
 import type { Integration } from "@webview-dev/helper";
 
 type Bridge = typeof import("../src/webviews/devReload");
 
-function setup(liveBuild: boolean, mode = 2, trusted = true, remoteName?: string) {
+const bundles = new Map<boolean, string>();
+function bundle(liveBuild: boolean): string {
+  const cached = bundles.get(liveBuild);
+  if (cached !== undefined) return cached;
+  const code = buildSync({
+    entryPoints: [path.join(__dirname, "../src/webviews/devReload.ts")],
+    bundle: true,
+    write: false,
+    platform: "node",
+    format: "cjs",
+    external: ["vscode", "@webview-dev/helper"],
+    define: { __WEBVIEW_DEV__: String(liveBuild) },
+    supported: { "dynamic-import": false },
+  }).outputFiles[0].text;
+  bundles.set(liveBuild, code);
+  return code;
+}
+
+function setup(
+  liveBuild: boolean,
+  mode = 2,
+  trusted = true,
+  remoteName?: string,
+  machineConfig: { gameId?: string; registry?: unknown } = {}
+) {
   const registrations: Array<{
     panel: vscode.WebviewPanel;
     options: Parameters<Integration["registerPanel"]>[1];
@@ -36,24 +61,20 @@ function setup(liveBuild: boolean, mode = 2, trusted = true, remoteName?: string
     },
   }));
   const watch = vi.fn(() => ({ close: vi.fn() }));
-  const code = buildSync({
-    entryPoints: [path.join(__dirname, "../src/webviews/devReload.ts")],
-    bundle: true,
-    write: false,
-    platform: "node",
-    format: "cjs",
-    external: ["vscode", "@webview-dev/helper"],
-    define: { __WEBVIEW_DEV__: String(liveBuild) },
-    supported: { "dynamic-import": false },
-  }).outputFiles[0].text;
+  const warning = vi.fn(async (_message: string, _action: string) => undefined);
+  const code = bundle(liveBuild);
   const module = { exports: {} };
   runInNewContext(code, {
     module,
     exports: module.exports,
     setTimeout,
     clearTimeout,
+    process: { platform: "linux", env: {} },
     require(id: string) {
       if (id === "crypto") return crypto;
+      if (id === "path") return path;
+      if (id === "os") return os;
+      if (id === "child_process") return { execFileSync: () => "" };
       if (id === "fs") return { existsSync: () => true, watch, statSync: () => ({ mtimeMs: 100 }) };
       if (id === "@webview-dev/helper") return { connectDevtools: connect };
       if (id === "vscode")
@@ -64,7 +85,16 @@ function setup(liveBuild: boolean, mode = 2, trusted = true, remoteName?: string
             file: uri,
             joinPath: (root: vscode.Uri, ...parts: string[]) => uri(path.join(root.fsPath, ...parts)),
           },
-          workspace: { isTrusted: trusted, getConfiguration: () => ({ get: () => "" }) },
+          workspace: {
+            isTrusted: trusted,
+            getConfiguration: () => ({
+              get: (key: string) => (key === "gameId" ? (machineConfig.gameId ?? "auto") : ""),
+              inspect: (key: string) =>
+                key === "machinePaths" ? { globalValue: machineConfig.registry } : {},
+            }),
+          },
+          window: { showWarningMessage: warning },
+          commands: { executeCommand: vi.fn() },
           env: { remoteName },
         };
       throw new Error(`Unexpected import: ${id}`);
@@ -100,11 +130,36 @@ function setup(liveBuild: boolean, mode = 2, trusted = true, remoteName?: string
     registerBuild,
     connect,
     watch,
+    warning,
     code,
   };
 }
 
 describe("Live Webview bridge", () => {
+  it("uses the active game's personal development bundle folder", () => {
+    const s = setup(false, 1, true, undefined, {
+      gameId: "vic3",
+      registry: {
+        version: 1,
+        defaults: {
+          ck3: { "dev.webviewSource": "ck3-bundles" },
+          vic3: { "dev.webviewSource": "vic3-bundles" },
+        },
+      },
+    });
+    const source = s.bridge.webviewSource(s.context);
+    expect(source.root.fsPath).toBe("vic3-bundles");
+    expect(source.watch).toBe(true);
+  });
+
+  it("warns about invalid personal settings while keeping repair panels usable", () => {
+    const s = setup(false, 1, true, undefined, { registry: { version: 2 } });
+    expect(s.bridge.webviewSource(s.context).watch).toBe(false);
+    s.bridge.webviewSource(s.context);
+    expect(s.warning).toHaveBeenCalledOnce();
+    expect(s.warning.mock.calls[0]?.[0]).toContain("unsupported version");
+  });
+
   it("registers one build with independent panels and fresh revision URLs", async () => {
     const s = setup(true);
     await s.bridge.initializeWebviewDevelopment(s.context, vi.fn());

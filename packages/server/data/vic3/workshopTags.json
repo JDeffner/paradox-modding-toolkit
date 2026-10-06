@@ -1,0 +1,45 @@
+{
+  "source": "https://steamcommunity.com/workshop/browse/?appid=529340&l=english",
+  "groups": [
+    {
+      "label": "Category",
+      "tags": [
+        "Alternative History",
+        "Balance",
+        "Cultures and Religions",
+        "Diplomacy",
+        "Events",
+        "Expansion",
+        "Economy and Buildings",
+        "Fixes",
+        "Flags",
+        "Gameplay",
+        "Graphics",
+        "Historical",
+        "Interest Groups",
+        "Journal Entries",
+        "Map",
+        "New Nations",
+        "Pops",
+        "Sound",
+        "Technologies",
+        "Total Conversion",
+        "Trade",
+        "Translation",
+        "Utilities",
+        "Warfare"
+      ]
+    },
+    {
+      "label": "Update Compatibility",
+      "tags": [
+        "Deprecated",
+        "1.9",
+        "1.10",
+        "1.11",
+        "1.12",
+        "1.13"
+      ]
+    }
+  ]
+}

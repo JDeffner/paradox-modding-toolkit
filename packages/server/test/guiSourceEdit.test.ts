@@ -975,9 +975,11 @@ describe("sourceEdit: S03-S05 vanilla sweep", () => {
   it.skipIf(!guiDir)(
     "every structural round trip restores a vanilla file byte for byte",
     () => {
-      const counts = roundTripSweep(vanillaFiles(guiDir!), VANILLA_PROBE_CAP);
+      const files = vanillaFiles(guiDir!);
+      const counts = roundTripSweep(files, VANILLA_PROBE_CAP);
       expect(counts.bad).toEqual([]);
-      expect(counts.files).toBe(373);
+      expect(counts.files).toBe(files.length);
+      expect(counts.files).toBeGreaterThan(300);
       expect(counts.reorders).toBeGreaterThan(1_000);
       expect(counts.inserts).toBeGreaterThan(1_000);
       expect(counts.duplicates).toBeGreaterThan(1_000);
@@ -1036,13 +1038,13 @@ describe("sourceEdit: S02 vanilla sweep", () => {
   const guiDir = gamePath ? path.join(gamePath, "gui") : null;
 
   it.skipIf(!guiDir)("a single-entry rewrite is byte-identical over the vanilla gui tree", () => {
-    const counts = rewriteSweep(vanillaFiles(guiDir!), false);
+    const files = vanillaFiles(guiDir!);
+    const counts = rewriteSweep(files, false);
     expect(counts.bad).toEqual([]);
-    expect(counts.files).toBe(373);
+    expect(counts.files).toBe(files.length);
+    expect(counts.files).toBeGreaterThan(300);
     expect(counts.rewrites).toBeGreaterThan(20_000);
-    // One re-parse per file that carried a probe: 365 of the 373 do, the rest
-    // hold no body with a property in it. A lower bound, like the rewrites: a
-    // game patch legitimately moves the number.
+    // Re-parse every file with a probe; patches can change that file count.
     expect(counts.parseChecks).toBeGreaterThan(300);
     console.log(
       `vanilla S02 rewrite sweep: ${counts.files} files, ${counts.rewrites} rewrites, ` +

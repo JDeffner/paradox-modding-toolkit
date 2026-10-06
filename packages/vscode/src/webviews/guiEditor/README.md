@@ -18,7 +18,10 @@ it, and which of the promises are load-bearing rather than conveniences.
 
 | File | What it is | Who ports it |
 |---|---|---|
-| `app/` | The editor. Pure modules (`scene`, `hitTest`, `gesture`, `snap`, `selection`, `inspector`, `tree`, `layers`, `align`, `palette`, `library`, `placement`, `devtools`, `textures`, `browse`) under a thin DOM shell (`main.ts`, `render.ts`) | Nobody. It is the shared artifact. |
+| `app/main.ts` | Coordinates camera, panels, rendering and host requests. Geometry and source edits remain outside this module. | Reused by every host. |
+| `app/selectionController.ts` | Owns primary and secondary selection identities, current scene indices, relayout restoration and authored renames. | Reused by every host. |
+| `app/gestureLifecycle.ts` | Owns canvas and layer drag lifetimes. Release consumes one gesture; cancellation clears its preview without a write; late verdicts cannot revive it. | Reused by every host. |
+| Other `app/` modules | Pure scene, geometry, hit testing, selection matching, inspector and view helpers, plus the canvas painter (`render.ts`). | Reused by every host. |
 | `app/host.ts` | The transport shim, and the ONLY file under `app/` that knows which host it is in | A new host adds a branch here. Nothing else under `app/` changes. |
 | `messages.ts` | The typed contract, both directions | Nobody. It is the contract. |
 | `html.ts` | The page: markup, ids and styles, parameterised by the four things only a host knows (bundle URL, nonce, CSP, game font) | Reusable as is. A host that writes its own page must keep the element ids. |

@@ -11,8 +11,8 @@
  *   node dist/live-pass.cjs          (then delete both .cjs — dist/ ships)
  */
 import { runTests } from "@vscode/test-electron";
+import AdmZip from "adm-zip";
 import * as fs from "fs";
-import * as os from "os";
 import * as path from "path";
 import { devPath, requireDevPath } from "./devPaths";
 
@@ -26,7 +26,9 @@ export async function main(): Promise<number> {
   if (vscodeExecutablePath && !fs.existsSync(vscodeExecutablePath))
     throw new Error("VSCODE_EXECUTABLE_PATH does not exist");
 
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "px-live-pass-"));
+  const testing = path.join(repoRoot, ".local/testing");
+  fs.mkdirSync(testing, { recursive: true });
+  const scratch = fs.mkdtempSync(path.join(testing, "live-pass-"));
   const userDataDir = path.join(scratch, "user-data");
   fs.mkdirSync(path.join(userDataDir, "User"), { recursive: true });
   fs.writeFileSync(
@@ -42,6 +44,7 @@ export async function main(): Promise<number> {
         "extensions.autoUpdate": false,
         "update.mode": "none",
         "telemetry.telemetryLevel": "off",
+        "chat.disableAIFeatures": true,
       },
       null,
       2
@@ -49,15 +52,23 @@ export async function main(): Promise<number> {
   );
 
   const resultsFile = path.join(scratch, "results.json");
+  const vsix = process.env.PX_LIVE_VSIX;
+  const extracted = path.join(scratch, "package");
+  if (vsix) new AdmZip(path.resolve(vsix)).extractAllTo(extracted);
   console.log(`live-pass results: ${resultsFile}`);
   let failed = false;
   try {
+    delete process.env.ELECTRON_RUN_AS_NODE;
     await runTests({
       vscodeExecutablePath,
-      extensionDevelopmentPath: path.join(repoRoot, "packages", "vscode"),
+      extensionDevelopmentPath: vsix
+        ? path.join(extracted, "extension")
+        : path.join(repoRoot, "packages", "vscode"),
       extensionTestsPath: path.join(repoRoot, "dist", "live-pass-suite.cjs"),
       launchArgs: [
         modPath,
+        "--profile",
+        "PXTK Development",
         "--user-data-dir",
         userDataDir,
         "--extensions-dir",
@@ -66,7 +77,8 @@ export async function main(): Promise<number> {
       ],
       extensionTestsEnv: { CK3_LIVE_RESULTS: resultsFile },
     });
-  } catch {
+  } catch (error) {
+    console.error(error);
     failed = true; // suite signals soft failures via results.json; still print it
   }
 
@@ -79,7 +91,7 @@ export async function main(): Promise<number> {
     }
     const bad = results.filter((r) => !r.ok).length;
     console.log(`\nlive-pass: ${results.length - bad}/${results.length} checks passed`);
-    return bad > 0 ? 1 : 0;
+    return failed || bad > 0 ? 1 : 0;
   }
   console.error("live-pass: no results file written — host crashed before the suite ran");
   return failed ? 1 : 2;

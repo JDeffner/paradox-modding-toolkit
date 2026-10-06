@@ -36,6 +36,7 @@ export interface UiState {
 
 export type AppToHost =
   | { type: "ready" }
+  /** Source coordinates stay 0-based, like the graph/detail protocol and VS Code positions. */
   | { type: "open"; file: string; line?: number }
   | { type: "fetch"; params: EventGraphParams }
   | { type: "export"; svg: string }

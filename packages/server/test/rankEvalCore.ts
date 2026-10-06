@@ -30,7 +30,7 @@ import { loadTokenDataFromLogs } from "../src/data/docsParser";
 import { mergeWikiTokens } from "../src/data/wikiDocs";
 import { walkStatements, parseScript, decode, type Statement } from "../src/parser";
 import { classifyKeyword } from "../src/contextKeywords";
-import type { SchemaEntry } from "../src/schema/types";
+import { definitionKinds, type SchemaEntry } from "../src/schema/types";
 
 /**
  * The completion contexts we sample and report separately. The four structural
@@ -149,7 +149,7 @@ export function buildEvalEnv(opts: {
   data.setTokens(scriptTokens.length > 0 ? mergeWikiTokens(scriptTokens, wikiTokens).tokens : wikiTokens);
   const schema = loadSchema(opts.modPath);
   data.completableKinds = new Set([
-    ...schema.entries.filter((e) => e.completable !== false).map((e) => e.kind),
+    ...schema.entries.filter((e) => e.completable !== false).flatMap(definitionKinds),
     "saved_scope",
     "variable",
   ]);

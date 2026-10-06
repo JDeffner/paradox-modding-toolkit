@@ -838,10 +838,29 @@ const hasDump = LOGS !== null && fs.existsSync(path.join(LOGS, "data_types"));
 (hasDump ? describe : describe.skip)("real DumpDataTypes: user's expression resolves", () => {
   const data = loadDataTypes(LOGS);
 
-  it("GetPlayer. offers Character members including MakeScope", () => {
-    const result = provideDataFnCompletion(data, emptyUsage(), 'visible = "[GetPlayer.')!;
+  it("GetPlayer. offers Character members and retrieves MakeScope as the user types", () => {
+    const prefix = 'visible = "[GetPlayer.';
+    const result = provideDataFnCompletion(data, emptyUsage(), prefix)!;
     expect(result.items.length).toBeGreaterThan(100);
-    expect(result.items.map((i) => i.label)).toContain("MakeScope");
+    // Large real dumps can exceed the initial response cap. The client must
+    // be told to requery, and narrowing must keep the whole chain intact.
+    if (!result.items.some((item) => item.label === "MakeScope")) {
+      expect(result.isIncomplete).toBe(true);
+    }
+    const typed = prefix + "Make";
+    const narrowed = provideDataFnCompletion(data, emptyUsage(), typed, undefined, {
+      line: 0,
+      character: typed.length,
+    })!;
+    const makeScope = narrowed.items.find((item) => item.label === "MakeScope");
+    expect(makeScope).toBeDefined();
+    expect(makeScope!.textEdit).toEqual({
+      range: {
+        start: { line: 0, character: prefix.length },
+        end: { line: 0, character: typed.length },
+      },
+      newText: "MakeScope",
+    });
   });
 
   it("a narrow type lists its producers, a broad one degrades to a count", () => {

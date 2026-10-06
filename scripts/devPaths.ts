@@ -24,6 +24,10 @@ import * as path from "path";
 const ENV_SUFFIX = {
   /** The game's `game/` data folder (…/steamapps/common/<Game>/game). */
   gamePath: "GAME_PATH",
+  /** Vanilla data the compatch test mod was based on (not necessarily older). */
+  compatchBasePath: "COMPATCH_BASE_PATH",
+  /** Vanilla data the compatch test mod is being adapted to. */
+  compatchTargetPath: "COMPATCH_TARGET_PATH",
   /** The game's logs folder holding the `script_docs` dumps and error.log. */
   logsPath: "LOGS_PATH",
   /** Your own mod's folder (default subject for the audit scripts). */
@@ -37,6 +41,8 @@ const ENV_SUFFIX = {
 /** dev-paths.json slot name for a key (per-game shape). */
 const SLOT: Record<DevPathKey, string> = {
   gamePath: "gamePath",
+  compatchBasePath: "compatchBasePath",
+  compatchTargetPath: "compatchTargetPath",
   logsPath: "logsPath",
   modPath: "modPath",
   corpusPath: "modCorpus",

@@ -26,6 +26,7 @@ const editor = vi.hoisted(() => ({
   rejectEdit: false,
   rejectSave: false,
   showInputBox: vi.fn(),
+  showQuickPick: vi.fn(),
   showWarningMessage: vi.fn(),
   showErrorMessage: vi.fn(),
 }));
@@ -49,6 +50,7 @@ vi.mock("vscode", () => ({
   },
   window: {
     showInputBox: editor.showInputBox,
+    showQuickPick: editor.showQuickPick,
     showWarningMessage: editor.showWarningMessage,
     showErrorMessage: editor.showErrorMessage,
   },
@@ -67,6 +69,9 @@ vi.mock("vscode", () => ({
     }
   },
   workspace: {
+    get textDocuments() {
+      return [...editor.documents.values()];
+    },
     openTextDocument: async (uri: { fsPath: string }) => {
       let doc = editor.documents.get(uri.fsPath);
       if (!doc) {
@@ -115,6 +120,7 @@ import * as vscode from "vscode";
 import {
   editLocalizationCommand,
   locTargetFile,
+  prepareLocalizationWrite,
   replaceLocLineValue,
   upsertNewModLoc,
   writeLocSmart,
@@ -188,23 +194,20 @@ describe("localization write boundary", () => {
     expect(await replaceLocLineValue(file, 1, "missing", "New")).toBe(false);
     expect(fs.readFileSync(file, "utf8")).toBe(original);
     const lookup = async () => [{ file, line: 1, source: "mod" as const }];
-    expect(await writeLocSmart(cfg, lookup, "missing", "Added")).toBe(
-      await locTargetFile(cfg, lookup, "missing")
-    );
-    expect(validOutput().map((entry) => [entry.key, entry.value])).toEqual([
-      ["other", "Untouched"],
-      ["missing", "Added"],
-    ]);
+    const target = await writeLocSmart(cfg, lookup, "missing", "Added");
+    expect(target).toBe(await locTargetFile(cfg, lookup, "missing"));
+    expect(validOutput(target).map((entry) => [entry.key, entry.value])).toEqual([["missing", "Added"]]);
+    expect(fs.readFileSync(file, "utf8")).toBe(original);
     expect(fs.existsSync(path.join(root, "localization", "replace"))).toBe(false);
   });
 
   it("adds and updates sibling keys through the same BOM and linebreak boundary", async () => {
-    fs.writeFileSync(file, 'l_english: # language\n audit_old:0 "Old"\n', "utf8");
-    expect(await upsertNewModLoc(cfg, "audit_new", "One\nTwo")).toBe(file);
-    expect(await upsertNewModLoc(cfg, "audit_new", "Three\r\nFour")).toBe(file);
+    fs.writeFileSync(file, 'l_english: # language\n audit_related_old:0 "Old"\n', "utf8");
+    expect(await upsertNewModLoc(cfg, "audit_related_new", "One\nTwo")).toBe(file);
+    expect(await upsertNewModLoc(cfg, "audit_related_new", "Three\r\nFour")).toBe(file);
     expect(validOutput().map((entry) => [entry.key, entry.value])).toEqual([
-      ["audit_old", "Old"],
-      ["audit_new", "Three\\nFour"],
+      ["audit_related_old", "Old"],
+      ["audit_related_new", "Three\\nFour"],
     ]);
   });
 
@@ -221,7 +224,7 @@ describe("localization write boundary", () => {
   });
 
   it("creates a valid new localization file", async () => {
-    const target = await upsertNewModLoc(cfg, "audit_new", "One\nTwo");
+    const target = await upsertNewModLoc(cfg, "audit_related_new", "One\nTwo");
     expect(validOutput(target).map((entry) => entry.value)).toEqual(["One\\nTwo"]);
   });
 
@@ -295,6 +298,129 @@ describe("localization write boundary", () => {
     expect(written).not.toContain(`${path.sep}replace${path.sep}`);
     expect(validOutput(written)[0].value).toBe("Deutsch");
     expect(validOutput()[0].value).toBe("English");
+  });
+
+  it("uses author defaults and preserves existing ownership", async () => {
+    fs.mkdirSync(path.join(root, ".px-toolkit"));
+    fs.writeFileSync(
+      path.join(root, ".px-toolkit", "localization.json"),
+      JSON.stringify({
+        language: "german",
+        newKeyFile: "localization/german/replace/chosen_l_{language}.yml",
+        entryVersion: "zero",
+      })
+    );
+    const target = await writeLocSmart(cfg, async () => [], "new_default", "Deutsch");
+    expect(target).toBe(path.join(root, "localization/german/replace/chosen_l_german.yml"));
+    expect(fs.readFileSync(target, "utf8")).toContain('new_default:0 "Deutsch"');
+    const own = path.join(root, "localization/german/owned_l_german.yml");
+    fs.writeFileSync(own, 'l_german:\n owned_key:7 "Existing" # keep\n');
+    expect(await writeLocSmart(cfg, async () => [], "owned_key", "Updated")).toBe(own);
+    expect(fs.readFileSync(own, "utf8")).toContain('owned_key:7 "Updated" # keep');
+  });
+
+  it("routes from unsaved sibling keys, without relying on the index", async () => {
+    fs.writeFileSync(file, 'l_english:\n unrelated: "Saved"\n');
+    await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+    editor.documents.get(file)!.text += ' agot_coronation_title: "Unsaved"\n';
+    const written = await writeLocSmart(cfg, async () => [], "agot_coronation_desc", "Description");
+    expect(written).toBe(file);
+    expect(fs.readFileSync(file, "utf8")).toContain('agot_coronation_title: "Unsaved"');
+  });
+
+  it("keeps replace-only layouts and rejects broad-prefix catchalls", async () => {
+    const replace = path.join(root, "localization/english/replace/rangers_l_english.yml");
+    fs.mkdirSync(path.dirname(replace), { recursive: true });
+    fs.writeFileSync(replace, 'l_english:\n agot_ranger_title: "Ranger"\n');
+    const written = await writeLocSmart(cfg, async () => [], "agot_coronation_title", "Coronation", {
+      sourcePath: "events/coronation.txt",
+    });
+    expect(written).toBe(path.join(path.dirname(replace), "coronation_l_english.yml"));
+    expect(fs.readFileSync(replace, "utf8")).not.toContain("agot_coronation");
+  });
+
+  it("refuses generated entries and leaves their source intact", async () => {
+    const original =
+      '# This file is generated by templates/render.py. Do not edit.\nl_english:\n generated_key: "Old"\n';
+    fs.writeFileSync(file, original);
+    await expect(writeLocSmart(cfg, async () => [], "generated_key", "New")).rejects.toThrow(
+      "source template"
+    );
+    expect(fs.readFileSync(file, "utf8")).toBe(original);
+  });
+
+  it("requires a choice for duplicate ownership and honors an explicit file", async () => {
+    const other = path.join(path.dirname(file), "other_l_english.yml");
+    fs.writeFileSync(file, 'l_english:\n shared_key: "First"\n');
+    fs.writeFileSync(other, 'l_english:\n shared_key: "Second"\n');
+    await expect(writeLocSmart(cfg, async () => [], "shared_key", "New")).rejects.toThrow("ambiguous");
+    expect(await writeLocSmart(cfg, async () => [], "shared_key", "New", { targetFile: other })).toBe(other);
+    expect(fs.readFileSync(file, "utf8")).toContain('"First"');
+  });
+
+  it.each(["disk", "buffer", "defaults"])(
+    "rejects a stale %s after the input prompt opens",
+    async (change) => {
+      fs.writeFileSync(file, 'l_english:\n wanted: "Old"\n');
+      const plan = (await prepareLocalizationWrite(cfg, async () => [], "wanted"))!;
+      if (change === "disk") fs.appendFileSync(file, "# external edit\n");
+      if (change === "buffer") editor.documents.get(file)!.text += "# unsaved edit\n";
+      if (change === "defaults") {
+        fs.mkdirSync(path.join(root, ".px-toolkit"));
+        fs.writeFileSync(path.join(root, ".px-toolkit/localization.json"), "{}");
+      }
+      await expect(plan.apply("New")).rejects.toThrow(/changed/);
+      expect(fs.readFileSync(file, "utf8")).toContain('"Old"');
+    }
+  );
+
+  it("does not create a destination when the user cancels", async () => {
+    editor.showInputBox.mockResolvedValue(undefined);
+    await editLocalizationCommand(async () => [], cfg, vi.fn(), "new_key");
+    expect(fs.readdirSync(path.dirname(file))).toEqual([]);
+  });
+
+  it("rejects a destination outside the mod and invalid configuration", async () => {
+    await expect(
+      writeLocSmart(cfg, async () => [], "new_key", "Value", {
+        targetFile: path.join(root, "../outside_l_english.yml"),
+      })
+    ).rejects.toThrow("inside");
+    fs.mkdirSync(path.join(root, ".px-toolkit"));
+    fs.writeFileSync(path.join(root, ".px-toolkit/localization.json"), "{ broken");
+    await expect(writeLocSmart(cfg, async () => [], "new_key", "Value")).rejects.toThrow("defaults");
+  });
+
+  it("keeps the source stage in a new EU5 destination", async () => {
+    const written = await writeLocSmart({ ...cfg, gameId: "eu5" }, async () => [], "new_key", "Value", {
+      sourcePath: "main_menu/events/test.txt",
+    });
+    expect(written).toBe(path.join(root, "main_menu/localization/english/test_l_english.yml"));
+  });
+
+  it("uses a selected vanilla localization file for source templates", async () => {
+    const mod = path.join(root, "Mod");
+    const game = path.join(root, "Vanilla");
+    const vanilla = path.join(game, "localization/english/dialogue_l_english.yml");
+    fs.mkdirSync(path.dirname(vanilla), { recursive: true });
+    fs.mkdirSync(path.join(mod, ".px-toolkit"), { recursive: true });
+    fs.writeFileSync(vanilla, 'l_english:\n inherited_key: "Vanilla"\n');
+    fs.writeFileSync(
+      path.join(mod, ".px-toolkit/localization.json"),
+      JSON.stringify({ overrideFile: "localization/replace/{source}_l_{language}.yml" })
+    );
+    editor.showInputBox.mockResolvedValue("Override");
+    const changed = vi.fn();
+    await editLocalizationCommand(
+      async () => [{ file: vanilla, line: 1, source: "vanilla", value: "Vanilla" }],
+      { ...cfg, modPath: mod, gamePath: game },
+      changed,
+      { pxKey: "inherited_key", pxLoc: { file: vanilla, line: 1 } }
+    );
+    const target = path.join(mod, "localization/replace/dialogue_l_english.yml");
+    expect(changed).toHaveBeenCalledWith(target);
+    expect(validOutput(target)[0].value).toBe("Override");
+    expect(fs.readFileSync(vanilla, "utf8")).toContain('"Vanilla"');
   });
 
   const tiger = devPath("tigerPath");

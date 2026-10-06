@@ -31,13 +31,17 @@ beforeEach(() => {
 afterEach(() => rmSync(cwd, { recursive: true, force: true }));
 
 describe("release preparation CLI", () => {
-  it("collects the exact version's notes without the title or changelog footer", () => {
+  it("collects the exact version's notes without the title and preserves changelog links", () => {
+    const link =
+      "[Full changes](https://github.com/JDeffner/paradox-modding-toolkit/blob/v0.4.4/packages/vscode/CHANGELOG.md)";
     writeFileSync(
       path.join(cwd, "docs/release/0.4.4.md"),
-      "\uFEFF# Release\r\n\r\n- Fix edits.\r\n\r\n### Full changelog\r\nOld link\r\n"
+      `\uFEFF# Release\r\n\r\n- Fix edits.\r\n\r\n### Full changelog\r\n${link}\r\n`
     );
     expect(run().status).toBe(0);
-    expect(readFileSync(path.join(cwd, "release-body.md"), "utf8")).toBe("- Fix edits.\n");
+    expect(readFileSync(path.join(cwd, "release-body.md"), "utf8")).toBe(
+      `- Fix edits.\r\n\r\n### Full changelog\r\n${link}\n`
+    );
   });
 
   it.each(["package.json", "packages/vscode/package.json"])(

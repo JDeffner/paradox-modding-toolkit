@@ -18,13 +18,20 @@
 import * as vscode from "vscode";
 import * as fs from "fs";
 import * as path from "path";
-import { convertDisplayInput, type CalendarSetting } from "@px-lsp/protocol/calendar";
-import { CALENDAR_FILE, readCalendarFile, writeCalendarFile } from "@px-lsp/protocol/calendarFile";
-import { generateCalendarLoc } from "@px-lsp/protocol/calendarLoc";
+import { convertDisplayInput, sanitizeCalendar, type CalendarSetting } from "@px-lsp/protocol/calendar";
+import { CALENDAR_FILE, calendarFilePath } from "@px-lsp/protocol/calendarFile";
+import { CAL_YEAR_KEY, CAL_ERA_KEY, generateCalendarLoc } from "@px-lsp/protocol/calendarLoc";
+import { upsertLocalizationText, type LocalizationDefaults } from "@px-lsp/protocol/localizationPolicy";
 import type { PxConfig } from "./config";
 import { metaFor } from "./meta";
-
-const BOM = "\uFEFF";
+import { prepareProjectConfigWrite, readProjectConfigText } from "./projectConfigFile";
+import {
+  assertLocalizationPath,
+  effectiveLocConfig,
+  localizationDefaultsFile,
+  readLocalizationDefaults,
+} from "./localizationProject";
+import { assertDocumentCurrent, readDocument, writeDocument, type DocumentSnapshot } from "./documentWrite";
 
 /** What `Declare Calendar` writes: valid as is, meant to be edited. */
 const EXAMPLE_CALENDAR: CalendarSetting = { epoch: 4000, after: "AD", before: "BC" };
@@ -36,12 +43,17 @@ const EXAMPLE_CALENDAR: CalendarSetting = { epoch: 4000, after: "AD", before: "B
  */
 export function calendarForMod(cfg: PxConfig): { calendar: CalendarSetting | undefined; problem?: string } {
   if (!cfg.modPath) return { calendar: cfg.calendar };
-  const read = readCalendarFile(cfg.modPath, metaFor(cfg.gameId));
-  if (read?.calendar) return { calendar: read.calendar };
-  return {
-    calendar: cfg.calendar,
-    problem: read ? `${path.relative(cfg.modPath, read.file)} is ${read.error}.` : undefined,
-  };
+  let file = path.join(cfg.modPath, metaFor(cfg.gameId).configDirName, CALENDAR_FILE);
+  try {
+    file = calendarFilePath(cfg.modPath, metaFor(cfg.gameId));
+    const text = readProjectConfigText(cfg.modPath, metaFor(cfg.gameId), CALENDAR_FILE);
+    if (text === undefined) return { calendar: cfg.calendar };
+    const calendar = sanitizeCalendar(JSON.parse(text.replace(/^\uFEFF/, "")));
+    if (!calendar) throw new Error("not a usable calendar");
+    return { calendar };
+  } catch (error) {
+    return { calendar: undefined, problem: `${path.relative(cfg.modPath, file)}: ${String(error)}` };
+  }
 }
 
 /** No calendar for this mod: say where it goes and offer to write it there. */
@@ -68,15 +80,20 @@ export async function declareCalendarCommand(cfg: PxConfig): Promise<void> {
     );
     return;
   }
-  const names = metaFor(cfg.gameId);
-  const existing = readCalendarFile(cfg.modPath, names);
-  const file = existing?.file ?? writeCalendarFile(cfg.modPath, names, cfg.calendar ?? EXAMPLE_CALENDAR);
-  await vscode.window.showTextDocument(vscode.Uri.file(file));
-  if (!existing) {
-    void vscode.window.showInformationMessage(
-      `Wrote ${path.relative(cfg.modPath, file)}. Set "epoch" to the script year that displays as year 1 ` +
-        'and name the era labels; leave "before" out for a single-era calendar. Commit the file with the mod.'
-    );
+  try {
+    const names = metaFor(cfg.gameId);
+    const prepared = await prepareProjectConfigWrite(cfg.modPath, names, CALENDAR_FILE);
+    const file = prepared.text === undefined ? prepared.target : prepared.source;
+    if (prepared.text === undefined) {
+      await prepared.write(JSON.stringify(cfg.calendar ?? EXAMPLE_CALENDAR, null, 2) + "\n");
+      void vscode.window.showInformationMessage(
+        `Wrote ${path.relative(cfg.modPath, file)}. Set "epoch" to the script year that displays as year 1 ` +
+          'and name the era labels; leave "before" out for a single-era calendar. Commit the file with the mod.'
+      );
+    }
+    await vscode.window.showTextDocument(vscode.Uri.file(file));
+  } catch (error) {
+    void vscode.window.showErrorMessage(`Could not declare calendar: ${String(error)}`);
   }
 }
 
@@ -123,7 +140,38 @@ export async function insertDateCommand(cfg: PxConfig): Promise<void> {
  * again after a calendar change regenerates in place.
  */
 export async function generateCalendarLocCommand(cfg: PxConfig): Promise<void> {
-  const { calendar, problem } = calendarForMod(cfg);
+  const sourceChecks: (() => void)[] = [];
+  try {
+    if (cfg.modPath) {
+      const names = metaFor(cfg.gameId);
+      for (const file of ["localization.json", CALENDAR_FILE]) {
+        const prepared = await prepareProjectConfigWrite(cfg.modPath, names, file);
+        sourceChecks.push(prepared.assertCurrent);
+      }
+    }
+    cfg = effectiveLocConfig(cfg);
+  } catch (error) {
+    void vscode.window.showErrorMessage(`Could not generate calendar localization: ${String(error)}`);
+    return;
+  }
+  const declared = calendarForMod(cfg);
+  let calendar = declared.calendar;
+  const problem = declared.problem;
+  const sources: DocumentSnapshot[] = [];
+  if (cfg.modPath) {
+    const declaration = calendarFilePath(cfg.modPath, metaFor(cfg.gameId));
+    if (fs.existsSync(declaration)) {
+      try {
+        const snapshot = await readDocument(declaration);
+        sources.push(snapshot);
+        calendar = sanitizeCalendar(JSON.parse(snapshot.text.replace(/^\uFEFF/, "")));
+        if (!calendar) throw new Error("The calendar declaration is not a usable calendar");
+      } catch (error) {
+        void vscode.window.showErrorMessage(`Could not generate calendar localization: ${String(error)}`);
+        return;
+      }
+    }
+  }
   if (!calendar) {
     await offerToDeclare(cfg, "Generate Calendar Localization", problem);
     return;
@@ -143,23 +191,129 @@ export async function generateCalendarLocCommand(cfg: PxConfig): Promise<void> {
     return;
   }
 
-  const { files, notes } = generateCalendarLoc(calendar, meta.calendarLoc, cfg.locLanguage);
-  const targets = files.map((f) => path.join(cfg.modPath!, ...f.relPath.split("/")));
-  const existing = targets.filter((t) => fs.existsSync(t));
-  if (existing.length > 0) {
-    const regenerate = "Regenerate";
-    const pick = await vscode.window.showWarningMessage(
-      `Overwrite the generated calendar files (${existing.map((t) => path.basename(t)).join(", ")})?`,
-      regenerate
+  try {
+    const defaultsFile = localizationDefaultsFile(cfg);
+    if (fs.existsSync(defaultsFile)) sources.push(await readDocument(defaultsFile));
+    const { files, notes } = generateCalendarLoc(calendar, meta.calendarLoc, cfg.locLanguage);
+    const defaults = readLocalizationDefaults(cfg);
+    const stage = meta.stageRoots?.[0];
+    const targets = files.map((file) =>
+      path.join(cfg.modPath!, ...(stage ? [stage] : []), ...file.relPath.split("/"))
     );
-    if (pick !== regenerate) return;
+    const targetsBefore: {
+      snapshot?: DocumentSnapshot;
+      document?: vscode.TextDocument;
+      text: string;
+      version?: number;
+    }[] = [];
+    for (const target of targets) {
+      assertLocalizationPath(cfg, target, cfg.locLanguage);
+      if (fs.existsSync(target)) {
+        const snapshot = await readDocument(target);
+        targetsBefore.push({ snapshot, text: snapshot.text });
+      } else {
+        const document = vscode.workspace.textDocuments?.find((doc) => doc.uri.fsPath === target);
+        targetsBefore.push({ document, text: document?.getText() ?? "", version: document?.version });
+      }
+    }
+    const existing = targets.filter(
+      (_target, index) => targetsBefore[index].snapshot || targetsBefore[index].text
+    );
+    if (existing.length > 0) {
+      const pick = await vscode.window.showWarningMessage(
+        `Update the generated calendar entries (${existing.map((target) => path.basename(target)).join(", ")})?`,
+        "Regenerate"
+      );
+      if (pick !== "Regenerate") return;
+    }
+    // A prompt is an edit boundary: reject every stale input before updating
+    // the first file, including the calendar declaration when it exists.
+    const assertTargetCurrent = (index: number) => {
+      const before = targetsBefore[index];
+      if (before.snapshot) assertDocumentCurrent(before.snapshot);
+      else if (
+        fs.existsSync(targets[index]) ||
+        (before.document &&
+          (before.document.isClosed ||
+            before.document.version !== before.version ||
+            before.document.getText() !== before.text))
+      ) {
+        throw new Error(`${path.basename(targets[index])} changed during the operation. Try again.`);
+      }
+    };
+    for (let i = 0; i < targets.length; i++) assertTargetCurrent(i);
+    for (const assertCurrent of sourceChecks) assertCurrent();
+    for (const source of sources) assertDocumentCurrent(source);
+    const owned = new Set([
+      CAL_YEAR_KEY,
+      CAL_ERA_KEY,
+      ...Object.keys(meta.calendarLoc.dateFormats),
+      ...(meta.calendarLoc.monthKeys ?? []).flat(),
+    ]);
+    const bodies = files.map((file, index) => {
+      const generated = file.content.replace(
+        /^([ \t]*[A-Za-z0-9_.\-']+:)0(?=[ \t]*")/gm,
+        `$1${defaults.entryVersion === "none" ? "" : "0"}`
+      );
+      return !targetsBefore[index].snapshot && !targetsBefore[index].text.replace(/^\uFEFF/, "")
+        ? generated
+        : mergeCalendarEntries(
+            targetsBefore[index].text,
+            generated,
+            owned,
+            cfg.locLanguage,
+            defaults.entryVersion
+          );
+    });
+    for (let i = 0; i < files.length; i++) {
+      assertTargetCurrent(i);
+      const snapshot = targetsBefore[i].snapshot ?? (await readDocument(targets[i], true));
+      if (
+        !targetsBefore[i].snapshot &&
+        (snapshot.text !== targetsBefore[i].text || (!snapshot.created && !targetsBefore[i].document))
+      ) {
+        throw new Error(`${path.basename(targets[i])} changed during the operation. Try again.`);
+      }
+      for (const assertCurrent of sourceChecks) assertCurrent();
+      await writeDocument(snapshot, bodies[i], true, sources);
+    }
+    await vscode.window.showTextDocument(vscode.Uri.file(targets[targets.length - 1]));
+    void vscode.window.showInformationMessage(
+      `Wrote ${targets.map((target) => path.relative(cfg.modPath!, target)).join(" and ")}. ` +
+        notes.join(" ")
+    );
+  } catch (error) {
+    void vscode.window.showErrorMessage(`Could not generate calendar localization: ${String(error)}`);
   }
-  for (let i = 0; i < files.length; i++) {
-    fs.mkdirSync(path.dirname(targets[i]), { recursive: true });
-    fs.writeFileSync(targets[i], BOM + files[i].content, "utf8");
+}
+
+/** Replace generated entries while preserving surrounding editor content. */
+function mergeCalendarEntries(
+  text: string,
+  generated: string,
+  owned: Set<string>,
+  language: string,
+  version?: LocalizationDefaults["entryVersion"]
+): string {
+  const eol = text.includes("\r\n") ? "\r\n" : "\n";
+  const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
+  const header = lines.find((line) => line.trim() && !line.trimStart().startsWith("#"));
+  if (!new RegExp(`^[ \\t]*l_${language}:[ \\t]*(?:#.*)?$`).test(header ?? "")) {
+    throw new Error(`Calendar localization needs an l_${language}: header`);
   }
-  await vscode.window.showTextDocument(vscode.Uri.file(targets[targets.length - 1]));
-  void vscode.window.showInformationMessage(
-    `Wrote ${files.map((f) => f.relPath).join(" and ")}. ` + notes.join(" ")
-  );
+  const entry = /^([ \t]*)([A-Za-z0-9_.\-']+):(\d*)[ \t]*"(.*)"([ \t]*(?:#.*)?)$/;
+  const replacements = new Map<string, RegExpExecArray>();
+  for (const line of generated.split("\n")) {
+    const match = entry.exec(line);
+    if (match) replacements.set(match[2], match);
+  }
+  let merged = lines
+    .filter((line) => {
+      const match = entry.exec(line);
+      return !match || !owned.has(match[2]) || replacements.has(match[2]);
+    })
+    .join(eol);
+  for (const [key, match] of replacements)
+    merged = upsertLocalizationText(merged, language, key, match[4], version);
+  return merged;
 }

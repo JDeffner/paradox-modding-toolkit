@@ -1,0 +1,263 @@
+body {
+  margin: 0;
+  padding: 24px;
+}
+main {
+  max-width: 1320px;
+  margin: 0 auto;
+}
+.heading-title,
+.toolbar,
+.source-row,
+.section-heading,
+.entry-meta,
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.heading-title svg {
+  width: 20px;
+  height: 20px;
+}
+h1 {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 0;
+}
+h2 {
+  font-size: 16px;
+  margin: 0;
+}
+h3 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+p {
+  line-height: 1.6;
+}
+.muted,
+.help,
+small {
+  color: var(--px-muted-fg);
+}
+.page-heading {
+  margin-bottom: 24px;
+}
+.page-heading p {
+  margin: 8px 0 0;
+}
+.setup,
+.workbench,
+.output,
+.notice {
+  border: 1px solid var(--px-border);
+  border-radius: var(--px-radius);
+  margin: 16px 0;
+}
+.setup,
+.output,
+.notice {
+  padding: 18px;
+}
+.setup summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.source-list {
+  list-style: decimal;
+  padding-left: 24px;
+  margin: 16px 0;
+}
+.source-list li {
+  padding: 8px 0;
+}
+.source-main {
+  flex: 1;
+  min-width: 170px;
+}
+.source-main strong,
+.source-main small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.source-main small {
+  margin-top: 4px;
+}
+.source-actions {
+  display: flex;
+  gap: 4px;
+}
+.toolbar {
+  margin-top: 14px;
+}
+.section-heading {
+  justify-content: space-between;
+}
+.setup .path {
+  margin: 10px 0;
+}
+.path,
+code {
+  font-family: var(--px-font-mono);
+  overflow-wrap: anywhere;
+}
+.workbench {
+  display: grid;
+  grid-template-columns: minmax(240px, 30%) minmax(0, 1fr);
+  overflow: hidden;
+}
+.queue {
+  border-right: 1px solid var(--px-border);
+  padding: 16px;
+}
+.queue .px-select {
+  width: 100%;
+  margin: 10px 0;
+}
+.entry-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.entry-button {
+  width: 100%;
+  display: block;
+  text-align: left;
+  padding: 12px 10px;
+  border: 0;
+  border-radius: var(--px-radius-sm);
+  color: var(--px-fg);
+  background: transparent;
+  cursor: pointer;
+}
+.entry-button:hover,
+.entry-button[aria-current="true"] {
+  background: var(--px-muted);
+}
+.entry-button[aria-current="true"] {
+  font-weight: 600;
+}
+.entry-name {
+  display: block;
+  overflow-wrap: anywhere;
+  margin-bottom: 6px;
+}
+.entry-meta {
+  font-size: var(--px-text-xs);
+  font-weight: 400;
+  color: var(--px-muted-fg);
+}
+.detail {
+  padding: 22px;
+  min-width: 0;
+}
+.contribution {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--px-border);
+}
+.contribution:last-child {
+  border-bottom: 0;
+}
+.contribution pre {
+  max-height: 220px;
+  overflow: auto;
+  padding: 12px;
+  background: var(--px-muted);
+  border-radius: var(--px-radius-sm);
+  font-family: var(--px-font-mono);
+  font-size: var(--px-text-sm);
+  line-height: 1.5;
+}
+.field-grid {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) minmax(140px, 2fr);
+  gap: 10px;
+  align-items: center;
+  margin: 16px 0;
+}
+.field-grid label {
+  overflow-wrap: anywhere;
+}
+.resolution-note,
+.manual-text {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 8px 0 12px;
+}
+.manual-text {
+  min-height: 180px;
+  font-family: var(--px-font-mono);
+  line-height: 1.5;
+}
+.decision {
+  padding-top: 18px;
+}
+.decision details {
+  margin: 18px 0;
+}
+.decision summary {
+  cursor: pointer;
+}
+.notice {
+  background: var(--px-muted);
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+.error {
+  color: var(--px-destructive);
+}
+.file-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--px-border);
+}
+.conflict {
+  margin: 14px 0;
+  padding: 14px;
+  background: var(--px-muted);
+  border-radius: var(--px-radius-sm);
+}
+.pagination {
+  margin-top: 14px;
+  justify-content: space-between;
+}
+.empty {
+  max-width: 680px;
+  padding: 12px 0;
+}
+.new-name {
+  max-width: 330px;
+  width: 100%;
+}
+.coverage {
+  font-size: var(--px-text-sm);
+  margin: 16px 0;
+}
+button:disabled {
+  cursor: default;
+}
+@media (max-width: 760px) {
+  body {
+    padding: 14px;
+  }
+  .workbench {
+    grid-template-columns: 1fr;
+  }
+  .queue {
+    border-right: 0;
+    border-bottom: 1px solid var(--px-border);
+  }
+  .entry-list {
+    max-height: 280px;
+    overflow: auto;
+  }
+  .detail {
+    padding: 16px;
+  }
+}

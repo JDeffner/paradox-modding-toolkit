@@ -17,6 +17,8 @@ import { readModName } from "@px-lsp/protocol/modName";
 import { LOC_LANGUAGES, detectLocFileLanguage } from "@px-lsp/protocol/translationCore";
 import { buildTranslationMod, type SourceLocFile } from "./translationBuild";
 import { metaFor } from "./meta";
+import { assertLocalizationPath, effectiveLocConfig, localizationRoots } from "./localizationProject";
+import { assertDocumentCurrent, readDocument, writeDocument, type DocumentSnapshot } from "./documentWrite";
 
 function uniqueRoots(cfg: PxConfig): string[] {
   const out: string[] = [];
@@ -47,7 +49,9 @@ function supportedVersionOf(root: string): string | null {
 
 export async function createTranslationModCommand(cfg: PxConfig, log: (msg: string) => void): Promise<void> {
   // 1. Source mod: any indexed root with localization files.
-  const candidates = uniqueRoots(cfg).filter((r) => fs.existsSync(path.join(r, "localization")));
+  const candidates = uniqueRoots(cfg).filter((modPath) =>
+    localizationRoots({ ...cfg, modPath }).some((root) => fs.existsSync(path.join(modPath, root)))
+  );
   if (candidates.length === 0) {
     void vscode.window.showWarningMessage(
       "Paradox Modding Toolkit: no mod with a localization folder found (open the mod to translate as a workspace folder or list it in px.parentMods)."
@@ -66,9 +70,10 @@ export async function createTranslationModCommand(cfg: PxConfig, log: (msg: stri
   if (!sourcePick) return;
   const sourceRoot = sourcePick.root;
   const sourceName = sourcePick.label;
+  cfg = effectiveLocConfig({ ...cfg, modPath: sourceRoot });
 
   // 2. Languages: source from what the mod actually ships, target from the rest.
-  const locFiles = listFiles(path.join(sourceRoot, "localization"), ".yml");
+  const locFiles = localizationRoots(cfg).flatMap((root) => listFiles(path.join(sourceRoot, root), ".yml"));
   const present = [
     ...new Set(locFiles.map(detectLocFileLanguage).filter((l): l is string => l !== null)),
   ].sort();
@@ -120,35 +125,62 @@ export async function createTranslationModCommand(cfg: PxConfig, log: (msg: stri
   if (!dest) return;
 
   // 4. Generate and write.
-  const files: SourceLocFile[] = [];
-  for (const f of locFiles) {
-    if (detectLocFileLanguage(f) !== sourceLang) continue;
-    try {
-      files.push({ relPath: path.relative(sourceRoot, f), content: fs.readFileSync(f, "utf8") });
-    } catch {
-      log(`translation mod: unreadable, skipped: ${f}`);
+  let result: ReturnType<typeof buildTranslationMod>;
+  try {
+    const files: SourceLocFile[] = [];
+    const sources: DocumentSnapshot[] = [];
+    for (const f of locFiles) {
+      if (detectLocFileLanguage(f) !== sourceLang) continue;
+      const snapshot = await readDocument(f);
+      sources.push(snapshot);
+      files.push({ relPath: path.relative(sourceRoot, f), content: snapshot.text });
     }
-  }
-  const meta = metaFor(cfg.gameId);
-  const result = buildTranslationMod({
-    gameName: meta.name,
-    gameShortName: meta.shortName,
-    tigerName: meta.tiger?.binaryName ?? null,
-    configDirName: meta.configDirName,
-    descriptorKind: meta.descriptor,
-    sourceName,
-    // The metadata convention links mods by id, not by display name.
-    sourceId: readMetadata(sourceRoot)?.id?.trim() || null,
-    supportedVersion: supportedVersionOf(sourceRoot),
-    sourceLang,
-    targetLang,
-    sourceRootRelative: path.relative(dest, sourceRoot) || null,
-    files,
-  });
-  for (const g of result.files) {
-    const abs = path.join(dest, ...g.relPath.split("/"));
-    fs.mkdirSync(path.dirname(abs), { recursive: true });
-    fs.writeFileSync(abs, g.content, "utf8");
+    const meta = metaFor(cfg.gameId);
+    result = buildTranslationMod({
+      gameName: meta.name,
+      gameShortName: meta.shortName,
+      tigerName: meta.tiger?.binaryName ?? null,
+      configDirName: meta.configDirName,
+      descriptorKind: meta.descriptor,
+      sourceName,
+      // The metadata convention links mods by id, not by display name.
+      sourceId: readMetadata(sourceRoot)?.id?.trim() || null,
+      supportedVersion: supportedVersionOf(sourceRoot),
+      sourceLang,
+      targetLang,
+      stageRoot: meta.stageRoots?.[0],
+      stageRoots: meta.stageRoots,
+      sourceRootRelative: path.relative(dest, sourceRoot) || null,
+      files,
+    });
+    // Recheck the destination after the input flow. An external write must not
+    // turn a new-mod scaffold into an overwrite of someone else's content.
+    if (fs.existsSync(dest) && fs.readdirSync(dest).length > 0) {
+      throw new Error("Destination folder is no longer empty. Choose an empty folder and try again.");
+    }
+    for (const file of result.files) {
+      if (/_l_[a-z_]+\.yml$/i.test(file.relPath)) {
+        assertLocalizationPath({ ...cfg, modPath: dest }, path.join(dest, file.relPath), targetLang);
+      }
+    }
+    for (const source of sources) assertDocumentCurrent(source);
+    const destinations: DocumentSnapshot[] = [];
+    for (const g of result.files) {
+      const snapshot = await readDocument(path.join(dest, ...g.relPath.split("/")), true);
+      if (!snapshot.created) throw new Error(`${g.relPath} already has content. Choose an empty folder.`);
+      destinations.push(snapshot);
+    }
+    for (const source of sources) assertDocumentCurrent(source);
+    for (const destination of destinations) assertDocumentCurrent(destination);
+    for (let i = 0; i < result.files.length; i++) {
+      const file = result.files[i];
+      await writeDocument(destinations[i], file.content, /_l_[a-z_]+\.yml$/i.test(file.relPath), sources);
+    }
+  } catch (error) {
+    const message = `Could not create translation mod: ${String(error)}`;
+    log(message);
+    void vscode.window.showErrorMessage(message);
+    return;
   }
   const summary =
     `Paradox Modding Toolkit: translation mod created at ${dest} — ${result.locFiles} loc file(s), ` +

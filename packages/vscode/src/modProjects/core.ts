@@ -13,7 +13,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { parseDescriptor, upsertDescriptorValue } from "@px-lsp/protocol/descriptorMod";
 import { hasMetadataDescriptor } from "@px-lsp/protocol/descriptorMetadata";
-import { resolveConfigDir, type ConfigDirNames } from "@px-lsp/protocol/configDir";
+import { resolveConfigPath, type ConfigDirNames } from "@px-lsp/protocol/configDir";
 
 /** Folder name of the mod content inside a project folder. */
 export const PROJECT_CONTENT_DIR = "mod";
@@ -197,7 +197,7 @@ export function claimDest(dir: string): boolean {
 /** Where the Workshop listing of a game-folder mod lives: `<configDir>/workshop`,
  * mirroring steam/workshopFiles.resolveWorkshopDir with no explicit setting. */
 export function listingDirIn(root: string, names: ConfigDirNames): string {
-  return path.join(resolveConfigDir(root, names), PROJECT_WORKSHOP_DIR);
+  return resolveConfigPath(root, names, PROJECT_WORKSHOP_DIR);
 }
 
 export interface MovePlan {

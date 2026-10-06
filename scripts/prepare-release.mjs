@@ -17,7 +17,6 @@ const file = `docs/release/${version}.md`;
 const notes = readFileSync(file, "utf8")
   .replace(/^\uFEFF/, "")
   .replace(/^# [^\r\n]*\r?\n/, "")
-  .replace(/^### Full changelog\b[\s\S]*/m, "")
   .trim();
 if (!notes) throw new Error(`${file} must contain release notes`);
 writeFileSync("release-body.md", `${notes}\n`);

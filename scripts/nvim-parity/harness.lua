@@ -138,6 +138,7 @@ local function first_top_level_key(file)
   local f = io.open(file, "r")
   if not f then return nil end
   for line in f:lines() do
+    line = line:gsub("^\239\187\191", "") -- CK3 script files use UTF-8 with BOM.
     local key = line:match("^([A-Za-z0-9_][A-Za-z0-9_.]*)%s*=%s*{")
     if key then
       f:close()

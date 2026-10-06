@@ -59,6 +59,66 @@ export function configForTarget(cfg: PxConfig, arg?: unknown): PxConfig {
   return { ...cfg, modPath: root ?? (arg === undefined ? cfg.modPath : null) };
 }
 
+/** Reference sources choose the focus mod; an explicit writable source keeps its owner. */
+export function configForLocalizationTarget(
+  cfg: PxConfig,
+  arg?: unknown,
+  focusedRoot?: string | null
+): PxConfig {
+  const uri = targetUri(arg);
+  const owner = writableRoot(uri, cfg);
+  if (owner) return { ...cfg, modPath: owner };
+  const reference =
+    uri?.scheme === "file" &&
+    [cfg.gamePath, ...cfg.parentPaths].some((root) => root && containsPath(root, uri.fsPath));
+  if (reference) {
+    return { ...cfg, modPath: writableRoot(focusedRoot ? vscode.Uri.file(focusedRoot) : undefined, cfg) };
+  }
+  return configForTarget(cfg, arg);
+}
+
+/** Native Explorer membership needs directories only, not every vanilla file. */
+export async function vanillaDirectories(root: string): Promise<string[]> {
+  const folders: string[] = [];
+  const visit = async (folder: string): Promise<void> => {
+    folders.push(vscode.Uri.file(folder).fsPath);
+    for (const entry of await fs.promises.readdir(folder, { withFileTypes: true })) {
+      if (entry.isDirectory() && !entry.isSymbolicLink()) await visit(path.join(folder, entry.name));
+    }
+  };
+  await visit(root);
+  return folders;
+}
+
+export function registerVanillaTargetContexts(
+  context: vscode.ExtensionContext,
+  getCfg: () => PxConfig
+): void {
+  let lastRoot: string | null | undefined;
+  let revision = 0;
+  const refresh = async () => {
+    const root = getCfg().gamePath;
+    if (root === lastRoot) return;
+    lastRoot = root;
+    const current = ++revision;
+    await vscode.commands.executeCommand("setContext", "px.vanillaFolders", []);
+    const folders = root ? await vanillaDirectories(root) : [];
+    if (current === revision)
+      await vscode.commands.executeCommand("setContext", "px.vanillaFolders", folders);
+  };
+  const update = () => {
+    void refresh().catch((error: unknown) => {
+      lastRoot = undefined;
+      void vscode.window.showErrorMessage(`Could not prepare vanilla file actions: ${String(error)}`);
+    });
+  };
+  update();
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeConfiguration(update),
+    vscode.workspace.onDidChangeWorkspaceFolders(update)
+  );
+}
+
 export async function targetDocument(
   arg?: unknown,
   extension?: string

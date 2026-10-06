@@ -7,10 +7,12 @@
  * (formerly Tools) is a webview — see webviews/dashboard/view.ts.
  */
 import * as vscode from "vscode";
+import { requireExperimentalFeatures } from "./experimental";
 import {
   targetPosition,
   targetUri,
   writableRoot,
+  containsPath,
   samePath,
   CREATOR_COMMANDS,
   type DefinitionTarget,
@@ -35,6 +37,7 @@ import {
 import { readModName } from "@px-lsp/protocol/modName";
 import { sanitizeStringList } from "@px-lsp/protocol/suppression";
 import { allWorkspaceModCandidates, modRootFor, type PxConfig } from "./config";
+import { readMachineSetting, writeMachineSetting } from "./machineSettings";
 
 /**
  * Which mod the mod-scoped views (Overview, Loc Coverage, Overrides, event
@@ -595,7 +598,14 @@ export function registerPxViews(
       if (CREATOR_COMMANDS[node.pxKind])
         await vscode.commands.executeCommand(CREATOR_COMMANDS[node.pxKind], { ...node, name: node.pxKey });
     }),
-    ...(["px.compareOverrideSource", "px.compareOverrideVanilla", "px.openOverrideBoth"] as const).map((id) =>
+    ...(
+      [
+        "px.compareOverrideSource",
+        "px.compareOverrideVanilla",
+        "px.openOverrideBoth",
+        "px.compatchOverride",
+      ] as const
+    ).map((id) =>
       vscode.commands.registerCommand(id, async (node?: Node) => {
         const override = node?.pxOverride;
         const source =
@@ -603,6 +613,20 @@ export function registerPxViews(
             ? override?.shadowed.find((s) => s.source === "vanilla")
             : node?.pxSource;
         if (!override || !source) return;
+        if (id === "px.compatchOverride") {
+          requireExperimentalFeatures();
+          const cfg = getCfg();
+          const roots = [cfg.modPath, ...cfg.workspaceMods, ...cfg.parentPaths, cfg.gamePath].filter(
+            (r): r is string => !!r
+          );
+          const owner = (file: string) =>
+            roots.filter((r) => containsPath(r, file)).sort((a, b) => b.length - a.length)[0];
+          const sourceA = owner(override.mod.file),
+            sourceB = owner(source.file);
+          if (sourceA && sourceB && !samePath(sourceA, sourceB))
+            await vscode.commands.executeCommand("px.newCompatch", { sourceA, sourceB });
+          return;
+        }
         if (id === "px.openOverrideBoth") {
           await vscode.commands.executeCommand("px.openFromView", { pxLoc: override.mod });
           await vscode.commands.executeCommand("px.openToSideFromView", { pxLoc: source });
@@ -744,8 +768,7 @@ export function registerPxViews(
       });
       if (!picked) return;
       const chosen = picked.map((i) => i.root);
-      const pxCfg = vscode.workspace.getConfiguration("px");
-      await pxCfg.update("excludedMods", chosen, vscode.ConfigurationTarget.Workspace);
+      await writeMachineSetting("excludedMods", chosen, cfg.gameId, "workspace");
 
       // Excluding is all-or-nothing; the cheaper middle ground is indexing a
       // mod like a dependency parent (definitions for completion/hover/
@@ -756,17 +779,18 @@ export function registerPxViews(
       // workspace mod is dead weight).
       const before = new Set(cfg.excludedMods.map((p) => p.toLowerCase()));
       const chosenKeys = new Set(chosen.map((p) => p.toLowerCase()));
-      const parents = sanitizeStringList(pxCfg.get("parentMods"));
+      const parents = sanitizeStringList(readMachineSetting("parentMods", cfg.gameId));
       // Paths compare case-insensitively throughout (Windows), so the drop set
       // is keyed by the lowercased path, not by the string the user typed.
       const unexcluded = new Set(
         parents.map((p) => p.toLowerCase()).filter((k) => before.has(k) && !chosenKeys.has(k))
       );
       if (unexcluded.size > 0) {
-        await pxCfg.update(
+        await writeMachineSetting(
           "parentMods",
           parents.filter((p) => !unexcluded.has(p.toLowerCase())),
-          vscode.ConfigurationTarget.Workspace
+          cfg.gameId,
+          "workspace"
         );
       }
       const newly = chosen.filter((r) => !before.has(r.toLowerCase()));
@@ -782,8 +806,8 @@ export function registerPxViews(
             "Keep as Read-Only Context"
           );
           if (keep === "Keep as Read-Only Context") {
-            const latest = sanitizeStringList(pxCfg.get("parentMods"));
-            await pxCfg.update("parentMods", [...latest, ...movable], vscode.ConfigurationTarget.Workspace);
+            const latest = sanitizeStringList(readMachineSetting("parentMods", cfg.gameId));
+            await writeMachineSetting("parentMods", [...latest, ...movable], cfg.gameId, "workspace");
           }
         }
       }

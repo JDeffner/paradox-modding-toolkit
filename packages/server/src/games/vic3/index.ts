@@ -16,6 +16,7 @@ import SKELETONS from "../../../data/vic3/skeletons.json";
 
 export const vic3Profile: GameProfile = {
   ...vic3Meta,
+  migrations: [],
   schema: VIC3_SCHEMA,
   refFields: VIC3_REF_FIELDS,
   prefixRefs: VIC3_PREFIX_REFS,

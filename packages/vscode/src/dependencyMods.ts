@@ -18,6 +18,7 @@ import { declaredDependencies, dependencyCandidates } from "./dependencyScan";
 import { findSteamLibraries } from "./steamDetect";
 import { metaFor } from "./meta";
 import type { PxConfig } from "./config";
+import { inspectMachineSetting, writeMachineSetting } from "./machineSettings";
 
 /** Trailing-separator-free lowercase key for path comparisons. */
 function normKey(p: string): string {
@@ -75,12 +76,13 @@ export async function addDependencyModCommand(cfg: PxConfig, modRoot: string | n
   }
 
   // Append: the setting is a load order the user may have arranged by hand.
-  const setting = vscode.workspace.getConfiguration("px");
-  const existing = sanitizeStringList(setting.get("parentMods"));
+  const setting = inspectMachineSetting("parentMods", cfg.gameId, "workspace");
+  if (setting.error) throw new Error(setting.error);
+  const existing = sanitizeStringList(setting.value);
   const have = new Set(existing.map(normKey));
   const added = chosen.filter((p) => !have.has(normKey(p)));
   if (added.length > 0) {
-    await setting.update("parentMods", [...existing, ...added], vscode.ConfigurationTarget.Workspace);
+    await writeMachineSetting("parentMods", [...existing, ...added], cfg.gameId, "workspace", setting.stamp);
   }
   void vscode.window.showInformationMessage(
     added.length === 0

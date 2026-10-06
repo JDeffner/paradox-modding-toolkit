@@ -1,5 +1,6 @@
 import { viewerBackground } from "../../shared/viewerBackground";
 import { installTips } from "../../shared/tips";
+import { menu, type MenuItem } from "../../shared/overlay";
 import type { AppToHost, HostToApp } from "../messages";
 
 declare function acquireVsCodeApi(): { postMessage(message: AppToHost): void };
@@ -21,6 +22,28 @@ $("fileName").addEventListener("click", () => {
 
 const stage = $("stage");
 const img = $<HTMLImageElement>("img");
+const mipSelect = $<HTMLButtonElement>("mipLevel");
+const mipItems: MenuItem[] = JSON.parse(mipSelect?.dataset.mips ?? "[]");
+const savePng = $<HTMLButtonElement>("savePng");
+function showMip(level: number): void {
+  if (!mipSelect) return;
+  mipSelect.value = String(level);
+  mipSelect.querySelector(".px-truncate")!.textContent =
+    mipItems.find((item) => item.value === mipSelect.value)?.label ?? "";
+}
+mipSelect?.addEventListener("click", () => {
+  menu(mipSelect, mipItems, {
+    value: mipSelect.value,
+    width: 220,
+    onPick: (value) => {
+      if (value === mipSelect.value) return;
+      showMip(Number(value));
+      if (savePng) savePng.disabled = true;
+      $("mipError").textContent = "Loading mip level…";
+      vscode.postMessage({ type: "mip", level: Number(value) });
+    },
+  });
+});
 const background = viewerBackground(
   stage,
   $("stageTools"),
@@ -31,6 +54,17 @@ const background = viewerBackground(
 );
 window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
   if (event.data.type === "background") background.restore(event.data.value);
+  if (event.data.type === "mip" && img && Number(mipSelect?.value) === event.data.level) {
+    img.src = event.data.dataUri;
+    $("stageInfo").textContent = event.data.meta;
+    $("mipError").textContent = "";
+    if (savePng) savePng.disabled = false;
+  }
+  if (event.data.type === "mipError") {
+    showMip(event.data.level);
+    $("mipError").textContent = event.data.message;
+    if (savePng) savePng.disabled = false;
+  }
 });
 vscode.postMessage({ type: "ready" });
 if (img) {

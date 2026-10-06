@@ -63,6 +63,12 @@ function targetAt(
       "This name has several possible symbol types here. Rename from its declaration."
     );
   }
+  if (defs.some((d) => schema.entries.some((entry) => entry.nestedDefinitions?.kind === d.kind))) {
+    throw new ResponseError(
+      0,
+      "Rename is unavailable for nested definitions because not all indirect reference forms are indexed."
+    );
+  }
   if (
     defs.some(
       (d) =>

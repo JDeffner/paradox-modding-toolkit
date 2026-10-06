@@ -83,7 +83,7 @@ import {
 } from "./groups";
 import { iconEl } from "../../shared/icons";
 import { sidePanel, type SidePanel } from "../../shared/sidePanel";
-import { closePopover, confirmDialog, menu, popover, toast, type MenuItem } from "../../shared/overlay";
+import { closePopover, confirmAction, menu, popover, toast, type MenuItem } from "../../shared/overlay";
 import { helpDialog } from "../../shared/help";
 import { scrubbable } from "../../shared/scrub";
 import { colorPicker, paintSwatch, rgbToHex } from "../../shared/colorPicker";
@@ -309,7 +309,7 @@ const dirty = (): boolean => past.length > 0 || loadedDirty;
 
 async function confirmDiscard(what: string): Promise<boolean> {
   if (!dirty()) return true;
-  return confirmDialog({
+  return confirmAction({
     title: `${what} discards your changes`,
     description: "The current design has unsaved edits.",
     confirmLabel: "Discard",

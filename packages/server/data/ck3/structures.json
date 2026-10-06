@@ -24,7 +24,7 @@
   "casus_belli": "casus_belli_types",
   "men_at_arms": "men_at_arms_types",
   "combat_effect": "combat_effects",
-  "law_group": "laws",
+  "law_group": "law_groups",
   "government": "governments",
   "landed_title": "landed_titles",
   "building": "buildings",
@@ -133,7 +133,8 @@
   "court_scene_group": "character_groups",
   "court_scene_role": "character_roles",
   "court_scene_culture": "scene_cultures",
-  "scripted_illustration": "scripted_illustrations"
+  "scripted_illustration": "scripted_illustrations",
+  "law": "laws"
  },
  "kinds": {
   "on_action": {
@@ -9738,6 +9739,346 @@
      "freq": 5
     }
    ]
+  },
+  "law": {
+   "topLevel": [
+    {
+     "key": "flag",
+     "doc": "brief: flag ( flag ) See below for flags treated specially. Can be checked in script with has_realm_law_flag = some_arbitrary_flag. See below for flags treated specially in code.",
+     "freq": 387
+    },
+    {
+     "key": "index",
+     "doc": "brief: index (integer) in what order should this law appear in the group. All indexes must be unique, if two are equal order of definition wins. default is 0. Can be negative",
+     "freq": 201
+    },
+    {
+     "key": "law_group_type",
+     "doc": "brief: law_group_type (key) what law group does this law belongs to. Mandatory.",
+     "freq": 201
+    },
+    {
+     "key": "can_keep",
+     "doc": "brief: can_keep ( trigger ) Requirements for keeping the law. If this invalidates, the law will be replaced with the default law (see own section) within a month. Also checked after changing faith since doctrinal changes are likely to inval",
+     "values": "block",
+     "scope": "character",
+     "freq": 183
+    },
+    {
+     "key": "modifier",
+     "doc": "brief: modifier ( character modifier ) Modifier applied to the ruler when this law is active",
+     "values": "block",
+     "freq": 155
+    },
+    {
+     "key": "pass_cost",
+     "doc": "brief: pass_cost ( scripted cost ) The cost of enacting this law Root scope = ruler wanting to pass the law",
+     "values": "block",
+     "scope": "character",
+     "freq": 152
+    },
+    {
+     "key": "ai_will_do",
+     "doc": "brief: ai_will_do ( value ) Script value in the ruler scope. If above 0, the AI will enact this law if able. Law enactment is checked in the RARE_TASK_TICK. If multiple laws are possible, the AI will enact the one with the highest score. Ro",
+     "values": "block",
+     "scope": "character",
+     "freq": 146
+    },
+    {
+     "key": "can_pass",
+     "doc": "brief: can_pass ( trigger ) Requirements for adopting the law in the ruler's scope. For more temporary conditions, e.g. being at war (\"I can have the law, but can't pass it right now\"). Always true if not specified. Root scope = ruler for w",
+     "values": "block",
+     "scope": "character",
+     "freq": 109
+    },
+    {
+     "key": "on_pass",
+     "doc": "brief: on_pass ( effect ) Effect run just before law change. Effect run on the ruler when the law is added. Does *NOT* get run when default laws are initialized, nor when inheriting a law from someone else. Root = ruler in question If this ",
+     "values": "block",
+     "scope": "character",
+     "freq": 87
+    },
+    {
+     "key": "shown_in_encyclopedia",
+     "doc": "brief: shown_in_encyclopedia ( bool, optional ) If this law should show up in the Encyclopedia default = yes",
+     "values": "bool",
+     "freq": 66
+    },
+    {
+     "key": "can_have",
+     "doc": "brief: can_have ( trigger ) Requirements for adopting the law in the ruler's scope. If this is true, the character is allowed to adopt the law and the law will show as available (but it can be currently disabled if can_pass is false). Alway",
+     "values": "block",
+     "scope": "character",
+     "freq": 56
+    },
+    {
+     "key": "succession",
+     "doc": "brief: succession ( struct, optional ) Succession rules. Any new law with a rule set will override the previous law's rule set. Overriding is in law definition order",
+     "values": "block",
+     "freq": 55
+    },
+    {
+     "key": "should_start_with",
+     "doc": "brief: should_start_with ( trigger ) If these conditions are true, this is a valid law for a ruler to start with. Note that it always includes the can_keep check. Root scope = ruler for whom we are checking the law",
+     "values": "block",
+     "scope": "character",
+     "freq": 46
+    },
+    {
+     "key": "potential",
+     "freq": 38,
+     "doc": "Used 38x in vanilla laws (not in the shipped docs)."
+    },
+    {
+     "key": "revoke_cost",
+     "doc": "brief: revoke_cost ( scripted cost ) The cost of revoking or clearing this law Root scope = ruler wanting to revoke the law",
+     "values": "block",
+     "scope": "character",
+     "freq": 24
+    },
+    {
+     "key": "can_title_have",
+     "doc": "brief: can_title_have ( trigger ) Requirements for titles being able to have this law. Always false if not specified. Root scope = title for which we are checking the law",
+     "values": "block",
+     "scope": "landed_title",
+     "freq": 21
+    },
+    {
+     "key": "should_show_for_title",
+     "doc": "brief: should_show_for_title ( trigger ) Should this law be shown in the UI for titles?",
+     "values": "block",
+     "freq": 13
+    },
+    {
+     "key": "confirmation_button_text",
+     "freq": 11,
+     "doc": "Used 11x in vanilla laws (not in the shipped docs)."
+    },
+    {
+     "key": "confirmation_title",
+     "freq": 11,
+     "doc": "Used 11x in vanilla laws (not in the shipped docs)."
+    },
+    {
+     "key": "pass_phrase",
+     "freq": 11,
+     "doc": "Used 11x in vanilla laws (not in the shipped docs)."
+    },
+    {
+     "key": "can_remove_from_title",
+     "freq": 10,
+     "doc": "Used 10x in vanilla laws (not in the shipped docs)."
+    },
+    {
+     "key": "title_allegiance_opinion",
+     "freq": 8,
+     "doc": "Used 8x in vanilla laws (not in the shipped docs)."
+    },
+    {
+     "key": "requires_approve",
+     "freq": 5,
+     "doc": "Used 5x in vanilla laws (not in the shipped docs)."
+    },
+    {
+     "key": "widget_name",
+     "freq": 5,
+     "doc": "Used 5x in vanilla laws (not in the shipped docs)."
+    },
+    {
+     "key": "can_realm_have",
+     "doc": "brief: can_realm_have ( trigger ) Requirements for characters being able to apply this law at realm level. Always false if not specified. By default, the following succession orders imply they can be applied to the whole realm: * inheritanc",
+     "values": "block",
+     "scope": "character",
+     "freq": 2
+    }
+   ],
+   "blocks": {
+    "modifier": [
+     {
+      "key": "glory_hound_opinion",
+      "freq": 55
+     },
+     {
+      "key": "courtly_opinion",
+      "freq": 40
+     },
+     {
+      "key": "belligerent_opinion",
+      "freq": 36
+     },
+     {
+      "key": "parochial_opinion",
+      "freq": 36
+     },
+     {
+      "key": "barons_and_minor_landholders_opinion",
+      "freq": 25
+     },
+     {
+      "key": "minority_opinion",
+      "freq": 24
+     },
+     {
+      "key": "treasury_military_budget_allocation",
+      "freq": 21
+     },
+     {
+      "key": "treasury_ministry_budget_allocation",
+      "freq": 21
+     },
+     {
+      "key": "treasury_salary_budget_allocation",
+      "freq": 21
+     },
+     {
+      "key": "zealot_opinion",
+      "freq": 19
+     },
+     {
+      "key": "player_heir_opinion",
+      "freq": 17
+     },
+     {
+      "key": "eligible_child_except_player_heir_opinion",
+      "freq": 14
+     },
+     {
+      "key": "republic_government_tax_contribution_add",
+      "freq": 10
+     },
+     {
+      "key": "vassal_tax_mult",
+      "freq": 9
+     },
+     {
+      "key": "vassal_levy_contribution_mult",
+      "freq": 7
+     },
+     {
+      "key": "vassal_opinion",
+      "freq": 7
+     },
+     {
+      "key": "celestial_government_tax_contribution_add",
+      "freq": 6
+     },
+     {
+      "key": "men_at_arms_cap",
+      "freq": 6
+     },
+     {
+      "key": "vassal_tax_contribution_mult",
+      "freq": 6
+     },
+     {
+      "key": "max_migration_distance_mult",
+      "freq": 5
+     },
+     {
+      "key": "men_at_arms_title_cap",
+      "freq": 5
+     },
+     {
+      "key": "monthly_legitimacy_add",
+      "freq": 5
+     },
+     {
+      "key": "vassal_limit_max",
+      "freq": 5
+     },
+     {
+      "key": "vassal_limit_min",
+      "freq": 5
+     },
+     {
+      "key": "army_damage_mult",
+      "freq": 4
+     },
+     {
+      "key": "army_toughness_mult",
+      "freq": 4
+     },
+     {
+      "key": "domain_limit_min",
+      "freq": 4
+     },
+     {
+      "key": "celestial_government_vassal_opinion",
+      "freq": 3
+     },
+     {
+      "key": "development_growth_factor",
+      "freq": 3
+     },
+     {
+      "key": "domain_limit_max",
+      "freq": 3
+     },
+     {
+      "key": "dynasty_house_opinion",
+      "freq": 3
+     },
+     {
+      "key": "knight_limit",
+      "freq": 3
+     },
+     {
+      "key": "meritocratic_government_tax_contribution_add",
+      "freq": 3
+     },
+     {
+      "key": "steppe_admin_government_tax_contribution_add",
+      "freq": 3
+     }
+    ],
+    "succession": [
+     {
+      "key": "order_of_succession",
+      "freq": 48,
+      "doc": "brief: order_of_succession ( enum ) Which order of succession ( provided by code ) does this law use? Options: inheritance election appointment ( requires traversal, division and rank be undefined ) theocratic company generate generate_from"
+     },
+     {
+      "key": "title_division",
+      "freq": 15,
+      "doc": "brief: title_division ( enum ) Used to determine how titles are split during succession Requires order_of_succession = inheritance or noble_family Options: partition ( only available when traversal_order = children ) single_heir ( only vali"
+     },
+     {
+      "key": "rank",
+      "freq": 14,
+      "doc": "brief: rank ( enum ) Determines how characters in the line of succession are sorted Options: oldest youngest"
+     },
+     {
+      "key": "traversal_order",
+      "freq": 14,
+      "doc": "brief: traversal_order ( enum ) Determines which set of characters is considered when building the line of succession. Options: children( may only be defined if title_division = partition ) dynasty dynasty_house"
+     },
+     {
+      "key": "appointment_type",
+      "freq": 13,
+      "doc": "brief: appointment_type ( database key, situational ) Entry in common/succession_appointment, used to determine which type of appointment should be used for succession. Only available for appointment."
+     },
+     {
+      "key": "pool_character_config",
+      "freq": 10,
+      "doc": "brief: pool_character_config ( database key, situational ) Entry in common/pool_character_selectors, used when choosing a character from the pool or generating a new character. Only available for theocratic, company, and generate."
+     },
+     {
+      "key": "election_type",
+      "freq": 8,
+      "doc": "brief: election_type ( database key, situational ) Entry in common/succession_election, used to determine which type of election should be used for succession. Only available for election."
+     },
+     {
+      "key": "gender_law",
+      "freq": 5,
+      "doc": "brief: gender_law ( enum, optional ) Used to determine which gender(s) are valid for succession. Options: male_only male_preference equal female_preference female_only"
+     },
+     {
+      "key": "primary_heir_minimum_share",
+      "freq": 4,
+      "doc": "brief: primary_heir_minimum_share ( fixed point, optional ) If defined, the primary heir will get at least this portion of titles, which means if there's a lot of heirs the primary still gets a guaranteed amount of land"
+     }
+    ]
+   }
   }
  }
 }

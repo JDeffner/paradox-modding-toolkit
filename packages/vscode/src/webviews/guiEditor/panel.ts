@@ -41,7 +41,8 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import { GUI_PREVIEW_MAX } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
-import { migrateConfigDir } from "@px-lsp/protocol/configDir";
+import { resolveConfigPath } from "@px-lsp/protocol/configDir";
+import { prepareProjectConfigWrite, readProjectConfigText } from "../../projectConfigFile";
 import {
   LAYOUT_DEBOUNCE_MS,
   type AppToHost,
@@ -417,24 +418,15 @@ export class GuiEditorPanel {
   }
 
   private previewValuesPath(): string | null {
-    return this.roots.modPath
-      ? path.join(migrateConfigDir(this.roots.modPath, this.meta), PREVIEW_VALUES_FILE)
-      : null;
+    return this.roots.modPath ? resolveConfigPath(this.roots.modPath, this.meta, PREVIEW_VALUES_FILE) : null;
   }
 
-  /** The mod's preview table, or undefined when there is none (or it is not a flat string map). */
+  /** The mod's preview table; invalid existing tables fail visibly instead of being replaced. */
   private readPreviewValues(): Record<string, string> | undefined {
     const file = this.previewValuesPath();
     if (!file) return undefined;
-    try {
-      const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
-      const out: Record<string, string> = {};
-      for (const [key, value] of Object.entries(parsed)) if (typeof value === "string") out[key] = value;
-      return out;
-    } catch {
-      return undefined;
-    }
+    const text = readProjectConfigText(this.roots.modPath!, this.meta, PREVIEW_VALUES_FILE);
+    return text === undefined ? undefined : parsePreviewValues(text);
   }
 
   /** Rewrite the table with one entry set or dropped, then lay the document out with it. */
@@ -446,12 +438,12 @@ export class GuiEditorPanel {
       );
       return;
     }
-    const table = this.readPreviewValues() ?? {};
+    const prepared = await prepareProjectConfigWrite(this.roots.modPath!, this.meta, PREVIEW_VALUES_FILE);
+    const table = prepared.text === undefined ? {} : parsePreviewValues(prepared.text);
     const key = `[${expression}]`;
     if (value === undefined) delete table[key];
     else table[key] = value;
-    fs.mkdirSync(path.dirname(file), { recursive: true });
-    fs.writeFileSync(file, JSON.stringify(table, null, 2) + "\n", "utf8");
+    await prepared.write(JSON.stringify(table, null, 2) + "\n");
     await this.load(await vscode.workspace.openTextDocument(this.sourceUri));
   }
 
@@ -1074,4 +1066,16 @@ function buildHtml(webview: vscode.Webview, source: WebviewSource, fontDataUri: 
     ].join("; "),
     fontDataUri,
   });
+}
+
+function parsePreviewValues(text: string): Record<string, string> {
+  const parsed: unknown = JSON.parse(text.replace(/^\uFEFF/, ""));
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed) ||
+    Object.values(parsed).some((value) => typeof value !== "string")
+  )
+    throw new Error("GUI preview values must be a JSON object of strings");
+  return parsed as Record<string, string>;
 }

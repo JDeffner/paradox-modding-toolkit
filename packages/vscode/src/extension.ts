@@ -7,6 +7,8 @@
 import * as vscode from "vscode";
 import * as os from "os";
 import * as path from "path";
+import { createHash } from "node:crypto";
+import { sanitizeStringList } from "@px-lsp/protocol/suppression";
 import {
   CloseAction,
   LanguageClient,
@@ -18,20 +20,31 @@ import {
 } from "vscode-languageclient/node";
 import {
   configForTarget,
+  configForLocalizationTarget,
   targetDocument,
   targetPosition,
   targetUri,
   writableRoot,
   registerTargetContexts,
+  registerVanillaTargetContexts,
   samePath,
   containsPath,
   templatesForFolder,
   CREATOR_COMMANDS,
   type DefinitionTarget,
 } from "./commandTargets";
-import { modRootFor, allWorkspaceModCandidates, readConfig, type PxConfig } from "./config";
+import {
+  modRootFor,
+  allWorkspaceModCandidates,
+  readConfig,
+  referenceGamePaths,
+  type PxConfig,
+} from "./config";
+import { migrateLegacyMachineSettings, readMachineSetting, writeMachineSetting } from "./machineSettings";
+import { migrateProjectStorage, type StorageUpgradeReport } from "./storageUpgrade";
 import { findStrayCalendar } from "./calendarSettingsCheck";
 import { writeCalendarFile } from "@px-lsp/protocol/calendarFile";
+import { EventGraphWriters } from "./eventGraphWriters";
 import { ensureFileAssociations, wireLanguageDetection } from "./languageMode";
 import { isScriptLang, PARADOX_SCRIPT_LANGS } from "./langIds";
 import { findDownloadedTiger, tigerFlavorFor } from "./tigerDownload";
@@ -51,6 +64,7 @@ import { TigerRunner } from "./tiger/runner";
 import {
   editLocalizationCommand,
   registerLocalizationContext,
+  prepareLocalizationWrite,
   locTargetFile,
   openLocalizationSideBySide,
   replaceLocLineValue,
@@ -59,13 +73,21 @@ import {
   type LocLookup,
 } from "./locCommands";
 import { LocFileDefinitionProvider, LocReferenceTracker, jumpToScriptReference } from "./locNavigation";
+import { configureLocalizationDefaults } from "./localizationDefaults";
+import { importVanillaFile, importVanillaFolder } from "./vanillaImport";
 import { registerSimulateEventLens } from "./eventLens";
 import { createTranslationCommand } from "./translation";
 import { createTranslationModCommand } from "./translationMod";
 import { openInfoDocsCommand, openVanillaExamplesCommand, updateInfoDocContext } from "./infoDocs";
 import { FocusMod, registerPxViews } from "./views";
+import { registerCompatch } from "./compatch/view";
+import { registerCompatchValidation } from "./compatch/validation";
+import { registerMigrations } from "./compatch/migrations";
+import { registerCompatibilityPatches } from "./compatch/patches";
+import { experimentalFeaturesEnabled, requireExperimentalFeatures } from "./experimental";
 import { addDependencyModCommand } from "./dependencyMods";
 import { registerDashboardView, hiddenRows, PROJECT_GROUPS } from "./webviews/dashboard/view";
+import { SettingsPanel } from "./webviews/settings/panel";
 import { actionGroups } from "./webviews/dashboard/actions";
 import { EventGraphPanel, type EventGraphActions } from "./webviews/eventGraph/panel";
 import { ExampleWikiPanel, type ExampleWikiTarget } from "./webviews/exampleWiki/panel";
@@ -86,7 +108,7 @@ import { DynastyTreePanel } from "./webviews/dynastyTree/panel";
 import { CultureCreatorPanel } from "./webviews/cultureCreator/panel";
 import { LegacyCreatorPanel } from "./webviews/legacyCreator/panel";
 import { readModName } from "@px-lsp/protocol/modName";
-import { indexConfigWatchPatterns, migrateConfigDir } from "@px-lsp/protocol/configDir";
+import { canonicalConfigPath, indexConfigWatchPatterns, resolveConfigPath } from "@px-lsp/protocol/configDir";
 import { hasDesignerFiles, type FlagRoot } from "./webviews/flagBuilder/database";
 import { DdsPreviewProvider } from "./ddsEditor";
 import { registerDefinitionContext } from "./definitionContext";
@@ -147,6 +169,7 @@ import {
   type ExampleWikiDetail,
   type ExampleWikiEntryParams,
   type ExampleWikiIndex,
+  type ExampleWikiContext,
   dynastyTreeRequest,
   eventVocabularyRequest,
   guiTreeRequest,
@@ -202,6 +225,7 @@ function log(msg: string): void {
 }
 
 function toSettings(c: PxConfig): ParadoxSettings {
+  const native = vscode.workspace.getConfiguration("px");
   return {
     gameId: c.gameId,
     gamePath: c.gamePath,
@@ -215,8 +239,9 @@ function toSettings(c: PxConfig): ParadoxSettings {
     completionMode: c.completionMode,
     texturePreviewBackground: c.texturePreviewBackground,
     calendar: c.calendar,
-    diagnosticsIgnore: c.diagnosticsIgnore,
-    diagnosticsIgnorePatterns: c.diagnosticsIgnorePatterns,
+    // Project rules are resolved per owning mod by the server, never used as sibling defaults.
+    diagnosticsIgnore: sanitizeStringList(native.get("diagnostics.ignore")),
+    diagnosticsIgnorePatterns: sanitizeStringList(native.get("diagnostics.ignorePatterns")),
     diagnosticsVanilla: c.diagnosticsVanilla,
     tracePerf: c.tracePerf,
   };
@@ -244,6 +269,55 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   cfg = resolveConfig();
   registerOnboarding(context, log);
   const startupNotices = new StartupNotices(context, log);
+  let upgradingStorage: Promise<StorageUpgradeReport> | undefined;
+  const upgradeStorage = (): Promise<StorageUpgradeReport> => {
+    if (upgradingStorage) return upgradingStorage;
+    upgradingStorage = (async () => {
+      if (!vscode.workspace.isTrusted)
+        throw new Error("Trust this workspace before upgrading toolkit settings.");
+      const roots = [
+        ...new Set([cfg.modPath, ...cfg.workspaceMods].filter((root): root is string => !!root)),
+      ];
+      const report = await migrateProjectStorage(roots.map((modPath) => ({ ...cfg, modPath })));
+      const personal = await migrateLegacyMachineSettings(cfg.gameId);
+      for (const key of ["imported", "conflicts", "errors", "removed"] as const)
+        report[key].push(...personal[key]);
+      report.noOp = !report.copied.length && !report.imported.length && !report.removed.length;
+      log(
+        `Settings upgrade: ${report.copied.length} files copied, ${report.imported.length} settings imported, ${report.removed.length} old scoped values removed.`
+      );
+      for (const key of ["copied", "imported", "removed", "conflicts", "errors"] as const)
+        for (const detail of report[key]) log(`Settings upgrade ${key}: ${detail}`);
+      cfg = resolveConfig();
+      return report;
+    })().finally(() => {
+      upgradingStorage = undefined;
+    });
+    return upgradingStorage;
+  };
+  if (vscode.workspace.isTrusted && cfg.isCk3Workspace) {
+    try {
+      const report = await upgradeStorage();
+      if (!report.noOp || report.conflicts.length || report.errors.length) {
+        const issues = report.conflicts.length + report.errors.length;
+        startupNotices.add({
+          key: `px.storageUpgrade.v1.${createHash("sha256").update(JSON.stringify(report)).digest("hex").slice(0, 16)}`,
+          scope: "workspace",
+          essential: !!issues,
+          message: issues
+            ? `Toolkit settings upgrade: ${issues} items need attention. Existing files and conflicting values were kept. Open the upgrade report for details.`
+            : "Toolkit settings upgraded. Shared mod rules and personal paths now use separate storage. Legacy files were kept for recovery.",
+          label: "Show settings upgrade report",
+          run: () => output?.show(true),
+        });
+      }
+    } catch (error) {
+      startupNotices.add({
+        message: `Toolkit settings upgrade failed: ${String(error)}. Existing settings remain available.`,
+        essential: true,
+      });
+    }
+  }
   if (cfg.warnings.length > 0) {
     // Fail soft: features degrade, extension still activates.
     startupNotices.add({
@@ -290,7 +364,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           else if (choice === "Reduce VS Code Load")
             await vscode.commands.executeCommand("px.reduceEditorLoad");
           else if (choice === "Settings")
-            await vscode.commands.executeCommand("workbench.action.openSettings", "px.excludedMods");
+            await vscode.commands.executeCommand("px.openSettings", "excludedMods");
         },
       });
     }
@@ -368,6 +442,16 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     void vscode.commands.executeCommand("setContext", "px.hasTiger", metaFor(cfg.gameId).tiger !== undefined);
     void vscode.commands.executeCommand(
       "setContext",
+      "px.compatchSemanticSupported",
+      metaFor(cfg.gameId).compatch !== null
+    );
+    void vscode.commands.executeCommand(
+      "setContext",
+      "px.compatchCompositionSupported",
+      !!metaFor(cfg.gameId).compatchComposition
+    );
+    void vscode.commands.executeCommand(
+      "setContext",
       "px.guiEditorSupported",
       guiEditorSupported(cfg.gameId)
     );
@@ -414,7 +498,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Baselines are per mod (multi-mod workspaces): each run suppresses the
   // baseline of the mod it validates, not one global file.
   const baselineFileFor = (root: string | null) =>
-    root ? path.join(migrateConfigDir(root, metaFor(cfg.gameId)), "tiger-baseline.json") : null;
+    root ? resolveConfigPath(root, metaFor(cfg.gameId), "tiger-baseline.json") : null;
   let tigerUnusedOnce = false;
   const tigerExtraArgs = (modRoot: string): string[] => {
     const args: string[] = [];
@@ -612,6 +696,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   lc.onNotification(statusNotification, (payload: StatusPayload) => {
     lastServerStatus = payload;
     updateStatus();
+    SettingsPanel.refresh();
   });
 
   lc.onNotification(progressNotification, (payload: ProgressPayload) => {
@@ -629,6 +714,20 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   let modWatchers: vscode.FileSystemWatcher[] = [];
   const notifyModFileChanged = (fsPath: string) => {
     void lc.sendNotification(modFileChangedNotification, { fsPath });
+    if (["project.json", "calendar.json"].includes(path.basename(fsPath))) {
+      const oldRoots = watchedRoots(cfg);
+      cfg = resolveConfig();
+      if (watchedRoots(cfg) !== oldRoots) {
+        wireModWatcher();
+        reapplyLanguages();
+      }
+      tiger.refreshStatus();
+      updateInfoDocContext(cfg);
+      updateStatus();
+      descriptorFeature.refresh();
+      SettingsPanel.refresh();
+      void lc.sendNotification(configChangedNotification, toSettings(cfg));
+    }
   };
   // One watcher per DISTINCT TOP-LEVEL root (§B5): the mod plus every parent
   // mod, so edits in a parent (multi-mod / compat-patch workspaces) re-index
@@ -670,6 +769,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!e.affectsConfiguration("px")) return;
       const oldRoots = watchedRoots(cfg);
       cfg = resolveConfig();
+      WikiPanel.refresh(metaFor(cfg.gameId));
       tiger.resetErrorNotice();
       tiger.refreshStatus();
       updateStatus();
@@ -690,6 +790,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       cfg = resolveConfig();
+      WikiPanel.refresh(metaFor(cfg.gameId));
       updateStatus();
       // Same trigger the PX item's visibility uses: a folder change can turn
       // the workspace into (or out of) a mod workspace, and tiger's gate
@@ -723,7 +824,34 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
 
   // ---- commands ---------------------------------------------------------------
 
+  const localizationConfig = (arg?: unknown) =>
+    configForLocalizationTarget(cfg, typeof arg === "string" ? undefined : arg, focus.current());
+  const focusedConfig = async (): Promise<PxConfig> => {
+    if (!focus.current()) await vscode.commands.executeCommand("px.pickFocusMod");
+    return { ...cfg, modPath: focus.current() };
+  };
+
   context.subscriptions.push(
+    vscode.commands.registerCommand("px.migrateToolkitStorage", async () => {
+      const report = await upgradeStorage();
+      updateStatus();
+      wireModWatcher();
+      descriptorFeature.refresh();
+      SettingsPanel.refresh();
+      void lc.sendNotification(configChangedNotification, toSettings(cfg));
+      const issues = report.conflicts.length + report.errors.length;
+      const text = issues
+        ? `Settings upgrade finished with ${issues} items needing attention. Existing values were kept.`
+        : report.noOp
+          ? "Toolkit settings already use the current storage format."
+          : "Toolkit settings upgraded. Legacy files were kept for recovery.";
+      const show = issues ? vscode.window.showWarningMessage : vscode.window.showInformationMessage;
+      if ((await show(text, "Show upgrade report")) === "Show upgrade report") output?.show(true);
+      return report;
+    }),
+    vscode.workspace.onDidGrantWorkspaceTrust(() => {
+      void vscode.commands.executeCommand("px.migrateToolkitStorage");
+    }),
     vscode.commands.registerCommand("px.reloadScriptDocs", async () => {
       const result = await lc.sendRequest<ReloadDocsResult>(reloadDocsRequest, { force: true });
       void vscode.window.showInformationMessage(
@@ -761,25 +889,30 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         await vscode.commands.executeCommand("editor.action.showReferences", uri, position, locations);
       }
     ),
-    vscode.commands.registerCommand("px.editLocalization", (arg?: unknown) =>
-      editLocalizationCommand(
-        lookupLoc,
-        typeof arg === "string" ? cfgForActive() : configForTarget(cfg, arg),
-        notifyModFileChanged,
-        arg
+    ...["px.editLocalization", "px.createLocalization", "px.overrideLocalization"].map((command) =>
+      vscode.commands.registerCommand(command, (arg?: unknown) =>
+        editLocalizationCommand(lookupLoc, localizationConfig(arg), notifyModFileChanged, arg)
       )
     ),
+    vscode.commands.registerCommand("px.configureLocalizationDefaults", async (arg?: unknown) => {
+      const target = arg === undefined ? await focusedConfig() : configForTarget(cfg, arg);
+      return configureLocalizationDefaults(target);
+    }),
+    vscode.commands.registerCommand("px.addVanillaFile", async (arg?: unknown) =>
+      importVanillaFile(await focusedConfig(), arg)
+    ),
+    vscode.commands.registerCommand("px.addVanillaDirectory", async (arg?: unknown) =>
+      importVanillaFolder(await focusedConfig(), arg)
+    ),
     vscode.commands.registerCommand("px.openLocalizationSideBySide", (arg?: unknown) =>
-      openLocalizationSideBySide(
-        lookupLoc,
-        arg,
-        configForTarget(cfg, typeof arg === "string" ? undefined : arg)
-      )
+      openLocalizationSideBySide(lookupLoc, arg, localizationConfig(arg))
     ),
     vscode.commands.registerCommand("px.jumpToScriptReference", (arg?: unknown) =>
       jumpToScriptReference(tracker, configForTarget(cfg, arg), arg)
     ),
-    vscode.commands.registerCommand("px.declareCalendar", () => declareCalendarCommand(cfgForActive())),
+    vscode.commands.registerCommand("px.declareCalendar", (arg?: unknown) =>
+      declareCalendarCommand(arg ? configForTarget(cfg, arg) : cfgForActive())
+    ),
     vscode.commands.registerCommand("px.insertDate", () => insertDateCommand(cfgForActive())),
     vscode.commands.registerCommand("px.generateCalendarLoc", () =>
       generateCalendarLocCommand(cfgForActive())
@@ -858,11 +991,24 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     () => cfg,
     async () => (await creatorFolders()).map((entry) => entry.folder)
   );
-  registerLocalizationContext(context, lookupLoc);
   registerDefinitionContext(context);
   const focus = new FocusMod(context.workspaceState, () => cfg);
   const views = registerPxViews(context, lc, () => cfg, focus);
+  registerVanillaTargetContexts(context, () => cfg);
+  const refreshLocalizationContext = registerLocalizationContext(context, lookupLoc, () =>
+    localizationConfig()
+  );
+  context.subscriptions.push(focus.onDidPin(refreshLocalizationContext));
+  registerCompatch(context, () => cfg);
+  registerCompatchValidation(context, () => cfg);
+  registerMigrations(context, () => cfg);
+  registerCompatibilityPatches(context, () => cfg);
   context.subscriptions.push(
+    vscode.commands.registerCommand("px.updateThisMod", (arg?: unknown) => {
+      requireExperimentalFeatures();
+      const modRoot = configForTarget(cfg, arg).modPath;
+      if (modRoot) return vscode.commands.executeCommand("px.updateModForGame", { modRoot });
+    }),
     ...(
       ["px.focusThisMod", "px.includeThisMod", "px.excludeThisMod", "px.addThisModAsDependency"] as const
     ).map((id) =>
@@ -879,26 +1025,31 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           if (writableRoot(vscode.Uri.file(root), cfg)) await focus.pin(root);
           return;
         }
-        const setting = vscode.workspace.getConfiguration("px");
         if (id === "px.addThisModAsDependency") {
-          const parents = setting.get<string[]>("parentMods", []);
+          const parents = readMachineSetting<string[]>("parentMods", cfg.gameId) ?? [];
           if (!parents.some((p) => samePath(p, root)))
-            await setting.update("parentMods", [...parents, root], vscode.ConfigurationTarget.Workspace);
-          const excluded = setting.get<string[]>("excludedMods", []);
+            await writeMachineSetting("parentMods", [...parents, root], cfg.gameId, "workspace");
+          const excluded = readMachineSetting<string[]>("excludedMods", cfg.gameId) ?? [];
           if (!excluded.some((p) => samePath(p, root)))
-            await setting.update("excludedMods", [...excluded, root], vscode.ConfigurationTarget.Workspace);
+            await writeMachineSetting("excludedMods", [...excluded, root], cfg.gameId, "workspace");
         } else {
-          const excluded = setting.get<string[]>("excludedMods", []).filter((p) => !samePath(p, root));
-          await setting.update(
+          const excluded = (readMachineSetting<string[]>("excludedMods", cfg.gameId) ?? []).filter(
+            (p) => !samePath(p, root)
+          );
+          await writeMachineSetting(
             "excludedMods",
             id === "px.excludeThisMod" ? [...excluded, root] : excluded,
-            vscode.ConfigurationTarget.Workspace
+            cfg.gameId,
+            "workspace"
           );
           if (id === "px.includeThisMod")
-            await setting.update(
+            await writeMachineSetting(
               "parentMods",
-              setting.get<string[]>("parentMods", []).filter((p) => !samePath(p, root)),
-              vscode.ConfigurationTarget.Workspace
+              (readMachineSetting<string[]>("parentMods", cfg.gameId) ?? []).filter(
+                (p) => !samePath(p, root)
+              ),
+              cfg.gameId,
+              "workspace"
             );
         }
       })
@@ -908,7 +1059,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // Hoisted: the Wiki commands above are registered before `views` exists, but
   // they only call this once the user opens the panel.
   function wikiDeps(): WikiDeps {
-    return { modReport: () => buildModReport(lc, views.focusRoot()) };
+    return {
+      modReport: () => buildModReport(lc, views.focusRoot()),
+      gamePath: (meta) => {
+        return referenceGamePaths(meta, cfg).gamePath;
+      },
+    };
   }
   dashboard = registerDashboardView(context, {
     getCfg: () => cfg,
@@ -929,16 +1085,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.openKeybindings", () =>
       vscode.commands.executeCommand("workbench.action.openGlobalKeybindings", "@ext:jdeffner.px-toolkit")
     ),
-    // Workspace scope: the settings that matter here (paths, focus, excludes)
-    // are per-project taste, and the User tab is one click away in the editor.
+    vscode.commands.registerCommand("px.openSettings", (key?: string) => {
+      SettingsPanel.show(context, { getCfg: () => cfg, getStatus: () => lastServerStatus }, key);
+    }),
     // Since VS Code 1.135 the settings editor opens as a modal overlay whenever
     // workbench.editor.useModal is not "off" (default "some"); the preferences
     // service decides that before any command argument is read, and the group id
     // that would override it is stripped from the command's options. Merging the
     // modal part back into the main window is the only command-level route to a
     // normal tab, and the move carries the search query in the editor view state.
-    vscode.commands.registerCommand("px.openSettings", async () => {
-      await vscode.commands.executeCommand("workbench.action.openWorkspaceSettings", {
+    vscode.commands.registerCommand("px.openNativeSettings", async () => {
+      const command =
+        vscode.workspace.workspaceFolders?.length || vscode.workspace.workspaceFile
+          ? "workbench.action.openWorkspaceSettings"
+          : "workbench.action.openSettings";
+      await vscode.commands.executeCommand(command, {
         query: "@ext:jdeffner.px-toolkit",
       });
       // Undefined on builds before 1.135, where neither the setting nor the
@@ -955,7 +1116,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       type Item = vscode.QuickPickItem & { command: string };
       const hidden = new Set(hiddenRows());
       const items: Item[] = [
-        ...actionGroups(metaFor(cfg.gameId), errorLog.problemCount)
+        ...actionGroups(metaFor(cfg.gameId), errorLog.problemCount, experimentalFeaturesEnabled())
           .filter((g) => PROJECT_GROUPS.includes(g.label))
           .flatMap((g) =>
             g.items.map((it) => ({
@@ -992,6 +1153,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   // option scaffold inserts before the event's closing brace and creates loc.
   const graphActions = (modRoot: string | null): EventGraphActions => {
     const actionCfg = { ...cfg, modPath: modRoot };
+    const writers = new EventGraphWriters();
     return {
       fetchDetail: fetchEventDetail,
       // The dropdowns in the graph inspector offer only what the server knows:
@@ -1030,21 +1192,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const target = await writeLocSmart(actionCfg, lookupLoc, key, value);
         notifyModFileChanged(target);
       },
-      async addOption(id: string, file: string, endLine: number, count: number): Promise<void> {
-        const optionKey = `${id}.${String.fromCharCode(97 + Math.min(count, 25))}`;
-        const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
-        const edit = new vscode.WorkspaceEdit();
-        edit.insert(doc.uri, new vscode.Position(endLine, 0), `\toption = {\n\t\tname = ${optionKey}\n\t}\n`);
-        if (!(await vscode.workspace.applyEdit(edit))) throw new Error("edit rejected");
-        await doc.save();
-        notifyModFileChanged(file);
+      async addOption(id: string, file: string, _endLine: number, count: number): Promise<void> {
         // The loc key belongs to the mod that owns the event file (multi-mod).
         const owner = modRootFor(file, actionCfg);
         const locCfg = owner && owner !== actionCfg.modPath ? { ...actionCfg, modPath: owner } : actionCfg;
-        if (locCfg.modPath) {
-          const locFile = await upsertNewModLoc(locCfg, optionKey, "New option");
-          notifyModFileChanged(locFile);
-        }
+        await writers.addOption(id, file, count, async (optionKey) => {
+          notifyModFileChanged(file);
+          if (locCfg.modPath) {
+            const locFile = await upsertNewModLoc(locCfg, optionKey, "New option");
+            notifyModFileChanged(locFile);
+          }
+        });
       },
       async createEvent(
         id: string,
@@ -1054,35 +1212,19 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         desc: string,
         options: number
       ): Promise<void> {
+        if (!/^[A-Za-z0-9_-]+\.\d+$/.test(id)) throw new Error("Use an event id in namespace.number format");
         const ns = id.split(".")[0];
         let target = file;
         if (!target) {
           if (!actionCfg.modPath) throw new Error("no mod folder configured");
           target = path.join(actionCfg.modPath, "events", `${ns}_events.txt`);
         }
-        const letters = Array.from({ length: Math.min(options, 26) }, (_, i) => String.fromCharCode(97 + i));
-        const optionBlocks = letters.map((l) => `\toption = {\n\t\tname = ${id}.${l}\n\t}\n`).join("");
-        const block = `${id} = {\n\ttype = ${type}\n\ttitle = ${id}.t\n\tdesc = ${id}.desc\n${optionBlocks}}\n`;
-        if (!fs.existsSync(target)) {
-          // A fresh namespace file: the BOM and the namespace header the engine wants.
-          fs.mkdirSync(path.dirname(target), { recursive: true });
-          fs.writeFileSync(target, `\uFEFFnamespace = ${ns}\n\n${block}`, "utf8");
-        } else {
-          const text = fs.readFileSync(target, "utf8");
-          const sep = text.endsWith("\n\n") ? "" : text.endsWith("\n") ? "\n" : "\n\n";
-          fs.appendFileSync(target, `${sep}${block}`, "utf8");
-        }
-        notifyModFileChanged(target);
         const owner = modRootFor(target, actionCfg);
         const locCfg = owner && owner !== actionCfg.modPath ? { ...actionCfg, modPath: owner } : actionCfg;
-        if (locCfg.modPath) {
-          const writes: Array<[string, string]> = [
-            [`${id}.t`, title || "New event"],
-            [`${id}.desc`, desc || "Describe what is happening here."],
-            ...letters.map((l): [string, string] => [`${id}.${l}`, "New option"]),
-          ];
-          for (const [key, value] of writes) notifyModFileChanged(await upsertNewModLoc(locCfg, key, value));
-        }
+        await writers.createEvent(id, target, type, title, desc, options, async (key, value) => {
+          notifyModFileChanged(target);
+          if (locCfg.modPath) notifyModFileChanged(await upsertNewModLoc(locCfg, key, value));
+        });
       },
     };
   };
@@ -1187,12 +1329,42 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // The argument is optional: the palette entry and the Project panel open
     // the catalog, a hover link names the article it wants.
     vscode.commands.registerCommand("px.showExamplesWiki", (arg?: unknown) => {
+      const selected =
+        typeof arg === "object" && arg !== null ? (arg as { gameId?: unknown }).gameId : undefined;
+      if (
+        typeof arg === "object" &&
+        arg !== null &&
+        Object.hasOwn(arg, "gameId") &&
+        (typeof selected !== "string" || !Object.hasOwn(GAME_METAS, selected))
+      ) {
+        void vscode.window.showErrorMessage("Examples Wiki: the requested reference game is not supported.");
+        return;
+      }
+      const meta =
+        typeof selected === "string" && Object.hasOwn(GAME_METAS, selected)
+          ? GAME_METAS[selected]
+          : metaFor(cfg.gameId);
+      const reference: ExampleWikiContext | undefined =
+        meta.id !== cfg.gameId
+          ? { gameId: meta.id, ...referenceGamePaths(meta, cfg), locLanguage: cfg.locLanguage }
+          : undefined;
       ExampleWikiPanel.show(
         context,
         {
-          fetchIndex: () => lc.sendRequest<ExampleWikiIndex>(exampleWikiRequest, null),
+          gameId: meta.id,
+          gameName: meta.name,
+          shortName: meta.shortName,
+          contextKey: JSON.stringify(reference ?? [cfg.gameId, cfg.gamePath, cfg.logsPath, cfg.locLanguage]),
+          fetchIndex: (refresh) =>
+            lc.sendRequest<ExampleWikiIndex>(
+              exampleWikiRequest,
+              reference ? { context: reference, refresh } : null
+            ),
           fetchEntry: (params: ExampleWikiEntryParams) =>
-            lc.sendRequest<ExampleWikiDetail | null>(exampleWikiEntryRequest, params),
+            lc.sendRequest<ExampleWikiDetail | null>(exampleWikiEntryRequest, {
+              ...params,
+              ...(reference ? { context: reference } : {}),
+            }),
         },
         exampleWikiTarget(arg)
       );
@@ -1396,6 +1568,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           editDefinition: (params) => lc.sendRequest<DefinitionEditResult>(definitionEditRequest, params),
           writeLoc: (key, value) => writeLocSmart(cfg, lookupLoc, key, value),
           locTarget: (key) => locTargetFile(cfg, lookupLoc, key),
+          prepareLoc: (key, modRoot) =>
+            prepareLocalizationWrite({ ...cfg, modPath: modRoot ?? views.focusRoot() }, lookupLoc, key),
           fetchForm: (params) => fetchCreatorForm(params, arg),
           fetchModifierFormats: (params) =>
             lc.sendRequest<ModifierFormatsResult | null>(modifierFormatsRequest, params),
@@ -1469,7 +1643,8 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand("px.tigerGenerateConf", () => generateTigerConfCommand(cfgForActive())),
     vscode.commands.registerCommand("px.tigerCreateBaseline", async () => {
       // The baseline belongs to the mod of the active editor (multi-mod).
-      const bl = baselineFileFor(cfgForActive().modPath);
+      const root = cfgForActive().modPath;
+      const bl = root ? canonicalConfigPath(root, metaFor(cfg.gameId), "tiger-baseline.json") : null;
       if (!bl) {
         void vscode.window.showWarningMessage(
           "Paradox Modding Toolkit: no mod folder found. Open your mod folder (the one with the mod's descriptor) as a workspace folder."

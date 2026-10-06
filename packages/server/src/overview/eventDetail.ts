@@ -21,6 +21,7 @@ import type { ServerData } from "../serverData";
 import type { SchemaData } from "../schema/loader";
 import { decode, LineIndex, parseScript, type BlockNode, type Statement } from "../parser";
 import { matchesSourceFile } from "../sourceFile";
+import { eventSourceHash } from "./eventSourceHash";
 import { detectContextFromParse, type BlockContext } from "../context";
 
 /**
@@ -91,6 +92,7 @@ export function computeEventDetail(
   const detail: EventDetail = {
     id,
     file: def.file,
+    sourceHash: eventSourceHash(text),
     line: lineOf(stmt.key.range.start),
     endLine: block.closeBrace !== null ? lineOf(block.closeBrace) : lineOf(block.range.end),
     bodyLine: lineOf(block.range.start) + 1,

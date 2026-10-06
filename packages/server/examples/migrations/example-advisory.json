@@ -1,0 +1,23 @@
+{
+  "manifest": {
+    "id": "author.example-advisory",
+    "revision": "1",
+    "sdkVersion": 1,
+    "gameId": "ck3",
+    "fromVersion": "1.0",
+    "toVersion": "2.0",
+    "kind": "advisory",
+    "detection": "none",
+    "requirement": "required",
+    "title": "Manual author example",
+    "description": "Synthetic advisory only. Replace the guidance and evidence with a researched game change before sharing.",
+    "guidance": "In a scratch mod, review the synthetic migration-demo.txt fixture. Make the intended change manually, then record what you did and which checks ran.",
+    "limitations": [
+      "Illustrative 1.0 and 2.0 builds are synthetic, not supported game versions.",
+      "This note does not inspect files, convert content, or verify compatibility."
+    ],
+    "dependsOn": [],
+    "evidence": ["Synthetic migration-demo.txt fixture; no game migration claim."],
+    "inputs": []
+  }
+}

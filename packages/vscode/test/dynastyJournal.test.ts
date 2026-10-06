@@ -3,7 +3,7 @@
  * somebody else has changed since the panel wrote it must NOT be put back,
  * because the panel's `before` would throw that work away.
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { WriteJournal, type JournalIo } from "../src/webviews/dynastyTree/journal";
 
 function fakeIo(files: Record<string, string>): JournalIo & { refusals: string[] } {
@@ -103,5 +103,67 @@ describe("WriteJournal", () => {
       journal.record({ file: `/mod/${n}.txt`, before: "b", after: "a" });
     }
     expect(journal.depth).toEqual({ undo: 2, redo: 0 });
+  });
+
+  it.each([false, true])(
+    "can retry a joined history step after a later save fails (dirty buffer %s)",
+    async (dirty) => {
+      const files = new Map([
+        ["script", "after"],
+        ["loc", "loc after"],
+      ]);
+      let fail = true;
+      const refuse = vi.fn();
+      const journal = new WriteJournal({
+        read: async (file) => files.get(file) ?? null,
+        write: async (file, text) => {
+          if (file === "script" && fail) {
+            if (dirty) files.set(file, text);
+            return false;
+          }
+          files.set(file, text);
+          return true;
+        },
+        refuse,
+      });
+      journal.record({ file: "script", before: "before", after: "after" });
+      journal.record({ file: "loc", before: "loc before", after: "loc after" }, true);
+      expect(await journal.undo()).toBe(false);
+      expect(files.get("loc")).toBe("loc before");
+      expect(journal.depth).toEqual({ undo: 1, redo: 0 });
+      expect(refuse).toHaveBeenCalledWith(expect.stringContaining("Earlier files restored: loc"));
+      fail = false;
+      expect(await journal.undo()).toBe(true);
+      expect(files.get("script")).toBe("before");
+      expect(journal.depth).toEqual({ undo: 0, redo: 1 });
+      expect(await journal.redo()).toBe(true);
+      expect(files.get("script")).toBe("after");
+      expect(files.get("loc")).toBe("loc after");
+    }
+  );
+
+  it("preserves a manual edit made after a partial history save failure", async () => {
+    const files = new Map([
+      ["script", "after"],
+      ["loc", "loc after"],
+    ]);
+    const write = vi.fn(async (file: string, text: string) => {
+      if (file === "script") return false;
+      files.set(file, text);
+      return true;
+    });
+    const journal = new WriteJournal({
+      read: async (file) => files.get(file) ?? null,
+      write,
+      refuse: vi.fn(),
+    });
+    journal.record({ file: "script", before: "before", after: "after" });
+    journal.record({ file: "loc", before: "loc before", after: "loc after" }, true);
+    expect(await journal.undo()).toBe(false);
+    files.set("loc", "Manual edit after failure");
+    write.mockClear();
+    expect(await journal.undo()).toBe(false);
+    expect(write).not.toHaveBeenCalled();
+    expect(files.get("loc")).toBe("Manual edit after failure");
   });
 });

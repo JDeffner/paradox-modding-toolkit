@@ -1,6 +1,16 @@
 import * as vscode from "vscode";
-import { decodeDds, encodeDds, encodePng, hasTransparency, type DdsEncodeFormat } from "@px-lsp/server/dds";
+import {
+  decodeDds,
+  ddsFormatInfo,
+  ddsMipLevels,
+  encodeDds,
+  encodePng,
+  hasTransparency,
+  type DdsEncodeFormat,
+} from "@px-lsp/server/dds";
 import { makeNonce } from "./webviews/nonce";
+import { PNG } from "pngjs";
+import { MAX_DECODE_PIXELS } from "@px-lsp/server/dds/decoder";
 
 export const IMAGE_MIME: Record<string, string> = {
   ".png": "image/png",
@@ -23,6 +33,45 @@ export interface ImageEncoding {
   format: ImageFormat;
   dds: DdsEncodeFormat | "auto";
   background: "white" | "black";
+  /** Full chain or an explicit count, including the base image. Channels are filtered independently. */
+  mipmaps?: boolean | number;
+  referenceSize?: { width: number; height: number };
+}
+
+/** The converter writes one 2D image. Preview decoders may still show the first surface. */
+function requireSingleImageDds(bytes: Uint8Array): void {
+  const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (bytes.length < 128 || header.getUint32(0, true) !== 0x20534444 || header.getUint32(4, true) !== 124)
+    throw new Error("Not a valid DDS file");
+  let multiple = (header.getUint32(112, true) & (0x200000 | 0xfe00)) !== 0 || header.getUint32(24, true) > 1;
+  if (header.getUint32(80, true) & 0x4 && header.getUint32(84, true) === 0x30315844) {
+    if (bytes.length < 148) throw new Error("Truncated DDS DX10 header");
+    multiple ||=
+      header.getUint32(132, true) !== 3 ||
+      (header.getUint32(136, true) & 0x4) !== 0 ||
+      header.getUint32(140, true) !== 1;
+  }
+  if (multiple)
+    throw new Error(
+      "Conversion requires a single 2D DDS image. Cubemaps, texture arrays and volume textures need a DDS tool that preserves all surfaces. To extract only the displayed surface, export the DDS preview as PNG."
+    );
+}
+
+/** Match a supported vanilla texture without guessing a format from its alpha pixels. */
+export function ddsEncodingFromReference(
+  bytes: Uint8Array
+): Pick<ImageEncoding, "dds" | "mipmaps" | "referenceSize"> {
+  requireSingleImageDds(bytes);
+  const info = ddsFormatInfo(bytes);
+  if (!info) throw new Error("Reference is not a valid DDS file");
+  const formats: Record<string, DdsEncodeFormat> = { DXT1: "bc1", DXT5: "bc3", A8R8G8B8: "bgra8" };
+  const format = formats[info.format];
+  if (!format)
+    throw new Error(
+      `Reference uses ${info.format}, which this converter cannot write. Use a DDS tool supporting that format.`
+    );
+  const levels = ddsMipLevels(bytes);
+  return { dds: format, mipmaps: levels.length, referenceSize: { width: info.width, height: info.height } };
 }
 
 /** Native DDS/PNG codecs and Chromium's image codecs share one batch lifetime. */
@@ -33,9 +82,21 @@ export class ImageCodec {
   private waiters = new Map<string, { resolve: (value: Reply) => void; reject: (error: Error) => void }>();
 
   async decode(bytes: Uint8Array, ext: string, token?: vscode.CancellationToken): Promise<ImagePixels> {
+    if (token?.isCancellationRequested) throw new vscode.CancellationError();
     if (ext === ".dds") {
+      requireSingleImageDds(bytes);
       const image = decodeDds(bytes);
       return { width: image.width, height: image.height, rgba: image.pixels };
+    }
+    if (ext === ".png") {
+      // Canvas premultiplies alpha and discards RGB at alpha 0. PNG masks need all four channels.
+      const buffer = Buffer.from(bytes);
+      if (buffer.length < 24) throw new Error("Invalid PNG header");
+      const width = buffer.readUInt32BE(16),
+        height = buffer.readUInt32BE(20);
+      if (width * height > MAX_DECODE_PIXELS) throw new Error("PNG exceeds the image pixel limit");
+      const image = PNG.sync.read(buffer);
+      return { width: image.width, height: image.height, rgba: image.data };
     }
     const mime = IMAGE_MIME[ext];
     if (!mime) throw new Error(`Unsupported image extension: ${ext}`);
@@ -61,13 +122,24 @@ export class ImageCodec {
     token?: vscode.CancellationToken
   ): Promise<Uint8Array> {
     const { width, height, rgba } = image;
-    if (options.format === "dds")
-      return encodeDds(
-        width,
-        height,
-        rgba,
-        options.dds === "auto" ? (hasTransparency(rgba) ? "bc3" : "bc1") : options.dds
-      );
+    if (options.format === "dds") {
+      if (
+        options.referenceSize &&
+        (width !== options.referenceSize.width || height !== options.referenceSize.height)
+      )
+        throw new Error(
+          `Image is ${width}x${height}; reference requires ${options.referenceSize.width}x${options.referenceSize.height}. Resize the source image before converting.`
+        );
+      const format =
+        options.dds === "auto"
+          ? width % 4 || height % 4
+            ? "bgra8"
+            : hasTransparency(rgba)
+              ? "bc3"
+              : "bc1"
+          : options.dds;
+      return encodeDds(width, height, rgba, format, options.mipmaps);
+    }
     const png = encodePng(width, height, rgba);
     if (options.format === "png") return png;
     const reply = await this.request(

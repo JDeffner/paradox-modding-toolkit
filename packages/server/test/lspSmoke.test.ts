@@ -16,7 +16,17 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import { encodeDds } from "../src/dds";
-import type { CompletionList, Location, TextDocumentEdit, WorkspaceEdit } from "vscode-languageserver/node";
+import type {
+  CodeAction,
+  CompletionList,
+  Hover,
+  Location,
+  SignatureHelp,
+  TextDocumentEdit,
+  TextEdit,
+  WorkspaceEdit,
+} from "vscode-languageserver/node";
+import { TextDocument } from "vscode-languageserver-textdocument";
 import {
   createMessageConnection,
   IPCMessageReader,
@@ -37,6 +47,7 @@ import {
   guiLayoutRequest,
   guiSourceEditRequest,
   guiTreeRequest,
+  indexStatsRequest,
   definitionFormRequest,
   definitionEditRequest,
   locTextRequest,
@@ -262,6 +273,9 @@ const CHARACTERS_TXT = `9000010 = {
 \t1020.2.2 = {
 \t\tadd_spouse = 9000011
 \t}
+\t1060.1.1 = {
+\t\tdeath = { death_reason = death_natural_causes }
+\t}
 }
 9000011 = {
 \tname = "Smokina"
@@ -312,6 +326,18 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
   let guiPanelFile: string;
   let initResult: { serverInfo?: { name: string; version: string } };
   const statuses: StatusPayload[] = [];
+
+  async function waitForIndexBuild(start: number): Promise<void> {
+    // The notification write does not wait for applySettings. A request on the
+    // same connection drains its preceding statuses before we inspect them.
+    await conn.sendRequest(indexStatsRequest);
+    // An older completion must not satisfy the wait while a newer build runs.
+    await expect
+      .poll(() => statuses.slice(start).some((s) => s.indexing) && statuses.at(-1)?.indexing === false, {
+        timeout: 20_000,
+      })
+      .toBe(true);
+  }
 
   beforeAll(async () => {
     modDir = fs.mkdtempSync(path.join(os.tmpdir(), "ck3-smoke-"));
@@ -419,6 +445,107 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     fs.rmSync(modDir, { recursive: true, force: true });
     fs.rmSync(parentDir, { recursive: true, force: true });
     fs.rmSync(depDir, { recursive: true, force: true });
+  });
+
+  it.each([
+    [
+      "common/religion/religion_types",
+      "faith",
+      "px_nested_religion = { faiths = { NAME = {} } }",
+      "faith = faith:",
+    ],
+    ["common/laws", "law", "px_nested_group = { NAME = {} }", "add_realm_law = "],
+  ])(
+    "indexes unsaved %s children over the wire and removes them on close",
+    async (folder, kind, template, field) => {
+      const name = `px_nested_${kind}`;
+      const uri = toUri(path.join(modDir, folder, "px_nested.txt"));
+      const useUri = toUri(path.join(modDir, "events", `px_nested_${kind}.txt`));
+      const prefix = `namespace = nested\nnested.1 = { immediate = { ${field}`;
+      const useText = `${prefix}${name} } }`;
+      const position = { line: 1, character: prefix.split("\n")[1].length + 2 };
+      const complete = () =>
+        conn.sendRequest<CompletionList>("textDocument/completion", {
+          textDocument: { uri: useUri },
+          position: { ...position, character: position.character - 2 },
+        });
+      try {
+        for (const [docUri, text] of [
+          [uri, template.replace("NAME", name)],
+          [useUri, useText],
+        ]) {
+          await conn.sendNotification("textDocument/didOpen", {
+            textDocument: { uri: docUri, text, version: 1, languageId: "paradox-ck3" },
+          });
+        }
+        expect((await complete()).items.map((item) => item.label)).toContain(name);
+        const target = await conn.sendRequest<Location[]>("textDocument/definition", {
+          textDocument: { uri: useUri },
+          position,
+        });
+        expect(target.map((location) => decodeURIComponent(location.uri).toLowerCase())).toEqual([
+          decodeURIComponent(uri).toLowerCase(),
+        ]);
+        await expect(
+          conn.sendRequest("textDocument/prepareRename", { textDocument: { uri: useUri }, position })
+        ).rejects.toThrow(/not all indirect reference forms/);
+        await conn.sendNotification("textDocument/didChange", {
+          textDocument: { uri, version: 2 },
+          contentChanges: [{ text: template.replace("NAME", `${name}_changed`) }],
+        });
+        const changed = (await complete()).items.map((item) => item.label);
+        expect(changed).toContain(`${name}_changed`);
+        expect(changed).not.toContain(name);
+        await conn.sendNotification("textDocument/didClose", { textDocument: { uri } });
+        expect((await complete()).items.map((item) => item.label)).not.toContain(`${name}_changed`);
+      } finally {
+        for (const docUri of [uri, useUri])
+          await conn.sendNotification("textDocument/didClose", { textDocument: { uri: docUri } });
+      }
+    }
+  );
+
+  it.each([
+    ["faith", "faith = faith:", "faith_details = { religion = smoke_religion }"],
+    ["rite", "set_character_rite = rite:", "faith = smoke_faith"],
+    ["tenet", "has_tenet = ", "visible = yes"],
+  ])("indexes Crozier %s definitions over IPC, including unsaved updates", async (kind, field, body) => {
+    const name = `px_crozier_${kind}`;
+    const uri = toUri(path.join(modDir, "common/religion", `${kind}_types`, "px_crozier.txt"));
+    const useUri = toUri(path.join(modDir, "events", `px_crozier_${kind}.txt`));
+    const prefix = `namespace = crozier\ncrozier.1 = { immediate = { ${field}`;
+    const position = { line: 1, character: prefix.split("\n")[1].length };
+    try {
+      await conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri, version: 1, languageId: "paradox-ck3", text: `${name} = { ${body} }` },
+      });
+      await conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri: useUri, version: 1, languageId: "paradox-ck3", text: `${prefix}${name} } }` },
+      });
+      const complete = () =>
+        conn.sendRequest<CompletionList>("textDocument/completion", {
+          textDocument: { uri: useUri },
+          position,
+        });
+      expect((await complete()).items.map((item) => item.label)).toContain(name);
+      const locations = await conn.sendRequest<Location[]>("textDocument/definition", {
+        textDocument: { uri: useUri },
+        position: { ...position, character: position.character + 2 },
+      });
+      expect(locations.map((location) => decodeURIComponent(location.uri).toLowerCase())).toEqual([
+        decodeURIComponent(uri).toLowerCase(),
+      ]);
+      await conn.sendNotification("textDocument/didChange", {
+        textDocument: { uri, version: 2 },
+        contentChanges: [{ text: `${name}_changed = { ${body} }` }],
+      });
+      const updated = (await complete()).items.map((item) => item.label);
+      expect(updated).toContain(`${name}_changed`);
+      expect(updated).not.toContain(name);
+    } finally {
+      for (const opened of [uri, useUri])
+        await conn.sendNotification("textDocument/didClose", { textDocument: { uri: opened } });
+    }
   });
 
   it("separates same-name kinds and refreshes unsaved script definitions and references", async () => {
@@ -646,16 +773,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
       const start = statuses.length;
       await conn.sendNotification("paradox/configChanged", settings);
       await reload();
-      await expect
-        .poll(
-          () => {
-            const updates = statuses.slice(start);
-            const began = updates.findIndex((s) => s.indexing);
-            return began >= 0 && updates.slice(began + 1).some((s) => !s.indexing);
-          },
-          { timeout: 20_000 }
-        )
-        .toBe(true);
+      await waitForIndexBuild(start);
       fs.rmSync(logs, { recursive: true, force: true });
     }
   });
@@ -738,16 +856,7 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
         diagnosticsVanilla: false,
         ...(indexAssets === undefined ? {} : { indexAssets }),
       });
-      await expect
-        .poll(
-          () => {
-            const updates = statuses.slice(start);
-            const began = updates.findIndex((s) => s.indexing);
-            return began >= 0 && updates.slice(began + 1).some((s) => !s.indexing);
-          },
-          { timeout: 20_000 }
-        )
-        .toBe(true);
+      await waitForIndexBuild(start);
     };
     const symbols = (query: string) => conn.sendRequest("workspace/symbol", { query });
     const references = () =>
@@ -1146,11 +1255,56 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(refs.some((r) => r.uri.includes("parent_events.txt"))).toBe(true);
   });
 
-  it("semantic tokens cover the document", async () => {
-    const tokens = (await conn.sendRequest("textDocument/semanticTokens/full", {
-      textDocument: { uri: eventsUri },
-    })) as { data: number[] };
-    expect(tokens.data.length).toBeGreaterThan(0);
+  it("semantic tokens expose script roles and embedded GUI/localization expressions", async () => {
+    const legend = (
+      initResult as {
+        capabilities: {
+          semanticTokensProvider: { legend: { tokenTypes: string[]; tokenModifiers: string[] } };
+        };
+      }
+    ).capabilities.semanticTokensProvider.legend;
+    expect(legend.tokenModifiers).toEqual(
+      expect.arrayContaining(["declaration", "pxEffect", "pxTrigger", "pxScope"])
+    );
+    const read = async (uri: string, text: string) => {
+      const tokens = (await conn.sendRequest("textDocument/semanticTokens/full", {
+        textDocument: { uri },
+      })) as { data: number[] };
+      let line = 0,
+        character = 0;
+      const decoded: { text: string; type: string; modifiers: string[] }[] = [];
+      for (let i = 0; i < tokens.data.length; i += 5) {
+        line += tokens.data[i];
+        character = tokens.data[i] === 0 ? character + tokens.data[i + 1] : tokens.data[i + 1];
+        decoded.push({
+          text: text.split("\n")[line].slice(character, character + tokens.data[i + 2]),
+          type: legend.tokenTypes[tokens.data[i + 3]],
+          modifiers: legend.tokenModifiers.filter((_, bit) => tokens.data[i + 4] & (1 << bit)),
+        });
+      }
+      return decoded;
+    };
+    const script = await read(eventsUri, EVENTS_TXT);
+    expect(script).toContainEqual({ text: "smoke.1", type: "event", modifiers: ["declaration", "px"] });
+    expect(script).toContainEqual({ text: "my_smoke_effect", type: "macro", modifiers: ["px", "pxEffect"] });
+    for (const languageId of ["paradox-gui", "paradox-loc"]) {
+      const text =
+        languageId === "paradox-gui"
+          ? 'widget = { text = "[Character.GetName]" }\n'
+          : '\uFEFFl_english:\n smoke_tokens:0 "[Character.GetName]"\n';
+      const uri = `file:///semantic-${languageId}.${languageId === "paradox-gui" ? "gui" : "yml"}`;
+      await conn.sendNotification("textDocument/didOpen", {
+        textDocument: { uri, languageId, version: 1, text },
+      });
+      const spans = await read(uri, text);
+      expect(spans).toContainEqual({ text: "Character", type: "type", modifiers: ["defaultLibrary", "px"] });
+      expect(spans).toContainEqual({
+        text: "GetName",
+        type: "function",
+        modifiers: ["defaultLibrary", "px"],
+      });
+      await conn.sendNotification("textDocument/didClose", { textDocument: { uri } });
+    }
   });
 
   it("documentColor + colorPresentation round-trip over the wire (issue #11)", async () => {
@@ -1182,12 +1336,15 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
   it("paradox/eventDetail answers with loc, options and refs", async () => {
     const detail = (await conn.sendRequest("paradox/eventDetail", { id: "smoke.1" })) as {
       id: string;
+      sourceHash?: string;
       title?: { key: string; text?: string };
       options: Array<{ name?: { key: string } }>;
       refs: Array<{ kind: string; name: string }>;
       endLine: number;
     } | null;
     expect(detail).not.toBeNull();
+    expect(typeof detail!.sourceHash).toBe("string");
+    expect(detail!.sourceHash).not.toBe("");
     expect(detail!.title?.key).toBe("smoke.1.t");
     expect(detail!.title?.text).toBe("Smoke");
     expect(detail!.options).toHaveLength(1);
@@ -1242,6 +1399,8 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(father).toMatchObject({ name: "Smoky", birth: "1000.1.1", spouses: ["9000011"] });
     // The portrait name without the quotes the file wrote, and only the skills
     // the block actually sets.
+    expect(father?.deathReason).toBe("death_natural_causes");
+    expect(father?.death).toBe("1060.1.1");
     expect(father?.dna).toBe("smoky_dna");
     expect(father?.skills).toEqual({ martial: 8, learning: 3 });
     expect(tree.characters?.find((c) => c.id === "9000012")?.skills).toBeUndefined();
@@ -1283,6 +1442,57 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     // Rows are ordered by how often the game itself writes the name.
     expect(index.entries[0].count).toBeGreaterThan(0);
     expect(index.sources.join(" ")).toContain("Set the game folder");
+  });
+
+  it("paradox/exampleWiki browses request-local game references without changing workspace data", async () => {
+    const base = path.resolve(".local/testing");
+    fs.mkdirSync(base, { recursive: true });
+    const referenceRoot = fs.mkdtempSync(path.join(base, "wiki-switch-smoke-"));
+    try {
+      const current = (await conn.sendRequest(exampleWikiRequest, null)) as ExampleWikiIndex;
+      expect(current.entries.some((entry) => entry.name === "smoke_toll")).toBe(true);
+      for (const gameId of ["vic3", "eu5"]) {
+        const gamePath = path.join(referenceRoot, gameId, "game");
+        const logsPath = path.join(referenceRoot, gameId, "logs");
+        fs.mkdirSync(path.join(gamePath, "common/scripted_effects"), { recursive: true });
+        fs.mkdirSync(logsPath, { recursive: true });
+        const name = `wiki_switch_${gameId}_effect`;
+        const doc = `Request-local ${gameId} reference sentinel.`;
+        fs.writeFileSync(
+          path.join(logsPath, "effects.log"),
+          `## ${name}\n${doc}\n\n**Supported Scopes**: country\n`
+        );
+        const source = path.join(gamePath, "common/scripted_effects/reference.txt");
+        fs.writeFileSync(source, `reference = { ${name} = yes }\n`);
+        const context = { gameId, gamePath, logsPath };
+        const index = (await conn.sendRequest(exampleWikiRequest, {
+          context,
+          refresh: true,
+        })) as ExampleWikiIndex;
+        expect(index.entries.some((entry) => entry.name === name && entry.kind === "effect")).toBe(true);
+        expect(index.gameId).toBe(gameId);
+        expect(index.entries.some((entry) => entry.name === "add_gold" || entry.name === "smoke_toll")).toBe(
+          false
+        );
+        const detail = (await conn.sendRequest(exampleWikiEntryRequest, {
+          name,
+          kind: "effect",
+          context,
+        })) as ExampleWikiDetail;
+        expect(detail.doc).toContain(doc);
+        expect(detail.examples.some((site) => site.file === source)).toBe(true);
+        expect(
+          await conn.sendRequest(exampleWikiEntryRequest, { name: "smoke_toll", kind: "variable", context })
+        ).toBeNull();
+        expect((await conn.sendRequest(exampleWikiRequest, null)) as ExampleWikiIndex).toEqual(current);
+      }
+      await expect(
+        conn.sendRequest(exampleWikiRequest, { context: { gameId: "missing-game" } })
+      ).rejects.toThrow("not supported");
+      expect((await conn.sendRequest(exampleWikiRequest, null)) as ExampleWikiIndex).toEqual(current);
+    } finally {
+      fs.rmSync(referenceRoot, { recursive: true, force: true });
+    }
   });
 
   it("paradox/exampleWikiEntry round-trips one catalog row and refuses an unknown name", async () => {
@@ -1912,7 +2122,11 @@ describe.skipIf(!hasServer)("LSP smoke: client capability object", () => {
       rootUri: toUri(modDir),
       workspaceFolders: [{ uri: toUri(modDir), name: "caps" }],
       capabilities: {
-        textDocument: { completion: { completionItem: { documentationFormat: ["plaintext"] } } },
+        workspace: { workspaceEdit: { documentChanges: true, resourceOperations: ["create"] } },
+        textDocument: {
+          completion: { completionItem: { documentationFormat: ["plaintext"] } },
+          codeAction: { disabledSupport: true },
+        },
       },
       initializationOptions: {
         storageDir: fs.mkdtempSync(path.join(os.tmpdir(), "ck3-smoke-caps-storage-")),
@@ -2006,6 +2220,108 @@ describe.skipIf(!hasServer)("LSP smoke: client capability object", () => {
         entry.variants.every((variant) => variant.preview.startsWith("**Insertion preview**"))
       )
     ).toBe(true);
+  });
+
+  it("multiline GUI completion, hover and signature help retain later-line expression context over the wire", async () => {
+    const uri = toUri(path.join(modDir, "gui", "multiline.gui"));
+    const text = 'widget = { text = "[ObjectsEqual(\n Character.GetName,\n GetPlayer()\n)]" }';
+    await conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri, languageId: "paradox-gui", version: 1, text },
+    });
+    try {
+      const hover = await conn.sendRequest<Hover>("textDocument/hover", {
+        textDocument: { uri },
+        position: { line: 1, character: 14 },
+      });
+      expect((hover.contents as { value: string }).value).toContain("Character.GetName");
+      expect(hover.range).toEqual({ start: { line: 1, character: 11 }, end: { line: 1, character: 18 } });
+      const result = await conn.sendRequest<CompletionList>("textDocument/completion", {
+        textDocument: { uri },
+        position: { line: 1, character: 12 },
+      });
+      expect(result.items.find((item) => item.label === "GetName")?.textEdit).toMatchObject({
+        range: { start: { line: 1, character: 11 }, end: { line: 1, character: 12 } },
+        newText: "GetName",
+      });
+      const help = await conn.sendRequest<SignatureHelp>("textDocument/signatureHelp", {
+        textDocument: { uri },
+        position: { line: 2, character: 1 },
+      });
+      expect(help.signatures[0].label).toContain("ObjectsEqual(");
+      expect(help.activeParameter).toBe(1);
+    } finally {
+      await conn.sendNotification("textDocument/didClose", { textDocument: { uri } });
+    }
+  });
+
+  it("bare localization actions use current buffers, per-mod defaults and versioned edits over the wire", async () => {
+    const uri = toUri(path.join(modDir, "events", "adaptive_loc.txt"));
+    const targetUri = toUri(path.join(modDir, "localization", "german", "adaptive_l_german.yml"));
+    const configUri = toUri(path.join(modDir, ".px-toolkit", "localization.json"));
+    const text =
+      '\uFEFFl_german:\r\n # unsaved comment\r\n adaptive_decision_desc:8 "unsaved value" # keep\r\n unrelated:2 "keep"\r\n';
+    const target = TextDocument.create(targetUri, "paradox-localization", 12, text);
+    const range = { start: { line: 0, character: 0 }, end: { line: 0, character: 5 } };
+    await conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri,
+        languageId: "paradox",
+        version: 1,
+        text: "namespace = adaptive\nadaptive.1 = { title = adaptive_decision_title }\n",
+      },
+    });
+    await conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri: targetUri, languageId: target.languageId, version: target.version, text },
+    });
+    await conn.sendNotification("textDocument/didOpen", {
+      textDocument: {
+        uri: configUri,
+        languageId: "json",
+        version: 1,
+        text: JSON.stringify({
+          language: "german",
+          newKeyFile: "localization/german/adaptive_l_german.yml",
+          entryVersion: "preserve",
+        }),
+      },
+    });
+    const request = (key: string) =>
+      conn.sendRequest<CodeAction[]>("textDocument/codeAction", {
+        textDocument: { uri },
+        range,
+        context: {
+          diagnostics: [
+            { range, message: "Missing localization", code: "missing-required-loc", data: { key } },
+          ],
+        },
+      });
+    try {
+      const [action] = await request("adaptive_decision_title");
+      expect(action.command).toBeUndefined();
+      expect(action.disabled).toBeUndefined();
+      expect(action.edit!.documentChanges).toHaveLength(1);
+      const change = action.edit!.documentChanges![0] as TextDocumentEdit;
+      expect(change.textDocument).toEqual({ uri: targetUri, version: 12 });
+      const updated = TextDocument.applyEdits(target, change.edits as TextEdit[]);
+      expect(updated).toContain(' adaptive_decision_title:8 ""\r\n');
+      expect(updated).toContain(' adaptive_decision_desc:8 "unsaved value" # keep\r\n');
+      expect(updated).toContain(' unrelated:2 "keep"\r\n');
+      expect(updated).toContain("# unsaved comment");
+      expect(fs.existsSync(path.join(modDir, "localization", "german", "adaptive_l_german.yml"))).toBe(false);
+      expect(await request("adaptive_decision_desc")).toEqual([]);
+
+      await conn.sendNotification("textDocument/didChange", {
+        textDocument: { uri: configUri, version: 2 },
+        contentChanges: [{ text: "invalid defaults" }],
+      });
+      const [disabled] = await request("adaptive_decision_title");
+      expect(disabled.disabled).toBeDefined();
+      expect(disabled.edit).toBeUndefined();
+    } finally {
+      for (const closeUri of [uri, targetUri, configUri]) {
+        await conn.sendNotification("textDocument/didClose", { textDocument: { uri: closeUri } });
+      }
+    }
   });
 
   it("textDocument/formatting honors the client's indentation options", async () => {

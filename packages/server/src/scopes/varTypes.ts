@@ -8,8 +8,8 @@
  * across all set-sites of a name. Anything anchored in a runtime scope
  * (`scope:…`, `this`, bare links) stays unknown: annotate, never guess (AD-5).
  *
- * The full map is rebuilt lazily once per index revision (variables only —
- * cheap even for AGOT-sized mods) and consumed by scope inference
+ * The full map is rebuilt lazily when its inference inputs change (variables
+ * only, cheap even for AGOT-sized mods) and consumed by scope inference
  * (`ctx.varTypes`), hover and completion detail.
  *
  * No `vscode` imports: unit-tested in plain Node.
@@ -17,7 +17,6 @@
 import type { Definition, Reference } from "@px-lsp/protocol/types";
 import type { SchemaEntry } from "../schema/types";
 import type { ServerData } from "../serverData";
-import type { DefinitionIndex } from "../index/indexer";
 import { resolveKeyChainScopes, type InferenceContext } from "./inference";
 import type { Scope, ScopeModel } from "./model";
 
@@ -53,12 +52,8 @@ export interface VariableTypeInfo {
 }
 
 interface Cache {
-  /** The index the info was built from. buildIndex installs a FRESH
-   * DefinitionIndex whose revision restarts at 0, so a revision match alone
-   * can hand back a map built from the previous index once the new one climbs
-   * back to the same number. */
-  index: DefinitionIndex;
-  revision: number;
+  version: object;
+  rootScopesForFile: (file: string) => Set<Scope> | null;
   info: VariableTypeInfo;
 }
 
@@ -86,13 +81,13 @@ export function defScopeTag(data: ServerData, name: string): Set<Scope> | null {
 /**
  * The one canonical InferenceContext for a file. Every feature (completion,
  * hover, inlay hints, audit script) MUST build its context through here:
- * getSavedScopes caches its result per document version, so callers passing
- * divergent contexts would make hover/completion results depend on which
- * request happened to arrive first.
+ * The version includes all shared inference inputs; the saved-scope cache also
+ * checks the file's schema entry and root scopes.
  */
 export function inferenceContextFor(data: ServerData, entry: SchemaEntry | null): InferenceContext {
   const varInfo = variableTypes(data, data.rootScopesForFile);
   return {
+    cacheVersion: data.inferenceVersion,
     entry,
     onActionScopes: data.onActionScopes,
     varTypes: varInfo.types,
@@ -105,7 +100,8 @@ export function inferenceContextFor(data: ServerData, entry: SchemaEntry | null)
 }
 
 interface CallSiteCache {
-  revision: string;
+  version: object;
+  rootScopesForFile: (file: string) => Set<Scope> | null;
   map: Map<string, Set<Scope>>;
 }
 
@@ -113,20 +109,21 @@ const callSiteCache = new WeakMap<ServerData, CallSiteCache>();
 
 /**
  * Calling scopes of scripted effects/triggers/modifiers aggregated from their
- * indexed call sites (rebuilt when either index changes). The root-scope
+ * indexed call sites (rebuilt when shared inference inputs change). The root-scope
  * fallback for definitions without a PdxDoc `@scope` tag.
  */
 export function callSiteScopes(
   data: ServerData,
   rootScopesForFile: (file: string) => Set<Scope> | null
 ): Map<string, Set<Scope>> {
-  const revision = `${data.index.revision}:${data.refIndex.revision}`;
+  const version = data.inferenceVersion;
   const cached = callSiteCache.get(data);
-  if (cached && cached.revision === revision) return cached.map;
+  if (cached && cached.version === version && cached.rootScopesForFile === rootScopesForFile)
+    return cached.map;
   // chainedCalls(), not all(): the builder skips everything else anyway, and on
   // a big workspace that skip was 96% of a 4.1M-reference walk (perf round 2).
   const map = buildCallSiteScopes(data.refIndex.chainedCalls(), data.scopeModel, rootScopesForFile);
-  callSiteCache.set(data, { revision, map });
+  callSiteCache.set(data, { version, rootScopesForFile, map });
   return map;
 }
 
@@ -187,13 +184,15 @@ export function buildCallSiteScopes(
   return map;
 }
 
-/** The variable type map for the current index revision (cached). */
+/** The variable type map for the current shared inference inputs (cached). */
 export function variableTypes(
   data: ServerData,
   rootScopesForFile: (file: string) => Set<Scope> | null
 ): VariableTypeInfo {
   const cached = cache.get(data);
-  if (cached && cached.index === data.index && cached.revision === data.index.revision) return cached.info;
+  const version = data.inferenceVersion;
+  if (cached && cached.version === version && cached.rootScopesForFile === rootScopesForFile)
+    return cached.info;
   const info = buildVariableTypes(
     data.index.entries(
       (d) =>
@@ -205,7 +204,7 @@ export function variableTypes(
     data.scopeModel,
     rootScopesForFile
   );
-  cache.set(data, { index: data.index, revision: data.index.revision, info });
+  cache.set(data, { version, rootScopesForFile, info });
   return info;
 }
 

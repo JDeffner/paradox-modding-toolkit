@@ -20,6 +20,9 @@ import type { PxConfig } from "../config";
 import { readModName } from "@px-lsp/protocol/modName";
 import { writeLocSmart, type LocLookup } from "../locCommands";
 import { scaffoldPrefix } from "../scaffold/command";
+import { effectiveLocConfig, localizationRoots } from "../localizationProject";
+import { assertModWritePath } from "../modWrite";
+import { readDocument, writeDocument } from "../documentWrite";
 import {
   BOM,
   defaultDefinitionFileName,
@@ -227,6 +230,8 @@ export async function openSaveTarget(
   choice: SaveTargetChoice
 ): Promise<SaveTarget | null> {
   if (!isPlainScriptFileName(choice.file)) return null;
+  if (!writableMods(cfg).some((root) => samePath(root, choice.modPath)))
+    throw new Error("Choose a writable workspace mod");
   const gameFiles = cfg.gamePath ? listTxt(path.join(cfg.gamePath, ...folder.split("/"))) : [];
   const clash = vanillaNameClash(choice.file, gameFiles, folder);
   if (clash) {
@@ -236,9 +241,10 @@ export async function openSaveTarget(
 
   const dir = path.join(choice.modPath, ...folder.split("/"));
   const abs = path.join(dir, choice.file);
+  assertModWritePath({ ...cfg, modPath: choice.modPath }, abs);
   if (!fs.existsSync(abs)) {
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(abs, BOM, "utf8");
+    fs.writeFileSync(abs, BOM, { encoding: "utf8", flag: "wx" });
   }
   const doc = await vscode.workspace.openTextDocument(abs);
   return { modPath: choice.modPath, file: choice.file, abs, text: doc.getText() };
@@ -254,6 +260,8 @@ export async function pickSaveTarget(
   return choice ? openSaveTarget(cfg, folder, choice) : null;
 }
 
+export type DefinitionSaveResult = "saved" | "stale" | "failed";
+
 /**
  * Apply the server's edits as ONE `WorkspaceEdit`, save, and (unless
  * `reveal: false`) show the file beside without stealing focus. `text` is the
@@ -264,51 +272,60 @@ export async function applyDefinitionEdits(
   abs: string,
   text: string,
   edits: readonly GuiTextEdit[],
-  opts: { reveal?: boolean } = {}
-): Promise<boolean> {
-  const doc = await vscode.workspace.openTextDocument(abs);
-  if (doc.getText() !== text) {
-    void vscode.window.showWarningMessage(
-      `Paradox Modding Toolkit: ${path.basename(abs)} changed while the editor was open, so nothing was written. Try again.`
-    );
-    return false;
-  }
-  if (edits.length > 0) {
-    const edit = new vscode.WorkspaceEdit();
-    for (const e of edits) {
-      edit.replace(doc.uri, new vscode.Range(doc.positionAt(e.start), doc.positionAt(e.end)), e.newText);
+  opts: { cfg: PxConfig; reveal?: boolean }
+): Promise<DefinitionSaveResult> {
+  try {
+    assertModWritePath(opts.cfg, abs);
+    const snapshot = await readDocument(abs);
+    const doc = snapshot.document;
+    if (snapshot.text !== text) {
+      void vscode.window.showWarningMessage(
+        `Paradox Modding Toolkit: ${path.basename(abs)} changed while the editor was open, so nothing was written. Try again.`
+      );
+      return "stale";
     }
-    if (!(await vscode.workspace.applyEdit(edit))) return false;
-    await doc.save();
+    let body = text;
+    for (const edit of [...edits].sort((a, b) => b.start - a.start)) {
+      body = body.slice(0, edit.start) + edit.newText + body.slice(edit.end);
+    }
+    assertModWritePath(opts.cfg, abs);
+    await writeDocument(snapshot, body, true);
+    if (opts.reveal !== false) {
+      await vscode.window.showTextDocument(doc, {
+        viewColumn: vscode.ViewColumn.Beside,
+        preserveFocus: true,
+      });
+    }
+    return "saved";
+  } catch (error) {
+    void vscode.window.showErrorMessage(
+      `Paradox Modding Toolkit: failed to save ${path.basename(abs)}: ${String(error)}`
+    );
+    return "failed";
   }
-  if (opts.reveal !== false) {
-    await vscode.window.showTextDocument(doc, {
-      viewColumn: vscode.ViewColumn.Beside,
-      preserveFocus: true,
-    });
-  }
-  return true;
 }
 
 /**
- * The loc file a creator's NEW keys go to: named after the script file the
- * definition was written to, in the same mod (`common/traits/mymod_traits.txt`
- * -> `localization/<lang>/mymod_traits_l_<lang>.yml`). It used to be "the
- * mod's largest loc file", which put a trait's name into a calendar file
- * where nobody looked for it. From the second save on the keys are found in
- * place, so the file is only ever created by the first.
+ * Source-derived fallback for a creator's new localization keys. Author
+ * defaults and meaningful sibling matches take priority in writeLocSmart.
  */
 export function creatorLocFile(cfg: PxConfig, target: { modPath: string; file: string }): string {
+  cfg = effectiveLocConfig({ ...cfg, modPath: target.modPath });
   const stem = target.file.replace(/\.txt$/i, "");
-  return path.join(target.modPath, "localization", cfg.locLanguage, `${stem}_l_${cfg.locLanguage}.yml`);
+  return path.join(
+    target.modPath,
+    localizationRoots(cfg)[0],
+    cfg.locLanguage,
+    `${stem}_l_${cfg.locLanguage}.yml`
+  );
 }
 
 /**
  * Write a creator's loc values through the normal loc writer: a key the mod
  * already has is rewritten in place, a vanilla-only key goes to
- * `localization/replace/`, a brand-new key goes to `creatorLocFile(target)`
- * (or, with no target, the mod file holding its siblings). Returns the files
- * written, in order.
+ * an override destination, and a brand-new key follows the mod's author
+ * defaults and sibling layout before the source-derived fallback. Returns
+ * the files written, in order.
  */
 export async function writeLocValues(
   cfg: PxConfig,
@@ -317,10 +334,18 @@ export async function writeLocValues(
   target?: { modPath: string; file: string }
 ): Promise<string[]> {
   const files: string[] = [];
+  cfg = effectiveLocConfig(target ? { ...cfg, modPath: target.modPath } : cfg);
   const newKeyFile = target ? creatorLocFile(cfg, target) : undefined;
+  const relatedKeys = pairs.map(({ key }) => key);
   for (const { key, value } of pairs) {
     if (key.trim() === "") continue;
-    files.push(await writeLocSmart(cfg, lookup, key, value, newKeyFile));
+    files.push(
+      await writeLocSmart(cfg, lookup, key, value, {
+        sourcePath: target?.file,
+        relatedKeys,
+        newKeyFallbackPath: newKeyFile,
+      })
+    );
   }
   return files;
 }

@@ -236,6 +236,7 @@ export function extractReferencesParsed(
         const offset = stmt.key.range.start + prefix.length + 1;
         if (VAR_PREFIXES.has(prefix)) pushRef(name, VAR_PREFIX_KINDS[prefix], offset);
         else if (prefix === "scope") pushRef(name, SAVED_SCOPE_KINDS, offset);
+        else if (schema.prefixRefs[prefix]) pushRef(name, schema.prefixRefs[prefix], offset);
       }
     }
 

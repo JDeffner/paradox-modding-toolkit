@@ -22,6 +22,7 @@ import * as path from "path";
 import type { TokenData, TokenKind } from "@px-lsp/protocol/types";
 import { LOG_FILES } from "@px-lsp/protocol/constants";
 import { activeProfile } from "../games/active";
+import type { GameMeta } from "../games/profile";
 
 export { LOG_FILES };
 
@@ -363,8 +364,11 @@ export function parseOnActionsLog(logsDir: string): Map<string, string> {
 }
 
 /** The parser for one log, per the active profile's dump dialect. */
-function parserFor(kind: TokenKind): (content: string, kind: TokenKind) => TokenData[] {
-  const dialect = activeProfile().scriptDocs;
+function parserFor(
+  kind: TokenKind,
+  profile: Pick<GameMeta, "scriptDocs">
+): (content: string, kind: TokenKind) => TokenData[] {
+  const dialect = profile.scriptDocs;
   if (kind === "modifier") {
     if (dialect?.modifiers === "masked-block") return parseMaskedBlockModifiers;
     if (dialect?.modifiers === "tag-line") return parseTagLineModifiers;
@@ -374,7 +378,10 @@ function parserFor(kind: TokenKind): (content: string, kind: TokenKind) => Token
 }
 
 /** Parse the four script_docs logs found in `logsDir`. Missing files are reported, not fatal. */
-export function loadTokenDataFromLogs(logsDir: string): DocsLoadResult {
+export function loadTokenDataFromLogs(
+  logsDir: string,
+  profile: Pick<GameMeta, "scriptDocs"> = activeProfile()
+): DocsLoadResult {
   const tokens: TokenData[] = [];
   const templates: TokenData[] = [];
   const mtimes: Record<string, number> = {};
@@ -390,7 +397,7 @@ export function loadTokenDataFromLogs(logsDir: string): DocsLoadResult {
     }
     mtimes[file] = stat.mtimeMs;
     try {
-      for (const t of parserFor(kind)(fs.readFileSync(full, "utf8"), kind)) {
+      for (const t of parserFor(kind, profile)(fs.readFileSync(full, "utf8"), kind)) {
         (t.name.includes("$") ? templates : tokens).push(t);
       }
     } catch {

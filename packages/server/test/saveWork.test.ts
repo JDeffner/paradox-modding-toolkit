@@ -105,7 +105,7 @@ describe.skipIf(!hasServer)("the work one save costs (§B3/§B4)", () => {
     const deadline = Date.now() + 20_000;
     while (Date.now() < deadline) {
       const latest = statuses[statuses.length - 1];
-      if (latest && !latest.indexing && latest.definitions >= 1) break;
+      if (latest && !latest.indexing && latest.definitions >= 1 && refreshWhileIndexing.length > 0) break;
       await sleep(50);
     }
     expect(statuses[statuses.length - 1]?.indexing).toBe(false);

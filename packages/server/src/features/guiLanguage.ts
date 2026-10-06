@@ -13,6 +13,7 @@ import { blockStackFromParse } from "../context";
 import { getParse } from "../parseCache";
 import { finalize, itemKind, MAX_ITEMS, type CompletionResult } from "./completion";
 import { provideDataFnCompletion, provideDataFnHover } from "./datafunction";
+import { datafunctionExpressionAt } from "./datafunctionContext";
 import { guiDefSources, type GuiPaths } from "./guiNavigation";
 import { collectOverridableBlocks, resolveGuiDef, typeBaseChain, type GuiTypeDef } from "../gui/guiDefs";
 import { wordRangeAt } from "../wordAt";
@@ -116,7 +117,14 @@ export function provideGuiCompletion(
   });
 
   // Inside a [ ... ] datafunction expression → data types / promotes / functions.
-  const dataFn = provideDataFnCompletion(data.dataTypes, data.dataFnUsage, linePrefix, data.index, pos);
+  const dataFn = provideDataFnCompletion(
+    data.dataTypes,
+    data.dataFnUsage,
+    linePrefix,
+    data.index,
+    pos,
+    datafunctionExpressionAt(document, offset)
+  );
   if (dataFn !== null) return dataFn;
 
   // Quoted asset path (`texture = "gfx/interface/ico`) → directory-segment drill-down.
@@ -213,7 +221,8 @@ export function provideGuiHover(
     data.dataFnUsage,
     lineText,
     position.character,
-    paths?.gamePath ?? null
+    paths?.gamePath ?? null,
+    datafunctionExpressionAt(document, document.offsetAt(position))
   );
   if (dataFn) {
     return {

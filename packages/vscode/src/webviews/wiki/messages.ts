@@ -2,9 +2,9 @@
  * The wire between the Wiki host (panel.ts) and its app (app/main.ts). The
  * host reads the article files, knows the active game and can build the mod
  * report; the app filters, renders and asks for a command to run. Articles
- * arrive once, in full, so search costs no round trip. The mod report is the
- * one page fetched on demand: it reads the live index, so it is built when
- * the page opens, not when the panel does.
+ * arrive in full, so search costs no round trip. Launch-options articles
+ * refresh from the installed game files. The mod report is fetched on demand
+ * from the live index when its page opens.
  */
 import type { IconName } from "../shared/icons";
 
@@ -25,6 +25,12 @@ export interface WikiArticle {
    */
   game?: string;
   markdown: string;
+  /** Source history bundled at build time, absent for live or external references. */
+  revision?: {
+    /** ISO timestamp of the last committed change to this article's source. */
+    lastEdited?: string;
+    uncommitted: boolean;
+  };
   /**
    * Cards drawn after the markdown as one filterable grid (the Credits and
    * Modding Tools pages): the kinds on them become the filter chips.
@@ -62,6 +68,8 @@ export interface WikiHubEntry {
   icon: IconName;
   /** One sentence: the card text, and the row tooltip. */
   tip: string;
+  /** Prefix the label and tooltip with the selected reference game. */
+  selectedGame?: boolean;
   target: { command: string } | { page: string };
 }
 
@@ -71,12 +79,18 @@ export type HostToApp =
       hub: WikiHubEntry[];
       articles: WikiArticle[];
       /** Every supported game, for the sidebar's switch. */
-      games: { id: string; name: string }[];
+      games: { id: string; name: string; shortName?: string }[];
       /** The workspace's game: what the switch starts on. */
       game: string;
       select: string | null;
     }
   | { type: "select"; id: string }
+  | { type: "hub"; hub: WikiHubEntry[] }
+  | { type: "launchOptions"; articles: WikiArticle[] }
   | { type: "modReport"; markdown: string };
 
-export type AppToHost = { type: "ready" } | { type: "run"; command: string } | { type: "modReport" };
+export type AppToHost =
+  | { type: "ready" }
+  | { type: "run"; command: string; game?: string }
+  | { type: "refreshLaunchOptions" }
+  | { type: "modReport" };

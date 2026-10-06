@@ -112,7 +112,7 @@ it.each(Object.keys(DASHBOARD_SECTIONS) as DashboardSection[])(
   }
 );
 
-it("exposes direct, labelled file actions and excludes compatch", () => {
+it("exposes direct, labelled file actions and gates compatch", () => {
   const commands = new Map(manifest.contributes.commands.map((command) => [command.command, command.title]));
   for (const key of ["editor/context", "explorer/context"] as const) {
     for (const item of manifest.contributes.menus[key]) {
@@ -120,7 +120,19 @@ it("exposes direct, labelled file actions and excludes compatch", () => {
       expect(commands.get(item.command)).toMatch(/^PX: /);
     }
   }
-  expect([...commands.keys()].some((key) => /compatch|updateModForGame/i.test(key))).toBe(false);
+  const compatch = manifest.contributes.commands.filter((item) =>
+    /compatch|updateModForGame|updateThisMod/i.test(item.command)
+  );
+  expect(compatch.length).toBeGreaterThan(0);
+  for (const command of compatch) expect(command.enablement).toContain("config.px.experimentalFeatures");
+  const ids = new Set(compatch.map((item) => item.command));
+  for (const items of Object.values(manifest.contributes.menus))
+    for (const item of items)
+      if ("command" in item && ids.has(item.command))
+        expect(item.when).toContain("config.px.experimentalFeatures");
+  expect(manifest.contributes.views["px-review"].find((view) => view.id === "px.compatch")?.when).toBe(
+    "config.px.experimentalFeatures"
+  );
   expect(Object.keys(DASHBOARD_SECTIONS)).toEqual(["px.tools", "px.utils", "px.test", "px.paths"]);
   expect(manifest.contributes.views.px.some((view) => view.id === "px.settings")).toBe(false);
 });
