@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Replace the website's shared-link preview with a charcoal-and-gold feature card showing real editor captures, supported games and product details.
+
 ## 0.6.0 (upcoming; preview 0.5.5)
 
 Toolkit 0.5.5 is the opt-in prerelease of the upcoming 0.6.0 update. These changes cover all work since the published 0.5.0 release, including the unpublished 0.5.2 draft. Compatch features remain experimental and off by default.
