@@ -83,6 +83,8 @@ The bounded Lantern faith and mask workflow has user-confirmed acceptance agains
 
 - Add an independently deployable toolkit website with a product tour, searchable handbook, release notes, visual identity, credits and recorded workflows. Keep published and preview features clearly labelled.
 
+- Fix an intermittent release check failure caused by asset tests running before indexing finished.
+
 ## 0.5.0 (beta) - editor improvements
 
 - Keep the new-mod wizard open when focus changes, show the created folder with opening actions if the final step is canceled, and show Explorer when adding the new mod to the workspace.

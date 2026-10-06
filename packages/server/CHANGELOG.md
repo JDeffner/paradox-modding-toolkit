@@ -53,6 +53,8 @@ The bounded faith and mask workflow has user-confirmed acceptance in the Lantern
 
 - Retain profile scaffold rendering, the game metadata registry and shared Tiger handling for the separate `paradox-toolkit-cli` project. The external CLI bundles the server and uses existing stdio requests; these helpers add no LSP method.
 
+- Make release smoke tests wait for the current index rebuild before checking asset references and symbols.
+
 ## 0.3.6
 
 Ships with the toolkit's 0.5.0 release.
