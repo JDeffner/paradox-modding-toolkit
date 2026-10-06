@@ -12,6 +12,7 @@ export type HostToApp =
   /** A deep link (px.showExamplesWiki with an argument): show this article,
    *  clearing the search and the filter so its row is reachable. */
   | { type: "reveal"; name: string; kind: ExampleWikiKind }
+  | { type: "search"; query: string }
   | { type: "error"; message: string };
 
 export type AppToHost =

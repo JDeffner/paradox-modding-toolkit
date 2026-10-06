@@ -404,7 +404,7 @@ export function moddingToolsPage(gameNames: Record<string, string>): {
   const outro = [
     "## Add a tool",
     "",
-    "Built something that does what the toolkit does not? Tell me on [Discord](https://discord.gg/DfEJ2H9hj4) or [open an issue](https://github.com/JDeffner/paradox-modding-toolkit/issues). I add the tools that fill a gap.",
+    "Use Improve this page to submit a tool. Include its link and a short explanation of what it does.",
     "",
     `Sources: ${sources}.`,
   ].join("\n");

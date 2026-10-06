@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Group Wiki references by topic, open search matches at their section or card, and carry queries into Examples Wiki for the selected reference game. Add Back and Forward, saved reading positions and filters, page contents, and content-submission links. Keep article edit dates and discard outdated Mod Report replies.
+- Shorten GitHub issue forms, make version details optional, and allow feature requests with only a title. Add a Wiki-content form with page and game context.
+
+## Unreleased
+
 - Replace the website's shared-link preview with a charcoal-and-gold feature card showing real editor captures, supported games and product details.
 
 ## 0.6.0 (upcoming; preview 0.5.5)

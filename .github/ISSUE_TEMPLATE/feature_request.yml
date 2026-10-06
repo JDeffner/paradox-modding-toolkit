@@ -3,31 +3,7 @@ description: Suggest an improvement or new capability
 labels: ["enhancement"]
 body:
   - type: textarea
-    id: problem
+    id: details
     attributes:
-      label: What are you trying to do?
-      description: Describe the modding task or workflow, not the solution. What slows you down or is impossible today, and how do you handle it right now (if at all)?
-    validations:
-      required: true
-
-  - type: textarea
-    id: proposal
-    attributes:
-      label: Proposed solution
-      description: How you imagine it working in the editor. Rough is fine, and feel free to sketch alternative approaches too — more ideas to pick from.
-    validations:
-      required: true
-
-  - type: dropdown
-    id: area
-    attributes:
-      label: Area
-      options:
-        - Diagnostics / validation
-        - Hover cards / completions
-        - ck3-tiger integration
-        - Workspace mods / multi-mod
-        - Translation mods
-        - Views / Tools panel
-        - New feature area
-        - Other / not sure
+      label: Additional details (optional)
+      description: Add context, examples or screenshots if the title needs them.

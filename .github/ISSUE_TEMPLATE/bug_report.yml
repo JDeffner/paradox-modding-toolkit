@@ -5,83 +5,31 @@ body:
   - type: textarea
     id: what-happened
     attributes:
-      label: What happened / what you expected
-      description: A clear description of the problem and the behavior you expected instead.
+      label: What happened?
+      description: Include the steps that caused the problem, what happened, and what you expected.
     validations:
       required: true
 
   - type: dropdown
-    id: area
+    id: game
     attributes:
-      label: Area
-      description: Where does the problem show up?
+      label: Game
       options:
-        - Diagnostics / validation
-        - Hover cards / completions
-        - ck3-tiger integration
-        - Workspace mods / multi-mod
-        - Translation mods
-        - Views / Tools panel
-        - Performance
-        - Other / not sure
+        - Crusader Kings III (ck3)
+        - Victoria 3 (vic3)
+        - Europa Universalis V (eu5)
+        - Not game-specific / not sure
     validations:
       required: true
 
   - type: input
-    id: extension-version
+    id: versions
     attributes:
-      label: Extension version
-      placeholder: e.g. 0.1.1
-    validations:
-      required: true
-
-  - type: dropdown
-    id: editor
-    attributes:
-      label: Editor
-      options:
-        - VS Code
-        - Cursor
-        - VSCodium
-        - Windsurf
-        - Other (say which under "Anything else")
-    validations:
-      required: true
-
-  - type: input
-    id: ck3-version
-    attributes:
-      label: CK3 game version
-      description: Matters — the extension derives data per game patch.
-      placeholder: e.g. 1.16.2
-    validations:
-      required: true
-
-  - type: input
-    id: tiger-version
-    attributes:
-      label: ck3-tiger version
-      description: Output of `ck3-tiger --version`, or "auto-downloaded", or "not used".
-      placeholder: e.g. 1.11.1 / auto-downloaded / not used
-
-  - type: checkboxes
-    id: data-sources
-    attributes:
-      label: Data sources
-      options:
-        - label: '`script_docs` logs generated (status bar says "script_docs + wiki")'
-        - label: "`DumpDataTypes` dump loaded (`data_types.log` in the logs folder)"
-        - label: Using a `.px-toolkit/schema.json` overlay or `playset.json` (attach it below if so)
-
-  - type: textarea
-    id: repro
-    attributes:
-      label: Snippet / repro
-      description: If a specific file confuses the parser or diagnostics, paste the smallest snippet that reproduces it.
-      render: text
+      label: Versions (optional)
+      description: "If known: toolkit version, editor, game version, and tiger version when relevant."
 
   - type: textarea
     id: extra
     attributes:
-      label: Anything else
-      description: Logs, screenshots, schema overlay, playset.json, or other context.
+      label: Files, screenshots or logs (optional)
+      description: Paste or attach a small example, error message, or relevant output that helps reproduce the problem.

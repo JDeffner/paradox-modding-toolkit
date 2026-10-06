@@ -1,6 +1,6 @@
 /**
- * The Wiki app: a front page of hub cards, a table of contents on the left,
- * one reading pane, and a search that reads titles and page text alike.
+ * The Wiki app: grouped reference pages, direct section/card search, and
+ * workspace-persisted reading history.
  *
  * Pages are of three kinds: articles the host read from files, the two
  * built-in pages (the Diagnostics index over the diagnostic articles, the
@@ -23,6 +23,16 @@ import type { AppToHost, HostToApp, WikiArticle, WikiCard, WikiHubEntry } from "
 import { installTips } from "../../shared/tips";
 import { helpDialog } from "../../shared/help";
 import { menu } from "../../shared/overlay";
+import { articleSections, searchWiki } from "../search";
+import {
+  initialWikiState,
+  parseWikiState,
+  positionKey,
+  rememberPosition,
+  travel,
+  visit,
+} from "../navigation";
+import type { WikiLocation } from "../messages";
 
 declare function acquireVsCodeApi(): { postMessage(message: unknown): void };
 const vscode = acquireVsCodeApi();
@@ -41,13 +51,18 @@ let articles: WikiArticle[] = [];
 let games: { id: string; name: string; shortName?: string }[] = [];
 /** The game the pages are shown for; the workspace's until the switch moves. */
 let game = "";
+let workspaceGame = "";
+let reading = initialWikiState("");
+let initialized = false;
+let restoring = false;
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
 /** null = the front page. */
 let selected: string | null = null;
 let query = "";
 let diagOpen = false;
 /** The last report the host sent; null while one is being built. */
 let report: string | null = null;
-/** The kind filter of the page being read, or null for all. Reset on every page. */
+/** The kind filter restored for the current page and reference game. */
 let cardKind: string | null = null;
 
 /** The articles of the selected game: one without a game belongs to all. */
@@ -55,19 +70,21 @@ const visible = (): WikiArticle[] => articles.filter((a) => !a.game || a.game ==
 const diagnostics = (): WikiArticle[] => visible().filter((a) => a.section === DIAG_SECTION);
 const isDiagnostic = (id: string | null): boolean => diagnostics().some((a) => a.id === id);
 
-function matchesArticle(article: WikiArticle, needle: string): boolean {
-  const cards = (article.cards ?? []).flatMap((c) => [c.title, c.kind, c.text, c.meta ?? ""]);
-  return [article.title, article.markdown, article.outro ?? "", ...cards]
-    .join("\n")
-    .toLowerCase()
-    .includes(needle);
-}
+const gameName = (id: string): string => games.find((item) => item.id === id)?.name ?? id;
+const groups: WikiHubEntry["group"][] = [
+  "Script reference",
+  "Images & formats",
+  "Troubleshooting",
+  "Community",
+  "More",
+];
 
 function pressable(node: HTMLElement, onOpen: () => void): void {
   node.setAttribute("role", "button");
   node.tabIndex = 0;
   node.addEventListener("click", onOpen);
   node.addEventListener("keydown", (e) => {
+    if (e.target !== node) return;
     const key = (e as KeyboardEvent).key;
     if (key === "Enter" || key === " ") {
       e.preventDefault();
@@ -142,58 +159,69 @@ function renderToc(nav: HTMLElement): void {
   home.setAttribute("aria-selected", String(selected === null));
   list.appendChild(home);
 
-  for (const entry of hubEntries()) {
-    const node = row(entry.icon, entry.label, entry.tip, () => open(entry));
-    const page = "page" in entry.target ? entry.target.page : null;
-    node.setAttribute("aria-selected", String(page !== null && page === selected));
-    list.appendChild(node);
-    if (page !== DIAGNOSTICS) continue;
+  for (const group of groups) {
+    const entries = hubEntries().filter((entry) => entry.group === group);
+    if (!entries.length) continue;
+    list.appendChild(el("div", "px-panel-title", group));
+    for (const entry of entries) {
+      const node = row(entry.icon, entry.label, entry.tip, () => open(entry));
+      if (entry.workspace)
+        node
+          .querySelector(".px-item-label")!
+          .appendChild(el("small", "workspace", `Workspace: ${workspaceGame.toUpperCase()}`));
+      const page = "page" in entry.target ? entry.target.page : null;
+      node.setAttribute("aria-selected", String(page !== null && page === selected));
+      list.appendChild(node);
+      if (page !== DIAGNOSTICS) continue;
 
-    // A span, not the svg itself: px-icon svgs are pointer-events: none, so
-    // a listener on the icon never fires and the row's open() wins.
-    const twist = el("span", "twist");
-    twist.appendChild(iconEl(diagOpen ? "chevronDown" : "chevronRight"));
-    twist.setAttribute("data-tip", diagOpen ? "Fold the codes" : "List the codes");
-    twist.addEventListener("click", (e) => {
-      e.stopPropagation();
-      diagOpen = !diagOpen;
-      renderNav();
-    });
-    node.appendChild(twist);
-    if (diagOpen) for (const article of diagnostics()) list.appendChild(diagRow(article));
+      const twist = el("button", "twist");
+      twist.setAttribute("aria-label", "Show diagnostic codes");
+      twist.setAttribute("aria-expanded", String(diagOpen));
+      twist.appendChild(iconEl(diagOpen ? "chevronDown" : "chevronRight"));
+      twist.setAttribute("data-tip", diagOpen ? "Fold the codes" : "List the codes");
+      twist.addEventListener("click", (e) => {
+        e.stopPropagation();
+        diagOpen = !diagOpen;
+        renderNav();
+        persist();
+      });
+      node.appendChild(twist);
+      if (diagOpen) for (const article of diagnostics()) list.appendChild(diagRow(article));
+    }
   }
 }
 
-/** Search results: matching hub entries, then matching pages, flat. */
+/** Matching sections and cards link to their location in the reading pane. */
 function renderSearch(nav: HTMLElement, needle: string): void {
-  const entries = hubEntries().filter((e) => e.label.toLowerCase().includes(needle));
-  const pages = visible().filter((a) => matchesArticle(a, needle));
-  if (entries.length === 0 && pages.length === 0) {
-    const empty = el("div", undefined, "No page matches that.");
+  const results = searchWiki(articles, game, needle);
+  const entries = hubEntries().filter(
+    (entry) =>
+      ("command" in entry.target || [DIAGNOSTICS, MOD_REPORT].includes(entry.target.page)) &&
+      entry.label.toLowerCase().includes(needle)
+  );
+  if (entries.length === 0 && results.length === 0) {
+    const empty = el("div", undefined, `No reference matches for ${gameName(game)}.`);
     empty.id = "navEmpty";
     nav.appendChild(empty);
-    return;
   }
-  if (entries.length > 0) {
-    nav.appendChild(el("div", "px-panel-title", "Hub"));
-    const list = el("div", "px-list");
-    for (const entry of entries) list.appendChild(row(entry.icon, entry.label, entry.tip, () => open(entry)));
-    nav.appendChild(list);
+  const list = el("div", "px-list");
+  for (const entry of entries) list.appendChild(row(entry.icon, entry.label, entry.tip, () => open(entry)));
+  for (const result of results) {
+    const node = row("fileText", result.title, undefined, () => select(result.page, result.anchor));
+    node.classList.add("search-result");
+    node.setAttribute("aria-selected", String(result.page === selected));
+    node.querySelector(".px-item-label")!.appendChild(el("small", "search-detail", result.detail));
+    list.appendChild(node);
   }
-  if (pages.length > 0) {
-    nav.appendChild(el("div", "px-panel-title", "Pages"));
-    const list = el("div", "px-list");
-    for (const article of pages) {
-      const node =
-        article.section === DIAG_SECTION
-          ? diagRow(article)
-          : row("fileText", article.title, undefined, () => select(article.id));
-      node.classList.remove("diag");
-      node.setAttribute("aria-selected", String(article.id === selected));
-      list.appendChild(node);
-    }
-    nav.appendChild(list);
-  }
+  nav.appendChild(list);
+  const examples = row("search", "Search in Examples Wiki", undefined, () =>
+    send({ type: "searchExamples", query, game })
+  );
+  examples.id = "searchExamples";
+  examples
+    .querySelector(".px-item-label")!
+    .appendChild(el("small", "workspace", `Reference: ${gameName(game)}`));
+  nav.appendChild(examples);
 }
 
 function renderNav(): void {
@@ -225,22 +253,39 @@ function renderHub(content: HTMLElement): void {
     el(
       "p",
       "lede",
-      "Everything the toolkit knows, from one place: the game's script vocabulary, the file formats, the art rules, what each problem code means, and the state of your mod."
+      "Script reference, file formats and practical help for modding. Choose a topic or search for what you need."
     )
   );
-  const cards = el("div", "cards");
-  for (const entry of hubEntries()) {
-    const card = el("button", "card");
-    card.setAttribute("type", "button");
-    const head = el("div", "head");
-    head.appendChild(iconEl(entry.icon));
-    head.appendChild(el("span", undefined, entry.label));
-    card.appendChild(head);
-    card.appendChild(el("div", "tip", entry.tip));
-    card.addEventListener("click", () => open(entry));
-    cards.appendChild(card);
+  for (const group of groups) {
+    const entries = hubEntries().filter((entry) => entry.group === group);
+    if (!entries.length) continue;
+    content.appendChild(el("h2", "hub-group", group));
+    const cards = el("div", group === "More" ? "secondary-links" : "cards hub-cards");
+    for (const entry of entries) {
+      if (group === "More") {
+        const button = el("button", "px-btn", entry.label);
+        button.dataset.variant = "outline";
+        button.prepend(iconEl(entry.icon));
+        if (entry.workspace)
+          button.appendChild(el("small", "workspace", `Workspace: ${gameName(workspaceGame)}`));
+        button.addEventListener("click", () => open(entry));
+        cards.appendChild(button);
+        continue;
+      }
+      const card = el("button", "card");
+      card.setAttribute("type", "button");
+      const head = el("div", "head");
+      head.appendChild(iconEl(entry.icon));
+      head.appendChild(el("span", undefined, entry.label));
+      card.appendChild(head);
+      card.appendChild(el("div", "tip", entry.tip));
+      if (entry.workspace)
+        card.appendChild(el("small", "workspace", `Workspace: ${gameName(workspaceGame)}`));
+      card.addEventListener("click", () => open(entry));
+      cards.appendChild(card);
+    }
+    content.appendChild(cards);
   }
-  content.appendChild(cards);
 }
 
 function renderDiagnosticsIndex(content: HTMLElement): void {
@@ -300,6 +345,7 @@ function renderModReport(content: HTMLElement): void {
   again.setAttribute("data-size", "sm");
   again.setAttribute("data-tip", "Build the report again from the index as it is now.");
   again.addEventListener("click", () => {
+    capturePosition();
     report = null;
     send({ type: "modReport" });
     renderPage();
@@ -312,6 +358,26 @@ function renderArticle(content: HTMLElement, article: WikiArticle): void {
   if (article.section === DIAG_SECTION) trail.push({ label: DIAG_SECTION, to: DIAGNOSTICS });
   renderCrumbs(trail, article.title);
   content.innerHTML = renderMarkdown(article.markdown);
+  const sections = articleSections(article.markdown);
+  const headings = Array.from(content.querySelectorAll<HTMLElement>("h1, h2, h3"));
+  for (const [index, heading] of headings.entries()) heading.id = sections[index]?.anchor ?? "";
+  const listed = headings.filter((heading) => heading.tagName !== "H1");
+  if (listed.length >= 3) {
+    const contents = el("details", "article-contents");
+    contents.appendChild(el("summary", undefined, "On this page"));
+    const links = el("div");
+    for (const heading of listed) {
+      const link = el("button", "contents-link", heading.textContent ?? "");
+      link.addEventListener("click", () => {
+        jump(heading.id);
+        persist();
+      });
+      links.appendChild(link);
+    }
+    contents.appendChild(links);
+    if (headings[0]) headings[0].after(contents);
+    else content.prepend(contents);
+  }
   if (article.revision) {
     const { lastEdited, uncommitted } = article.revision;
     const revision = el("p", "article-revision");
@@ -379,6 +445,7 @@ function renderCards(content: HTMLElement, cards: WikiCard[]): void {
     filterRow(kinds, cardKind, (value) => {
       cardKind = value;
       renderPage();
+      persist();
     })
   );
   content.appendChild(filters);
@@ -387,6 +454,7 @@ function renderCards(content: HTMLElement, cards: WikiCard[]): void {
   const shown = forGame.filter((c) => cardKind === null || c.kind === cardKind);
   for (const card of shown) {
     const node = el("div", "card info");
+    node.id = `wiki-card-${cards.indexOf(card)}`;
     const head = el("div", "head");
     const icon = iconEl(card.icon);
     icon.setAttribute("data-tip", card.kind);
@@ -417,20 +485,75 @@ function renderPage(): void {
     if (article) renderArticle(content, article);
     else renderHub(content);
   }
+  $("improvePage").hidden = !visible().some((article) => article.id === selected);
 }
 
-function select(id: string | null): void {
-  selected = id;
-  cardKind = null;
-  if (isDiagnostic(id)) diagOpen = true;
-  if (id === MOD_REPORT) {
-    report = null;
-    send({ type: "modReport" });
+function capturePosition(): void {
+  if (initialized && !restoring && !(selected === MOD_REPORT && report === null)) {
+    rememberPosition(reading, $("doc").scrollTop, cardKind);
   }
-  if (id === LAUNCH_OPTIONS) send({ type: "refreshLaunchOptions" });
+}
+
+function persist(): void {
+  if (!initialized) return;
+  clearTimeout(saveTimer);
+  capturePosition();
+  reading.current.query = query;
+  reading.diagOpen = diagOpen;
+  send({ type: "saveState", state: reading });
+}
+
+function jump(anchor: string): void {
+  const target = document.getElementById(anchor);
+  if (!target) return;
+  document.querySelector(".search-target")?.classList.remove("search-target");
+  target.classList.add("search-target");
+  target.tabIndex = -1;
+  target.scrollIntoView({ block: "start" });
+  target.focus({ preventScroll: true });
+}
+
+function showLocation(anchor?: string): void {
+  const location = reading.current;
+  game = games.some((item) => item.id === location.game) ? location.game : workspaceGame;
+  selected = location.page !== null && known(location.page) ? location.page : null;
+  query = location.query;
+  reading.current = { page: selected, game, query };
+  const position = reading.positions[positionKey(reading.current)];
+  cardKind = anchor ? null : (position?.cardKind ?? null);
+  if (isDiagnostic(selected)) diagOpen = true;
+  input.value = query;
+  renderGames();
   renderNav();
+  restoring = true;
   renderPage();
-  $("doc").scrollTop = 0;
+  $("doc").scrollTop = position?.scroll ?? 0;
+  if (anchor) jump(anchor);
+  restoring = false;
+  $<HTMLButtonElement>("wikiBack").disabled = reading.back.length === 0;
+  $<HTMLButtonElement>("wikiForward").disabled = reading.forward.length === 0;
+  if (selected === MOD_REPORT && report === null) send({ type: "modReport" });
+  if (selected === LAUNCH_OPTIONS) send({ type: "refreshLaunchOptions" });
+  persist();
+}
+
+function navigate(location: WikiLocation, anchor?: string): void {
+  capturePosition();
+  visit(reading, location);
+  showLocation(anchor);
+}
+
+function select(id: string | null, anchor?: string): void {
+  if (id === MOD_REPORT) {
+    capturePosition();
+    report = null;
+  }
+  navigate({ page: id, game, query }, anchor);
+}
+
+function history(direction: "back" | "forward"): void {
+  capturePosition();
+  if (travel(reading, direction)) showLocation();
 }
 
 const known = (id: string): boolean =>
@@ -444,18 +567,26 @@ function renderGames(): void {
 window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
   const msg = ev.data;
   if (msg.type === "content") {
+    if (workspaceGame !== msg.game) report = null;
     hub = msg.hub;
     articles = msg.articles;
     games = msg.games;
-    game = msg.game;
-    renderGames();
-    select(msg.select && known(msg.select) ? msg.select : selected);
+    workspaceGame = msg.game;
+    if (!initialized) {
+      reading = parseWikiState(msg.state) ?? initialWikiState(workspaceGame);
+      diagOpen = reading.diagOpen;
+      initialized = true;
+    } else capturePosition();
+    if (msg.select) visit(reading, { ...reading.current, page: msg.select });
+    showLocation();
   } else if (msg.type === "select") {
     if (known(msg.id)) select(msg.id);
   } else if (msg.type === "hub") {
+    capturePosition();
+    if (workspaceGame !== msg.game) report = null;
+    workspaceGame = msg.game;
     hub = msg.hub;
-    renderNav();
-    renderPage();
+    showLocation();
   } else if (msg.type === "launchOptions") {
     articles = [...articles.filter((article) => article.id !== LAUNCH_OPTIONS), ...msg.articles];
     renderNav();
@@ -466,7 +597,10 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
     }
   } else if (msg.type === "modReport") {
     report = msg.markdown;
-    if (selected === MOD_REPORT) renderPage();
+    if (selected === MOD_REPORT) {
+      renderPage();
+      $("doc").scrollTop = reading.positions[positionKey(reading.current)]?.scroll ?? 0;
+    }
   }
 });
 
@@ -474,6 +608,7 @@ const input = $<HTMLInputElement>("query");
 input.addEventListener("input", () => {
   query = input.value;
   renderNav();
+  persist();
 });
 
 $("game").addEventListener("click", () =>
@@ -483,20 +618,39 @@ $("game").addEventListener("click", () =>
     {
       value: game,
       onPick: (value) => {
-        game = value;
-        renderGames();
-        // A page the new game has no article for falls back to the front page.
-        select(selected !== null && known(selected) ? selected : null);
+        navigate({ page: selected, game: value, query });
       },
     }
   )
 );
 
+$("wikiBack").addEventListener("click", () => history("back"));
+$("wikiForward").addEventListener("click", () => history("forward"));
+$("suggestContent").addEventListener("click", () => send({ type: "contribute", game }));
+$("improvePage").addEventListener("click", () => {
+  if (selected) send({ type: "contribute", game, article: selected });
+});
+$("doc").addEventListener("scroll", () => {
+  clearTimeout(saveTimer);
+  capturePosition();
+  saveTimer = setTimeout(persist, 150);
+});
+window.addEventListener("beforeunload", persist);
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) persist();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.altKey && !event.ctrlKey && !event.metaKey && ["ArrowLeft", "ArrowRight"].includes(event.key)) {
+    event.preventDefault();
+    history(event.key === "ArrowLeft" ? "back" : "forward");
+  }
+});
+
 $("helpBtn").addEventListener("click", () =>
   helpDialog({
     title: "The Wiki",
     intro:
-      "The hub for the reference knowledge the toolkit carries. The front page is one card per destination; the list on the left is the same set as a table of contents, with the page you are reading marked.",
+      "Modding references grouped by topic. Search opens matching article sections, tools and guides. Back and Forward return to pages you have read, with their scroll positions and filters.",
     sections: [
       {
         title: "The pages",
@@ -556,11 +710,15 @@ $("helpBtn").addEventListener("click", () =>
         items: [
           {
             lead: "The search box",
-            text: "reads the titles and the whole text of every page, so a word from the middle of an article finds it.",
+            text: "finds pages, article sections, tools and guides for the reference game. Search in Examples Wiki carries your query into the selected reference game's script reference.",
           },
           {
             lead: "The breadcrumb",
             text: "above a page leads back to the section and the front page.",
+          },
+          {
+            lead: "Suggest content and Improve this page",
+            text: "open a GitHub form for your title and the content you want added or changed. The toolkit fills in the game and page. Toolkit help opens the usage documentation on the website.",
           },
         ],
       },
