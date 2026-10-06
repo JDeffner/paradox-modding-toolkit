@@ -2,7 +2,8 @@ import type { WikiLocation, WikiReadingState } from "./messages";
 
 const HISTORY_LIMIT = 50;
 const POSITION_LIMIT = 200;
-export const positionKey = (location: WikiLocation): string => JSON.stringify([location.game, location.page]);
+export const positionKey = (location: WikiLocation): string =>
+  JSON.stringify([location.game, location.page, ...(location.anchor ? [location.anchor] : [])]);
 
 export function initialWikiState(game: string): WikiReadingState {
   return {
@@ -27,7 +28,9 @@ export function parseWikiState(value: unknown): WikiReadingState | undefined {
       typeof l.game === "string" &&
       l.game.length <= 30 &&
       typeof l.query === "string" &&
-      l.query.length <= 2000
+      l.query.length <= 2000 &&
+      (l.anchor === undefined ||
+        (typeof l.anchor === "string" && /^wiki-(?:heading-\d+|card-\d+|start|outro)$/.test(l.anchor)))
     );
   };
   if (
@@ -74,7 +77,8 @@ export function visit(state: WikiReadingState, next: WikiLocation): void {
   if (
     state.current.page === next.page &&
     state.current.game === next.game &&
-    state.current.query === next.query
+    state.current.query === next.query &&
+    state.current.anchor === next.anchor
   )
     return;
   state.back.push({ ...state.current });

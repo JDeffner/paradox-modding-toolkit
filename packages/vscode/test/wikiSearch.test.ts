@@ -91,7 +91,7 @@ describe("Wiki search", () => {
     ];
     expect(searchWiki(pages, "ck3", "modding tools").map((hit) => hit.page)).toEqual(["shared"]);
     expect(searchWiki(pages, "ck3", "unique preamble")[0]).toMatchObject({ page: "shared" });
-    expect(searchWiki(pages, "ck3", "unique preamble")[0].anchor).toBeUndefined();
+    expect(searchWiki(pages, "ck3", "unique preamble")[0].anchor).toBe("wiki-start");
     expect(searchWiki(pages, "ck3", " \n\t ")).toEqual([]);
   });
 

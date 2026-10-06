@@ -355,6 +355,36 @@ it("discards a report that finishes after the workspace game changes", async () 
   expect(host.posted.some((message) => message.type === "modReport")).toBe(false);
 });
 
+it.each(["refresh", "refresh without game", "reopen with new dependencies"])(
+  "discards a stale same-game report on %s and permits a current report",
+  async (action) => {
+    let finishOld!: (value: string) => void;
+    const old = new Promise<string>((resolve) => {
+      finishOld = resolve;
+    });
+    const build = vi.fn().mockReturnValueOnce(old).mockResolvedValue("# Current focused mod");
+    WikiPanel.show(context() as never, ck3Meta, { ...deps(), modReport: build });
+    host.receive({ type: "ready" });
+    host.receive({ type: "modReport" });
+    host.posted = [];
+    if (action === "refresh") WikiPanel.refresh(ck3Meta);
+    else if (action === "refresh without game") WikiPanel.refresh();
+    else
+      WikiPanel.show(context() as never, ck3Meta, {
+        ...deps(),
+        modReport: async () => "# Current focused mod",
+      });
+    expect(host.posted).toContainEqual(expect.objectContaining({ type: "hub", game: "ck3" }));
+    finishOld("# Previous focused mod");
+    await Promise.resolve();
+    expect(host.posted.some((message) => message.type === "modReport")).toBe(false);
+    host.receive({ type: "modReport" });
+    await vi.waitFor(() =>
+      expect(host.posted.at(-1)).toEqual({ type: "modReport", markdown: "# Current focused mod" })
+    );
+  }
+);
+
 it("keeps the newer report when earlier builds finish last, including failure messages", async () => {
   let finishOld!: (value: string) => void;
   let finishNew!: (value: string) => void;

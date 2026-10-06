@@ -26,6 +26,7 @@ describe("Wiki navigation state boundary", () => {
       [],
       { ...valid, version: 2 },
       { ...valid, current: { ...valid.current, page: 7 } },
+      { ...valid, current: { ...valid.current, anchor: "unknown-element" } },
       { ...valid, back: [{ game: "ck3", page: null }] },
       { ...valid, positions: { x: { scroll: -1, cardKind: null } } },
       { ...valid, positions: { x: { scroll: Infinity, cardKind: null } } },

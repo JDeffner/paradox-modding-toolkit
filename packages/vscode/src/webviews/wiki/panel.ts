@@ -140,12 +140,11 @@ export class WikiPanel {
   static refresh(meta?: GameMeta): void {
     const existing = WikiPanel.instance;
     if (!existing) return;
-    if (meta) existing.refreshWorkspace(meta);
+    existing.refreshWorkspace(meta ?? GAME_METAS[existing.game]);
     existing.refreshLaunchOptions();
   }
 
   private refreshWorkspace(meta: GameMeta): void {
-    if (this.game === meta.id) return;
     this.game = meta.id;
     this.reportGeneration++;
     if (this.ready) this.post({ type: "hub", hub: hub(meta), game: this.game });

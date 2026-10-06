@@ -95,9 +95,10 @@ export function searchWiki(
       });
     };
     const { preamble, sections } = parseSections(article.markdown);
-    const pageText = [article.summary ?? "", preamble, article.outro ?? ""].join("\n");
+    const pageText = [article.summary ?? "", preamble].join("\n");
     const titleMatch = matches(article.title);
-    if (titleMatch || matches(pageText)) add(article.title, pageText || article.title);
+    if (titleMatch || matches(pageText)) add(article.title, pageText || article.title, "wiki-start");
+    if (article.outro && matches(article.outro)) add(article.title, article.outro, "wiki-outro");
     sections.forEach((section, index) => {
       if (titleMatch && index === 0 && section.title === plainText(article.title)) return;
       if (matches(section.title) || matches(section.text)) {

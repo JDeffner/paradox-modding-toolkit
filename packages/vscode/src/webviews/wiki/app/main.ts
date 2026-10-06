@@ -358,6 +358,9 @@ function renderArticle(content: HTMLElement, article: WikiArticle): void {
   if (article.section === DIAG_SECTION) trail.push({ label: DIAG_SECTION, to: DIAGNOSTICS });
   renderCrumbs(trail, article.title);
   content.innerHTML = renderMarkdown(article.markdown);
+  const start = el("div");
+  start.id = "wiki-start";
+  content.prepend(start);
   const sections = articleSections(article.markdown);
   const headings = Array.from(content.querySelectorAll<HTMLElement>("h1, h2, h3"));
   for (const [index, heading] of headings.entries()) heading.id = sections[index]?.anchor ?? "";
@@ -369,8 +372,7 @@ function renderArticle(content: HTMLElement, article: WikiArticle): void {
     for (const heading of listed) {
       const link = el("button", "contents-link", heading.textContent ?? "");
       link.addEventListener("click", () => {
-        jump(heading.id);
-        persist();
+        select(selected, heading.id);
       });
       links.appendChild(link);
     }
@@ -399,8 +401,9 @@ function renderArticle(content: HTMLElement, article: WikiArticle): void {
   if (article.cards) renderCards(content, article.cards);
   if (article.outro) {
     const outro = el("div");
+    outro.id = "wiki-outro";
     outro.innerHTML = renderMarkdown(article.outro);
-    content.append(...Array.from(outro.childNodes));
+    content.append(outro);
   }
 }
 
@@ -518,7 +521,8 @@ function showLocation(anchor?: string): void {
   game = games.some((item) => item.id === location.game) ? location.game : workspaceGame;
   selected = location.page !== null && known(location.page) ? location.page : null;
   query = location.query;
-  reading.current = { page: selected, game, query };
+  reading.current = { ...location, page: selected, game, query };
+  const destination = anchor ?? location.anchor;
   const position = reading.positions[positionKey(reading.current)];
   cardKind = anchor ? null : (position?.cardKind ?? null);
   if (isDiagnostic(selected)) diagOpen = true;
@@ -528,7 +532,7 @@ function showLocation(anchor?: string): void {
   restoring = true;
   renderPage();
   $("doc").scrollTop = position?.scroll ?? 0;
-  if (anchor) jump(anchor);
+  if (destination && (anchor || !position)) jump(destination);
   restoring = false;
   $<HTMLButtonElement>("wikiBack").disabled = reading.back.length === 0;
   $<HTMLButtonElement>("wikiForward").disabled = reading.forward.length === 0;
@@ -548,7 +552,7 @@ function select(id: string | null, anchor?: string): void {
     capturePosition();
     report = null;
   }
-  navigate({ page: id, game, query }, anchor);
+  navigate({ page: id, game, query, ...(anchor ? { anchor } : {}) }, anchor);
 }
 
 function history(direction: "back" | "forward"): void {
@@ -577,13 +581,14 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
       diagOpen = reading.diagOpen;
       initialized = true;
     } else capturePosition();
-    if (msg.select) visit(reading, { ...reading.current, page: msg.select });
+    if (msg.select)
+      visit(reading, { page: msg.select, game: reading.current.game, query: reading.current.query });
     showLocation();
   } else if (msg.type === "select") {
     if (known(msg.id)) select(msg.id);
   } else if (msg.type === "hub") {
     capturePosition();
-    if (workspaceGame !== msg.game) report = null;
+    report = null;
     workspaceGame = msg.game;
     hub = msg.hub;
     showLocation();
@@ -606,7 +611,8 @@ window.addEventListener("message", (ev: MessageEvent<HostToApp>) => {
 
 const input = $<HTMLInputElement>("query");
 input.addEventListener("input", () => {
-  query = input.value;
+  query = input.value.slice(0, 2000);
+  input.value = query;
   renderNav();
   persist();
 });

@@ -158,7 +158,7 @@ ${uiCss}
       <button id="game" class="px-btn px-dropdown" data-variant="outline" data-size="sm" aria-label="Game" data-tip="The game the wiki shows pages for. The toolkit keeps working on the workspace's game." data-tip-wrap><span class="px-truncate"></span>${icon("chevronDown")}</button>
     </div>
     <div id="searchBar">
-      <div class="px-input-group">${icon("search")}<input id="query" class="px-input" data-size="sm" autocomplete="off" spellcheck="false" placeholder="Search the wiki…" data-tip="Matches the title and the text of every page." data-tip-wrap /></div>
+      <div class="px-input-group">${icon("search")}<input id="query" maxlength="2000" class="px-input" data-size="sm" autocomplete="off" spellcheck="false" placeholder="Search the wiki…" data-tip="Matches the title and the text of every page." data-tip-wrap /></div>
     </div>
     <div id="nav"></div>
     <div id="sidebarFooter">

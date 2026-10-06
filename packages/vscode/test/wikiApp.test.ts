@@ -4,7 +4,7 @@ import { buildSync } from "esbuild";
 import * as path from "node:path";
 import { wikiHtml } from "../src/webviews/wiki/html";
 import type { AppToHost, HostToApp, WikiArticle } from "../src/webviews/wiki/messages";
-import { initialWikiState, positionKey } from "../src/webviews/wiki/navigation";
+import { initialWikiState, parseWikiState, positionKey } from "../src/webviews/wiki/navigation";
 
 const bundle = buildSync({
   entryPoints: [path.join(__dirname, "../src/webviews/wiki/app/main.ts")],
@@ -369,4 +369,79 @@ it("routes Examples Wiki to the selected game and updates its labels in cards an
   });
   expect(t.document.getElementById("game")?.textContent).toContain("CK3");
   expect(t.content.textContent).toContain("Vic3 Mod Report (workspace)");
+});
+
+it("keeps long input within the saved-history and Examples query limit", () => {
+  const t = boot();
+  t.query("x".repeat(2100));
+  expect((t.document.getElementById("query") as HTMLInputElement).value).toHaveLength(2000);
+  t.post({ type: "select", id: "other" });
+  const saved = [...t.messages].reverse().find((msg) => msg.type === "saveState");
+  expect(saved?.type === "saveState" && parseWikiState(saved.state)).toBeTruthy();
+  t.document.getElementById("searchExamples")!.click();
+  expect(t.messages.at(-1)).toEqual({ type: "searchExamples", query: "x".repeat(2000), game: "ck3" });
+});
+
+it("restores distinct same-page search destinations and their scroll positions", () => {
+  const t = boot({
+    select: null,
+    articles: [
+      {
+        id: "guide",
+        title: "Guide",
+        section: "About",
+        markdown: "# Guide\n## Setup one\nFirst.\n## Setup two\nSecond.",
+      },
+    ],
+  });
+  t.query("setup");
+  t.open("Setup one");
+  t.scroll.scrollTop = 40;
+  t.open("Setup two");
+  t.scroll.scrollTop = 90;
+  t.document.getElementById("wikiBack")!.click();
+  expect(t.scroll.scrollTop).toBe(40);
+  const saved = [...t.messages].reverse().find((msg) => msg.type === "saveState");
+  expect(saved?.type === "saveState" && saved.state.current.anchor).toBe("wiki-heading-1");
+  t.document.getElementById("wikiForward")!.click();
+  expect(t.scroll.scrollTop).toBe(90);
+});
+
+it("opens title and outro matches at their destination instead of a saved page position", () => {
+  const state = initialWikiState("ck3");
+  state.current.page = "guide";
+  state.positions[positionKey(state.current)] = { scroll: 700, cardKind: null };
+  const t = boot({
+    select: "guide",
+    state,
+    articles: [
+      { id: "guide", title: "Guide", section: "About", markdown: "# Guide\nBody.", outro: "Footer needle." },
+    ],
+  });
+  expect(t.scroll.scrollTop).toBe(700);
+  t.query("guide");
+  t.open("Guide");
+  expect(t.content.querySelector(".search-target")?.id).toBe("wiki-start");
+  t.query("footer needle");
+  t.open("Guide");
+  expect(t.content.querySelector(".search-target")?.id).toBe("wiki-outro");
+});
+
+it("keeps rendered section destinations aligned after fenced heading examples", () => {
+  const t = boot({
+    select: null,
+    articles: [
+      {
+        id: "guide",
+        title: "Guide",
+        section: "About",
+        markdown: "# Guide\n```text\n## Fake heading\n```\n## Right target\nBody.",
+      },
+    ],
+  });
+  t.query("right target");
+  t.open("Right target");
+  expect(t.content.querySelector(".search-target")?.textContent).toBe("Right target");
+  expect(t.content.querySelector("pre code")?.textContent).toBe("## Fake heading");
+  expect(t.content.querySelector("pre h2")).toBeNull();
 });

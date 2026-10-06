@@ -80,6 +80,7 @@ export interface WikiLocation {
   page: string | null;
   game: string;
   query: string;
+  anchor?: string;
 }
 
 export interface WikiReadingState {
