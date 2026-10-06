@@ -5,8 +5,8 @@ import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, expect, it } from "vitest";
 
 const base = path.resolve(".local/testing");
-const initialDate = "2026-01-02T03:04:05+00:00";
-const laterDate = "2026-02-03T04:05:06+00:00";
+const initialDate = "2026-01-02T03:04:05.000Z";
+const laterDate = "2026-02-03T04:05:06.000Z";
 const image = "packages/vscode/media/image-guidelines.md";
 const bbcode = "packages/vscode/media/steam-bbcode.md";
 const diagnostic = "docs/diagnostics/PX1001.md";
@@ -48,6 +48,12 @@ function build(cwd = root) {
   const revisions = JSON.parse(
     fs.readFileSync(path.join(cwd, "packages/vscode/dist/wiki-revisions.json"), "utf8")
   ) as Revisions;
+  // Git versions spell UTC as either Z or +00:00; compare the recorded instant.
+  for (const revision of Object.values(revisions)) {
+    if (revision.lastEdited !== undefined) {
+      revision.lastEdited = new Date(revision.lastEdited).toISOString();
+    }
+  }
   return { revisions, warning: result.stderr };
 }
 
