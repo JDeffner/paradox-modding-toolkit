@@ -79,6 +79,10 @@ The bounded Lantern faith and mask workflow has user-confirmed acceptance agains
 - Report malformed Tiger output and process failures as validation failures. Bound validation time and output, and stop when a declared dependency descriptor is missing.
 - Prepare Toolkit 0.5.5 as a prerelease of this upcoming 0.6.0 update. Keep server 0.3.8 and protocol 0.2.8 independently versioned. New prerelease npm versions use `next`, stable versions use `latest`. Discord prereleases mention only the dedicated prerelease role; stable announcements retain the stable role.
 
+- Lead the website with completion, the Coat of Arms Designer and Steam Workshop publishing. Add a larger wordmark, scroll-responsive navigation, image overlays and wiki page update dates with revision-history links. Reserve link arrows for external destinations.
+
+- Add an independently deployable toolkit website with a product tour, searchable handbook, release notes, visual identity, credits and recorded workflows. Keep published and preview features clearly labelled.
+
 ## 0.5.0 (beta) - editor improvements
 
 - Keep the new-mod wizard open when focus changes, show the created folder with opening actions if the final step is canceled, and show Explorer when adding the new mod to the workspace.

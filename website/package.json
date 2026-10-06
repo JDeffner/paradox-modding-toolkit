@@ -1,0 +1,20 @@
+{
+  "name": "@px-toolkit/website",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "sync:wiki": "node scripts/import-content.mjs",
+    "build": "node scripts/build.mjs",
+    "preview": "node scripts/serve.mjs",
+    "check": "node scripts/check.mjs",
+    "test": "node --test scripts/import-content.test.mjs && playwright test"
+  },
+  "dependencies": {
+    "marked": "17.0.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.2"
+  },
+  "packageManager": "pnpm@11.25.0"
+}

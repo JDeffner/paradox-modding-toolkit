@@ -213,6 +213,18 @@ measured costs and the settings that shrink them.
 
 ## Contributing
 
+The standalone product website and handbook live in [`website/`](website/README.md). Its GitHub Pages build is independent of extension releases. [`website/DESIGN.md`](website/DESIGN.md) records the visual identity and its sources.
+
+Website sources:
+
+| Source | Use | License |
+|---|---|---|
+| [Source Sans 3](https://github.com/adobe-fonts/source-sans) | Website headings, interface and reading text | SIL Open Font License 1.1 |
+| [Archivo](https://github.com/Omnibus-Type/Archivo) | Website wordmark | SIL Open Font License 1.1 |
+| [IBM Plex](https://github.com/IBM/plex) | Website code typography | SIL Open Font License 1.1 |
+| [Marked](https://github.com/markedjs/marked) | Build-time Markdown rendering | MIT |
+| [Playwright](https://github.com/microsoft/playwright) | Website browser checks | Apache-2.0 |
+
 Concrete examples from real mods are the most useful thing you can send.
 [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, the F5 dev loop, tests and
 the PR flow; [docs/webviews.md](docs/webviews.md) shows how the visual tools

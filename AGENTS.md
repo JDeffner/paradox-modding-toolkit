@@ -237,6 +237,18 @@ The companion must be enabled in the Extension Development Host that runs the to
 
 **Wiki mirrors:** `docs/EMBEDDING.md` → wiki "Embedding", `docs/PROTOCOL.md` → wiki "Protocol Reference". The repo copies are canonical and change with the implementation. Sync the wiki from the corresponding release revision during a requested release, or from the revision specified for a requested wiki update. A feature or fix request alone does not authorize wiki publication.
 
+### Website and documentation publication
+
+The product website lives in `website/` in this repository and is squash-merged into `main`. Its GitHub Pages workflow is independent of extension releases. Do not create a separate website repository or maintain a permanent website source branch.
+
+**Wiki first:** submit shared guide text, corrections and documentation images to the GitHub wiki first. The `gollum` event then runs `.github/workflows/website.yml` on `main`, imports the published wiki, builds the site, checks links and browser behavior, and deploys the passing result. Do not edit a second handbook copy in the website. `website/.cache/wiki/` is generated, ignored content. New wiki pages appear under "More guides" until they are assigned a group in `website/scripts/catalog.mjs`.
+
+The canonical Embedding and Protocol documents remain the repository files named above. Update them with code, publish their wiki mirrors from the intended release or explicitly requested revision, and let `gollum` update the website from those mirrors. Keep unreleased behavior labelled as preview. A documentation publication request covers the wiki-to-website update; an ordinary implementation request still does not authorize publishing unreleased documentation.
+
+The homepage, visual identity, navigation, release presentation, website credits, fonts and recordings are website source. Edit those through a normal PR. Shared guide facts belong in the wiki. See `website/README.md` for local imports, deployment and failure recovery.
+
+After publishing wiki changes, check the **Toolkit website** workflow and the rendered result. A failed import, build or check must leave the last successful deployment in place. If the wiki edit does not produce a `gollum` run (including a bulk Git update), run the same workflow with `gh workflow run website.yml --ref main`; do not create a second synchronization path or commit generated content. Wiki deletions that leave broken links require a wiki correction before deployment can pass.
+
 **Work artifacts stay out of the repo.** Plans live in PR descriptions;
 durable decisions in the tracked docs, present tense; the merged PR is the
 record. Do not create notes under `docs/`.

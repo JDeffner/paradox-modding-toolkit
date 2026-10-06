@@ -3,6 +3,10 @@ dist/
 packages/*/dist/
 packages/vscode/data/
 pnpm-lock.yaml
+# Browser-run output is generated, not website source.
+website/test-results/
+website/playwright-report/
+website/.cache/
 # Harvested/generated data: byte-for-byte reproducible from scripts/, never hand-edited.
 packages/server/data/
 # Bundled wiki mirrors (CC BY-SA) keep their upstream shape.
