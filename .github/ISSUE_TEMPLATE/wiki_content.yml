@@ -1,0 +1,16 @@
+name: Wiki content
+description: Submit a new reference or improve an existing page
+labels: [documentation]
+body:
+  - type: textarea
+    id: content
+    attributes:
+      label: Content
+      description: Write the text you want added or changed. You can include code, sources and screenshots.
+    validations:
+      required: true
+  - type: input
+    id: context
+    attributes:
+      label: Page and game (optional)
+      description: Filled in when opened from the toolkit.

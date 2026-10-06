@@ -1028,7 +1028,7 @@ export function moddingGuidesPage(gameNames: Record<string, string>): {
   const outro = [
     "## Missing a page?",
     "",
-    "A wiki page you keep going back to and do not find here: tell me on [Discord](https://discord.gg/DfEJ2H9hj4) or [open an issue](https://github.com/JDeffner/paradox-modding-toolkit/issues).",
+    "Use Improve this page to submit a guide. Include its link and the topics it covers.",
     "",
     `Sources: ${sources}.`,
   ].join("\n");

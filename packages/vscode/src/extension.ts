@@ -90,7 +90,7 @@ import { registerDashboardView, hiddenRows, PROJECT_GROUPS } from "./webviews/da
 import { SettingsPanel } from "./webviews/settings/panel";
 import { actionGroups } from "./webviews/dashboard/actions";
 import { EventGraphPanel, type EventGraphActions } from "./webviews/eventGraph/panel";
-import { ExampleWikiPanel, type ExampleWikiTarget } from "./webviews/exampleWiki/panel";
+import { ExampleWikiPanel, parseExampleWikiTarget } from "./webviews/exampleWiki/panel";
 import { WikiPanel, CREDITS_ARTICLE, IMAGE_GUIDELINES_ARTICLE, type WikiDeps } from "./webviews/wiki/panel";
 import { EventSimPanel } from "./webviews/eventSim/panel";
 import { GuiTreePanel } from "./webviews/guiTree/panel";
@@ -1366,7 +1366,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
               ...(reference ? { context: reference } : {}),
             }),
         },
-        exampleWikiTarget(arg)
+        parseExampleWikiTarget(arg)
       );
     }),
     vscode.commands.registerCommand("px.showGuiTree", async (arg?: unknown) => {
@@ -1843,15 +1843,6 @@ function definitionName(arg: unknown): string | undefined {
   if (typeof arg !== "object" || arg === null) return undefined;
   const name = (arg as { name?: unknown; pxKey?: unknown }).name ?? (arg as { pxKey?: unknown }).pxKey;
   return typeof name === "string" && /^[A-Za-z_][\w.-]*$/.test(name) ? name : undefined;
-}
-
-/** The article a `px.showExamplesWiki` argument names, or nothing. The argument
- *  comes off a hover command link, so it is validated, not trusted. */
-function exampleWikiTarget(arg: unknown): ExampleWikiTarget | undefined {
-  if (typeof arg !== "object" || arg === null) return undefined;
-  const { name, kind } = arg as { name?: unknown; kind?: unknown };
-  if (typeof name !== "string" || name === "" || typeof kind !== "string") return undefined;
-  return { name, kind: kind as ExampleWikiTarget["kind"] };
 }
 
 async function resolveEventIdAtCursor(lc: LanguageClient): Promise<string | undefined> {

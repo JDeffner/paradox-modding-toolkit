@@ -70,7 +70,26 @@ export interface WikiHubEntry {
   tip: string;
   /** Prefix the label and tooltip with the selected reference game. */
   selectedGame?: boolean;
+  group: "Script reference" | "Images & formats" | "Troubleshooting" | "Community" | "More";
+  /** Uses the workspace game, independently of the reference selector. */
+  workspace?: boolean;
   target: { command: string } | { page: string };
+}
+
+export interface WikiLocation {
+  page: string | null;
+  game: string;
+  query: string;
+  anchor?: string;
+}
+
+export interface WikiReadingState {
+  version: 1;
+  current: WikiLocation;
+  back: WikiLocation[];
+  forward: WikiLocation[];
+  positions: Record<string, { scroll: number; cardKind: string | null }>;
+  diagOpen: boolean;
 }
 
 export type HostToApp =
@@ -83,14 +102,18 @@ export type HostToApp =
       /** The workspace's game: what the switch starts on. */
       game: string;
       select: string | null;
+      state?: WikiReadingState;
     }
   | { type: "select"; id: string }
-  | { type: "hub"; hub: WikiHubEntry[] }
+  | { type: "hub"; hub: WikiHubEntry[]; game: string }
   | { type: "launchOptions"; articles: WikiArticle[] }
   | { type: "modReport"; markdown: string };
 
 export type AppToHost =
   | { type: "ready" }
   | { type: "run"; command: string; game?: string }
+  | { type: "saveState"; state: WikiReadingState }
+  | { type: "searchExamples"; query: string; game: string }
+  | { type: "contribute"; game: string; article?: string }
   | { type: "refreshLaunchOptions" }
   | { type: "modReport" };

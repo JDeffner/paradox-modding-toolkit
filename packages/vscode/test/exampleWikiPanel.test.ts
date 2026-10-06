@@ -46,7 +46,11 @@ vi.mock("../src/webviews/devReload", () => ({
   bundleUri: () => "exampleWiki.js",
   watchBundle: () => ({ dispose() {} }),
 }));
-import { ExampleWikiPanel, type ExampleWikiActions } from "../src/webviews/exampleWiki/panel";
+import {
+  ExampleWikiPanel,
+  parseExampleWikiTarget,
+  type ExampleWikiActions,
+} from "../src/webviews/exampleWiki/panel";
 
 const index = (name: string): ExampleWikiIndex => ({
   entries: [{ name, kind: "effect", shortDoc: name, count: 0 }],
@@ -124,5 +128,79 @@ it("keeps a deep link until the app is ready after a game change", async () => {
   host.receive({ type: "refresh" });
   await vi.waitFor(() =>
     expect(host.posted.at(-1)).toEqual({ type: "reveal", name: "vic3-only", kind: "effect" })
+  );
+});
+
+it("validates query command arguments while preserving article callers", () => {
+  expect(parseExampleWikiTarget({ query: " capital " })).toEqual({ query: "capital" });
+  for (const arg of [{ query: " " }, { query: 12 }, { query: "x\n" }, { query: "x".repeat(2001) }, null]) {
+    expect(parseExampleWikiTarget(arg)).toBeUndefined();
+  }
+  expect(parseExampleWikiTarget({ name: "is_alive", kind: "trigger" })).toEqual({
+    name: "is_alive",
+    kind: "trigger",
+  });
+});
+
+it("sends a new search after the index and searches an already open catalog", async () => {
+  const selected = actions("ck3", vi.fn().mockResolvedValue(index("fixture")));
+  ExampleWikiPanel.show({} as never, selected, { query: "capital" });
+  expect(host.posted).toEqual([]);
+  host.receive({ type: "refresh" });
+  await vi.waitFor(() => expect(host.posted.at(-1)).toEqual({ type: "search", query: "capital" }));
+  expect(host.posted.map((m) => m.type)).toEqual(["loading", "index", "search"]);
+  ExampleWikiPanel.show({} as never, selected, { query: "culture" });
+  expect(selected.fetchIndex).toHaveBeenCalledTimes(1);
+  expect(host.posted.at(-1)).toEqual({ type: "search", query: "culture" });
+  ExampleWikiPanel.show({} as never, selected, { name: "is_alive", kind: "trigger" });
+  expect(host.posted.at(-1)).toEqual({ type: "reveal", name: "is_alive", kind: "trigger" });
+});
+
+it("keeps the latest reused search through loading failures and retry", async () => {
+  const selected = actions(
+    "ck3",
+    vi.fn().mockRejectedValueOnce(new Error("Index unavailable")).mockResolvedValue(index("fixture"))
+  );
+  ExampleWikiPanel.show({} as never, selected, { query: "old" });
+  ExampleWikiPanel.show({} as never, selected, { query: "latest" });
+  host.receive({ type: "refresh" });
+  await vi.waitFor(() => expect(host.posted.at(-1)).toEqual({ type: "error", message: "Index unavailable" }));
+  expect(host.posted.some((m) => m.type === "search")).toBe(false);
+  host.receive({ type: "refresh" });
+  await vi.waitFor(() => expect(host.posted.at(-1)).toEqual({ type: "search", query: "latest" }));
+});
+
+it("holds the latest search until a changed reference context finishes loading", async () => {
+  const initial = actions("ck3", vi.fn().mockResolvedValue(index("initial")));
+  ExampleWikiPanel.show({} as never, initial);
+  host.receive({ type: "refresh" });
+  await vi.waitFor(() => expect(host.posted.at(-1)?.type).toBe("index"));
+  let finish!: (value: ExampleWikiIndex) => void;
+  const next = actions(
+    "ck3",
+    vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        })
+    )
+  );
+  next.contextKey = "ck3-new-reference-path";
+  ExampleWikiPanel.show({} as never, next, { query: "first" });
+  ExampleWikiPanel.show({} as never, next, { query: "latest" });
+  expect(host.posted.at(-1)).toEqual({ type: "loading", reset: true, gameName: "ck3" });
+  expect(next.fetchIndex).toHaveBeenCalledTimes(1);
+  finish(index("new-reference"));
+  await vi.waitFor(() =>
+    expect(host.posted.slice(-2)).toEqual([
+      { type: "index", index: index("new-reference") },
+      { type: "search", query: "latest" },
+    ])
+  );
+  host.receive({ type: "refresh" });
+  expect(next.fetchIndex).toHaveBeenLastCalledWith(true);
+  finish(index("refreshed-reference"));
+  await vi.waitFor(() =>
+    expect(host.posted.at(-1)).toEqual({ type: "index", index: index("refreshed-reference") })
   );
 });

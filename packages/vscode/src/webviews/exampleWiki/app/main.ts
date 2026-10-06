@@ -680,6 +680,8 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
     case "loading":
       if (msg.reset) {
         entries = [];
+        sources = [];
+        needsScriptDocs = false;
         byName.clear();
         query = "";
         input.value = "";
@@ -748,6 +750,13 @@ window.addEventListener("message", (event: MessageEvent<HostToApp>) => {
       openEntry({ name: msg.name, kind: msg.kind });
       break;
     }
+    case "search":
+      query = msg.query;
+      input.value = msg.query;
+      setFilter("all");
+      renderList();
+      input.focus();
+      break;
     case "error":
       loading = false;
       loadError = msg.message;

@@ -2,32 +2,17 @@ name: Documentation
 description: Something in the wiki or README is wrong, missing, or confusing
 labels: ["documentation"]
 body:
-  - type: dropdown
-    id: kind
-    attributes:
-      label: What's the issue?
-      options:
-        - Incorrect / outdated information
-        - Missing documentation
-        - Unclear / confusing explanation
-        - Broken link or example
-        - Other
-    validations:
-      required: true
-
   - type: input
     id: location
     attributes:
-      label: Where?
-      description: Wiki page title, README section, or a link.
+      label: Page or section (optional)
+      description: Link to the page or name the section. Leave blank for new content.
       placeholder: e.g. wiki "Getting started", or README "Data sources"
-    validations:
-      required: true
 
   - type: textarea
     id: details
     attributes:
-      label: What's wrong / what's missing
-      description: Describe the problem and, if you can, what it should say instead.
+      label: Correction or missing content
+      description: Explain what needs to change, or paste the text you want added. You can include sources and screenshots here.
     validations:
       required: true

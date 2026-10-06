@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { URI } from "vscode-uri";
 import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
 import { vic3Meta } from "@px-lsp/server/games/vic3/meta";
+import { initialWikiState } from "../src/webviews/wiki/navigation";
 import type { AppToHost, HostToApp } from "../src/webviews/wiki/messages";
 
 interface Watcher {
@@ -21,11 +22,16 @@ const host = vi.hoisted(() => ({
   reveal: () => {},
   execute: vi.fn(),
   error: vi.fn(),
+  openExternal: vi.fn(),
+  state: undefined as unknown,
+  update: vi.fn(),
 }));
 vi.mock("vscode", () => {
   const disposable = { dispose() {} };
   return {
     ViewColumn: { Active: 1 },
+    Uri: { parse: (value: string) => URI.parse(value) },
+    env: { openExternal: host.openExternal },
     RelativePattern: class {
       constructor(
         public base: string,
@@ -96,8 +102,11 @@ let gamePath: string;
 const filename = () => path.join(gamePath, ck3Meta.launchOptionsFile!);
 const write = (flag: string) => fs.writeFileSync(filename(), `# Fixture option\n${flag}\n`);
 const deps = (): WikiDeps => ({ modReport: async () => "# Report", gamePath: () => gamePath });
-const show = () =>
-  WikiPanel.show({ asAbsolutePath: (p: string) => path.join(scratch, p) } as never, ck3Meta, deps());
+const context = () => ({
+  asAbsolutePath: (p: string) => path.join(scratch, p),
+  workspaceState: { get: () => host.state, update: host.update },
+});
+const show = () => WikiPanel.show(context() as never, ck3Meta, deps());
 function latest() {
   const message = host.posted.at(-1)!;
   if (message.type !== "content" && message.type !== "launchOptions") throw new Error("Expected articles");
@@ -108,6 +117,9 @@ beforeEach(() => {
   host.watchers = [];
   host.execute.mockReset();
   host.error.mockReset();
+  host.state = undefined;
+  host.update.mockReset().mockResolvedValue(undefined);
+  host.openExternal.mockReset().mockResolvedValue(true);
   const base = path.resolve(".local/testing");
   fs.mkdirSync(base, { recursive: true });
   scratch = fs.mkdtempSync(path.join(base, "wiki-tests-"));
@@ -130,6 +142,7 @@ it("loads all games on ready and replaces changed, deleted and recreated source 
     hub: expect.arrayContaining([
       {
         label: "Launch Options",
+        group: "Script reference",
         selectedGame: true,
         icon: "play",
         tip: expect.any(String),
@@ -200,6 +213,7 @@ it("passes a selected game to Examples and rejects unknown game or command messa
   WikiPanel.refresh(vic3Meta);
   expect(host.posted).toContainEqual({
     type: "hub",
+    game: "vic3",
     hub: expect.arrayContaining([expect.objectContaining({ label: "Vic3 Mod Report (workspace)" })]),
   });
 });
@@ -270,4 +284,137 @@ it("loads owned articles with unavailable dates when metadata is missing or inva
   } finally {
     warning.mockRestore();
   }
+});
+
+it("restores validated workspace history and saves state with honest storage failures", async () => {
+  const state = initialWikiState("ck3");
+  state.current.page = "credits";
+  host.state = state;
+  show();
+  host.receive({ type: "ready" });
+  expect(host.posted[0]).toMatchObject({ type: "content", state });
+  host.receive({ type: "saveState", state });
+  await vi.waitFor(() => expect(host.update).toHaveBeenCalledWith("px.wiki.readingState", state));
+  host.receive({ type: "saveState", state: { version: 9 } as never });
+  expect(host.update).toHaveBeenCalledTimes(1);
+  host.update.mockRejectedValueOnce(new Error("Storage unavailable"));
+  host.receive({ type: "saveState", state });
+  await vi.waitFor(() =>
+    expect(host.error).toHaveBeenCalledWith(expect.stringContaining("Storage unavailable"))
+  );
+});
+
+it("retains explicit links before ready and updates the workspace game on reuse and refresh", () => {
+  show();
+  WikiPanel.show(context() as never, vic3Meta, deps(), "credits");
+  host.receive({ type: "ready" });
+  expect(host.posted[0]).toMatchObject({ type: "content", game: "vic3", select: "credits" });
+  WikiPanel.refresh(ck3Meta);
+  expect(host.posted).toContainEqual(expect.objectContaining({ type: "hub", game: "ck3" }));
+  WikiPanel.show(context() as never, vic3Meta, deps());
+  expect(host.posted).toContainEqual(expect.objectContaining({ type: "hub", game: "vic3" }));
+});
+
+it("opens the fixed contribution form and passes searches to the existing command", async () => {
+  show();
+  host.receive({ type: "contribute", game: "ck3", article: "credits" });
+  await vi.waitFor(() => expect(host.openExternal).toHaveBeenCalledTimes(1));
+  const url = new URL(host.openExternal.mock.calls[0][0].toString(true));
+  expect(url.origin + url.pathname).toBe("https://github.com/JDeffner/paradox-modding-toolkit/issues/new");
+  expect(url.searchParams.get("template")).toBe("wiki_content.yml");
+  expect(url.searchParams.get("context")).toContain("Credits (credits)");
+  host.receive({ type: "contribute", game: "ck3", article: "https://untrusted.test" });
+  expect(host.openExternal).toHaveBeenCalledTimes(1);
+  host.openExternal.mockResolvedValueOnce(false);
+  host.receive({ type: "contribute", game: "vic3" });
+  await vi.waitFor(() =>
+    expect(host.error).toHaveBeenCalledWith(expect.stringContaining("browser did not open"))
+  );
+  host.openExternal.mockRejectedValueOnce(new Error("Unavailable"));
+  host.receive({ type: "contribute", game: "eu5" });
+  await vi.waitFor(() => expect(host.error).toHaveBeenCalledWith(expect.stringContaining("Unavailable")));
+  host.receive({ type: "searchExamples", query: "capital", game: "vic3" });
+  expect(host.execute).toHaveBeenCalledWith("px.showExamplesWiki", { query: "capital", gameId: "vic3" });
+  host.receive({ type: "searchExamples", query: "capital", game: "unknown" });
+  host.receive({ type: "searchExamples", query: "x\n", game: "vic3" });
+  expect(host.execute).toHaveBeenCalledTimes(1);
+});
+
+it("discards a report that finishes after the workspace game changes", async () => {
+  let resolve!: (value: string) => void;
+  const report = new Promise<string>((done) => {
+    resolve = done;
+  });
+  WikiPanel.show(context() as never, ck3Meta, { ...deps(), modReport: () => report });
+  host.receive({ type: "ready" });
+  host.receive({ type: "modReport" });
+  WikiPanel.refresh(vic3Meta);
+  resolve("# Old workspace report");
+  await Promise.resolve();
+  expect(host.posted).toContainEqual(expect.objectContaining({ type: "hub", game: "vic3" }));
+  expect(host.posted.some((message) => message.type === "modReport")).toBe(false);
+});
+
+it.each(["refresh", "refresh without game", "reopen with new dependencies"])(
+  "discards a stale same-game report on %s and permits a current report",
+  async (action) => {
+    let finishOld!: (value: string) => void;
+    const old = new Promise<string>((resolve) => {
+      finishOld = resolve;
+    });
+    const build = vi.fn().mockReturnValueOnce(old).mockResolvedValue("# Current focused mod");
+    WikiPanel.show(context() as never, ck3Meta, { ...deps(), modReport: build });
+    host.receive({ type: "ready" });
+    host.receive({ type: "modReport" });
+    host.posted = [];
+    if (action === "refresh") WikiPanel.refresh(ck3Meta);
+    else if (action === "refresh without game") WikiPanel.refresh();
+    else
+      WikiPanel.show(context() as never, ck3Meta, {
+        ...deps(),
+        modReport: async () => "# Current focused mod",
+      });
+    expect(host.posted).toContainEqual(expect.objectContaining({ type: "hub", game: "ck3" }));
+    finishOld("# Previous focused mod");
+    await Promise.resolve();
+    expect(host.posted.some((message) => message.type === "modReport")).toBe(false);
+    host.receive({ type: "modReport" });
+    await vi.waitFor(() =>
+      expect(host.posted.at(-1)).toEqual({ type: "modReport", markdown: "# Current focused mod" })
+    );
+  }
+);
+
+it("keeps the newer report when earlier builds finish last, including failure messages", async () => {
+  let finishOld!: (value: string) => void;
+  let finishNew!: (value: string) => void;
+  let failLatest!: (reason: Error) => void;
+  const old = new Promise<string>((resolve) => {
+    finishOld = resolve;
+  });
+  const next = new Promise<string>((resolve) => {
+    finishNew = resolve;
+  });
+  const latest = new Promise<string>((_resolve, reject) => {
+    failLatest = reject;
+  });
+  const build = vi.fn().mockReturnValueOnce(old).mockReturnValueOnce(next).mockReturnValueOnce(latest);
+  WikiPanel.show(context() as never, ck3Meta, { ...deps(), modReport: build });
+  host.receive({ type: "ready" });
+  host.receive({ type: "modReport" });
+  WikiPanel.refresh(vic3Meta);
+  host.receive({ type: "modReport" });
+  finishNew("# New workspace report");
+  await Promise.resolve();
+  expect(host.posted.at(-1)).toEqual({ type: "modReport", markdown: "# New workspace report" });
+  finishOld("# Old workspace report");
+  await Promise.resolve();
+  expect(host.posted.at(-1)).toEqual({ type: "modReport", markdown: "# New workspace report" });
+  host.receive({ type: "modReport" });
+  failLatest(new Error("Report unavailable"));
+  await Promise.resolve();
+  expect(host.posted.at(-1)).toEqual({
+    type: "modReport",
+    markdown: "# Mod Report\n\nThe report could not be built: Report unavailable",
+  });
 });

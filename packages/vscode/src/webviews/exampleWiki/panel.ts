@@ -20,9 +20,24 @@ import { tabIcon } from "../tabIcons";
 import { bundleUri, watchBundle, webviewSource } from "../devReload";
 
 /** One article, as a deep link names it. */
-export interface ExampleWikiTarget {
+interface ExampleWikiArticleTarget {
   name: string;
   kind: ExampleWikiKind;
+}
+
+export type ExampleWikiTarget = ExampleWikiArticleTarget | { query: string };
+
+/** Command arguments can come from other extensions and command links. */
+export function parseExampleWikiTarget(arg: unknown): ExampleWikiTarget | undefined {
+  if (typeof arg !== "object" || arg === null) return undefined;
+  const { name, kind, query } = arg as { name?: unknown; kind?: unknown; query?: unknown };
+  if (query !== undefined) {
+    if (typeof query !== "string" || query.length > 2000 || !query.trim() || /\p{Cc}/u.test(query))
+      return undefined;
+    return { query: query.trim() };
+  }
+  if (typeof name !== "string" || name === "" || typeof kind !== "string") return undefined;
+  return { name, kind: kind as ExampleWikiKind };
 }
 
 export interface ExampleWikiActions {
@@ -42,6 +57,7 @@ export class ExampleWikiPanel {
   private actions: ExampleWikiActions;
   private generation = 0;
   private ready = false;
+  private indexReady = false;
   private disposables: vscode.Disposable[] = [];
   private disposed = false;
 
@@ -105,14 +121,15 @@ export class ExampleWikiPanel {
       existing.panel.title = `${actions.shortName} Examples Wiki`;
       if (changed) {
         existing.generation++;
+        existing.indexReady = false;
         existing.pending = target;
         if (existing.ready) void existing.loadIndex(true);
       }
       existing.panel.reveal(vscode.ViewColumn.Active);
       if (target && !changed) {
-        if (existing.ready) {
+        if (existing.indexReady) {
           existing.pending = undefined;
-          existing.post({ type: "reveal", ...target });
+          existing.revealTarget(target);
         } else existing.pending = target;
       }
       return;
@@ -136,18 +153,24 @@ export class ExampleWikiPanel {
   private async loadIndex(reset = false, refresh = false): Promise<void> {
     const generation = ++this.generation;
     const actions = this.actions;
+    this.indexReady = false;
     this.post({ type: "loading", ...(reset ? { reset: true } : {}), gameName: actions.gameName });
     try {
       const index = await actions.fetchIndex(refresh);
       if (generation !== this.generation || this.disposed) return;
       this.post({ type: "index", index });
+      this.indexReady = true;
       const target = this.pending;
       this.pending = undefined;
-      if (target) this.post({ type: "reveal", ...target });
+      if (target) this.revealTarget(target);
     } catch (err) {
       if (generation !== this.generation || this.disposed) return;
       this.post({ type: "error", message: message(err) });
     }
+  }
+
+  private revealTarget(target: ExampleWikiTarget): void {
+    this.post("query" in target ? { type: "search", query: target.query } : { type: "reveal", ...target });
   }
 
   private async onMessage(msg: AppToHost): Promise<void> {
