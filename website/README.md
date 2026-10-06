@@ -27,7 +27,7 @@ A successful import replaces the previous cache, including removed pages and ima
 
 New pages enter the generated search index and the "More guides" navigation group automatically. Add them to `scripts/catalog.mjs` for a more specific group and description. Removed pages disappear from navigation; remaining broken links fail validation instead of replacing the last good deployment. Website-only credits live in `fragments/credits.md`. The homepage, release presentation, identity and recordings remain website source. Do not put shared documentation corrections in a website fragment or generated cache.
 
-The site deliberately distinguishes published 0.5.0 from the 0.5.2 preview. When the release ships, update `sources.json`, the release page in `scripts/pages.mjs`, and the preview labels in affected guides together. Do not infer publication from a branch version number. Compatch remains separate, planned 0.6.0 work.
+The site distinguishes stable 0.5.0 from the opt-in 0.5.5 prerelease of the upcoming 0.6.0 update. Update `sources.json`, the release page in `scripts/pages.mjs`, and affected wiki guides together when publishing. Do not infer publication from a branch version number. Compatch is experimental and off by default in 0.5.5. Historical recordings retain their actual capture version.
 
 ## GitHub Pages
 

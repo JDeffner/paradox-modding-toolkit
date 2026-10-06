@@ -171,7 +171,7 @@ await page(
 await page(
   "releases/",
   "Release notes",
-  "What ships in 0.5.0 and what is coming in the 0.5.2 preview.",
+  `Stable ${sources.stableVersion} and the opt-in ${sources.previewVersion} prerelease.`,
   releasesPage({ url, repo, sources }),
   { active: "releases" }
 );
