@@ -11,6 +11,7 @@ import type { PxConfig } from "./config";
 import { listFiles } from "@px-lsp/protocol/fsWalk";
 import { readDocument, writeDocument } from "./documentWrite";
 import { assertLocalizationPath, effectiveLocConfig, localizationRoots } from "./localizationProject";
+import { assertLocalizationHeader, generatedLocalizationSource } from "@px-lsp/protocol/localizationPolicy";
 import {
   LOC_LANGUAGES,
   buildTranslation,
@@ -101,6 +102,10 @@ export async function createTranslationCommand(cfg: PxConfig, log: (msg: string)
       const sourceSnapshot = await readDocument(src);
       const destination = await readDocument(dst, true);
       if (!destination.created) {
+        assertLocalizationHeader(destination.text, target);
+        const generated = generatedLocalizationSource(destination.text);
+        if (generated)
+          throw new Error(`This localization is generated. Edit its source template instead. ${generated}`);
         const merged = mergeTranslation(destination.text, sourceSnapshot.text, source);
         if (merged.added > 0) {
           await writeDocument(destination, merged.content, true, [sourceSnapshot]);

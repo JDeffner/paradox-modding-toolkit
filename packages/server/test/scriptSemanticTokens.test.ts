@@ -16,6 +16,7 @@ import {
   datafunctionExpressionRanges,
 } from "../src/features/datafunctionSemanticTokens";
 import { parseDataTypesDump } from "../src/data/dataTypes";
+import { extractDefinitions } from "../src/index/extract";
 
 const originalProfile = activeProfile();
 afterEach(() => setActiveProfile(originalProfile));
@@ -65,6 +66,59 @@ function collisionData() {
 }
 
 describe("script semantic grammar", () => {
+  it.each(allProfiles().filter((profile) => ["ck3", "vic3"].includes(profile.id)))(
+    "keeps weighted schema reference kinds before indexing and through collisions in $id",
+    (profile) => {
+      setActiveProfile(profile);
+      const fields = [...loadSchema(null).refFields].filter(([, field]) => field.weighted);
+      expect(fields.length).toBeGreaterThan(0);
+      for (const [key] of fields) {
+        const text = `owner = { ${key} = { 100 = shared 50 = unindexed } }`;
+        const data = collisionData();
+        data.index.addAll([
+          { name: "shared", kind: "on_action", file: "fixture.txt", line: 0, source: "mod" },
+        ]);
+        const matches = tokens(data, text).filter((token) => ["shared", "unindexed"].includes(token.text));
+        expect(
+          matches.map((token) => token.type),
+          key
+        ).toEqual(["event", "event"]);
+        expect(
+          matches.every((token) => !token.modifiers.includes("pxScope")),
+          key
+        ).toBe(true);
+      }
+      const ordinary = tokens(collisionData(), "owner = { weights = { 100 = shared } }").find(
+        (token) => token.text === "shared"
+      );
+      expect(ordinary?.modifiers).toContain("pxScope");
+    }
+  );
+
+  it.each(allProfiles())("uses the same entry-mode declaration names as the $id index", (profile) => {
+    setActiveProfile(profile);
+    const entry: SchemaEntry = { path: "common/scripted_effects", kind: "scripted_effect" };
+    const modes = profile.entryModes ?? ["REPLACE"];
+    const text = modes.map((mode, i) => `${mode}:effect_${i} = { }`).join("\n") + "\nplain_effect = {}";
+    const data = new ServerData();
+    const definitions = extractDefinitions(text, entry, "effects.txt", "mod");
+    data.index.addAll(definitions);
+    const matches = tokens(data, text, entry);
+    expect(
+      matches.filter((token) => token.modifiers.includes("declaration")).map((token) => token.text)
+    ).toEqual(definitions.map((definition) => definition.name));
+    if (profile.entryModes) {
+      expect(matches.filter((token) => token.type === "keyword").map((token) => token.text)).toEqual(modes);
+      expect(
+        matches
+          .filter((token) => token.type === "macro")
+          .every((token) => token.modifiers.includes("pxEffect"))
+      ).toBe(true);
+    } else {
+      expect(matches.map((token) => token.text)).toEqual(["plain_effect"]);
+    }
+  });
+
   it("resolves scalar math identities before same-named engine calls or runtime names", () => {
     const data = new ServerData();
     data.setTokens([{ name: "add_gold", kind: "effect", doc: "fixture", scopes: [] }]);

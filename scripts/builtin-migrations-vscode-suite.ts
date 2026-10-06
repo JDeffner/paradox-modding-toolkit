@@ -12,6 +12,7 @@ async function checks() {
   const source = process.env.PX_BUILTIN_MIGRATION_SOURCE!;
   const target = process.env.PX_BUILTIN_MIGRATION_TARGET!;
   const targetVersion = process.env.PX_BUILTIN_MIGRATION_TARGET_VERSION!;
+  const faithOnly = process.env.PX_BUILTIN_MIGRATION_MODE === "faith-only";
   assert.ok(scratch && source && target);
   assert.ok(["1.20.0.2", "1.20.0.3"].includes(targetVersion));
   const suffix = targetVersion === "1.20.0.3" ? ".1.20.0.3" : "";
@@ -20,6 +21,7 @@ async function checks() {
   const mod = path.join(scratch, "Mod");
   const faithFile = path.join(mod, "common/religion/religion_types/custom.txt");
   const originalFaith = await fs.readFile(path.join(scratch, "original-faith.txt"));
+  assert.doesNotMatch(originalFaith.toString("utf8"), /ReligiousHeadNameFemale\s*=/);
   const originalMask = await fs.readFile(path.join(scratch, "original-mask.dds"));
   const unrelated = await fs.readFile(path.join(mod, "unrelated.txt"));
   const fixture = JSON.parse(await fs.readFile(path.join(scratch, "fixture.json"), "utf8")) as {
@@ -223,8 +225,20 @@ async function checks() {
     const diff = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
     assert.ok(diff instanceof vscode.TabInputTextDiff, "faith preview opens the native diff editor");
     assert.match((await vscode.workspace.openTextDocument(diff.original)).getText(), /faiths\s*=/);
-    assert.doesNotMatch((await vscode.workspace.openTextDocument(diff.modified)).getText(), /faiths\s*=/);
+    const reviewedReligion = (await vscode.workspace.openTextDocument(diff.modified)).getText();
+    assert.doesNotMatch(reviewedReligion, /faiths\s*=/);
+    assert.match(reviewedReligion, /ReligiousHeadNameFemale\s*=\s*buddhism_religious_head_title\b/);
     await ui.screenshot(path.join(scratch, "builtin-faith-native-diff.png"));
+    await vscode.commands.executeCommand("px.openMigrations");
+    await act(
+      "document.querySelector('[data-diff=\"common/religion/faith_types/px_migrated_parent.txt\"]').click()",
+      "faith female title native diff"
+    );
+    const parentDiff = vscode.window.tabGroups.activeTabGroup.activeTab?.input;
+    assert.ok(parentDiff instanceof vscode.TabInputTextDiff, "new faith opens the native diff editor");
+    const reviewedParent = (await vscode.workspace.openTextDocument(parentDiff.modified)).getText();
+    assert.match(reviewedParent, /ReligiousHeadNameFemale\s*=\s*buddhism_religious_head_title\b/);
+    await ui.screenshot(path.join(scratch, "builtin-faith-female-title-diff.png"));
     await vscode.commands.executeCommand("px.openMigrations");
     await ui.eval("document.querySelector('[data-action=apply]').scrollIntoView({block:'center'})");
     await ui.screenshot(path.join(scratch, "builtin-faith-review.png"));
@@ -235,12 +249,32 @@ async function checks() {
     const writtenRite = await fs.readFile(path.join(mod, "common/religion/rite_types/px_migrated_child.txt"));
     assert.ok(writtenFaith.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf])));
     assert.ok(writtenRite.subarray(0, 3).equals(Buffer.from([0xef, 0xbb, 0xbf])));
+    assert.equal(
+      writtenFaith.toString("utf8").replace(/\r\n/g, "\n"),
+      `\uFEFF${reviewedParent.replace(/\r\n/g, "\n")}`,
+      "Apply writes the reviewed faith content with BOM (native diff normalizes EOL)"
+    );
     assert.match(writtenFaith.toString("utf8"), /faith_details/);
+    assert.match(
+      writtenFaith.toString("utf8"),
+      /ReligiousHeadNameFemale\s*=\s*buddhism_religious_head_title\b/
+    );
+    assert.match(writtenFaith.toString("utf8"), /preserve parent title comment/);
+    const writtenReligion = await fs.readFile(faithFile, "utf8");
+    assert.equal(
+      writtenReligion.replace(/\r\n/g, "\n"),
+      `\uFEFF${reviewedReligion.replace(/\r\n/g, "\n")}`,
+      "Apply writes the reviewed religion content with BOM (native diff normalizes EOL)"
+    );
+    assert.match(writtenReligion, /ReligiousHeadNameFemale\s*=\s*buddhism_religious_head_title\b/);
+    assert.match(writtenReligion, /preserve religion title comment/);
     assert.match(writtenRite.toString("utf8"), /faith\s*=\s*parent/);
     assert.match(
       await fs.readFile(faithFile, "utf8"),
       /preserve this religion comment[\s\S]*preserve this unrelated tail/
     );
+    await fs.writeFile(path.join(scratch, "faith-applied-religion.txt"), writtenReligion);
+    await fs.writeFile(path.join(scratch, "faith-applied-parent.txt"), writtenFaith);
     await restore();
     assert.deepEqual(await fs.readFile(faithFile), originalFaith);
     await assert.rejects(fs.access(path.join(mod, "common/religion/faith_types/px_migrated_parent.txt")), {
@@ -264,6 +298,61 @@ async function checks() {
       "unsupported faith consumer blocks preparation"
     );
     await fs.unlink(unsupportedConsumer);
+
+    if (faithOnly) {
+      const ambiguousFaith = originalFaith
+        .toString("utf8")
+        .replace(
+          "ReligiousHeadName = buddhism_religious_head_title # preserve parent title comment",
+          "ReligiousHeadName = px_unknown_head_title # preserve parent title comment"
+        );
+      assert.notEqual(ambiguousFaith, originalFaith.toString("utf8"));
+      await fs.writeFile(faithFile, ambiguousFaith);
+      await click("scan");
+      await choose("faith:parent:representation", "Keep as an independent faith");
+      const blockedText = String(await ui.eval("document.body.innerText"));
+      assert.match(blockedText, /Add an explicit ReligiousHeadNameFemale/);
+      assert.match(blockedText, /custom\.txt/);
+      assert.equal(
+        await ui.eval("document.querySelector('[data-action=prepare]').disabled"),
+        true,
+        "a head title without an exact target mapping blocks preparation"
+      );
+      assert.equal(await fs.readFile(faithFile, "utf8"), ambiguousFaith, "blocked mapping preserves source");
+      assert.deepEqual(await fs.readFile(path.join(mod, "unrelated.txt")), unrelated);
+      await fs.writeFile(path.join(scratch, "faith-blocked-mapping.txt"), blockedText);
+      await ui.screenshot(path.join(scratch, "builtin-faith-blocked-mapping.png"));
+      await fs.writeFile(faithFile, originalFaith);
+      await fs.writeFile(
+        path.join(scratch, "result.json"),
+        JSON.stringify(
+          {
+            status: "passed",
+            mode: "faith-only",
+            targetVersion,
+            verified: [
+              "packaged catalog and exact route",
+              "real source folder picker",
+              "required choices and explicit defer block preparation",
+              "native religion and independent-faith diffs include the target female title",
+              "Apply saves the reviewed female title at both localization scopes",
+              "script BOM, title comments, source tail and unrelated content preserved",
+              "Restore recovers exact original bytes and removes generated files",
+              "unsupported faith consumer blocks preparation",
+              "missing target title mapping blocks preparation and preserves source",
+            ],
+            unverified: [
+              "target-game runtime after restart",
+              "Crozier validator (none available)",
+              "DDS UI not rerun in faith-only mode",
+            ],
+          },
+          null,
+          2
+        )
+      );
+      return;
+    }
 
     await select(maskId);
     const beforeCancel = await modBytes();
@@ -358,6 +447,7 @@ async function checks() {
             "native text diff and apply",
             "script BOM and unrelated preservation",
             "faith restore",
+            "target female head title in native review and saved religion/faith outputs",
             "visible Cancel aborts DDS capture without changing mod bytes",
             "DDS metadata review",
             "retained DDS pixels and exact count",

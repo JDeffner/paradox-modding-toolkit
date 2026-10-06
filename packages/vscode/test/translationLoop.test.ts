@@ -11,7 +11,21 @@ const ui = vi.hoisted(() => ({
   upsert: vi.fn(),
 }));
 vi.mock("vscode", () => ({ window: ui }));
-vi.mock("../src/locCommands", () => ({ replaceLocLineValue: ui.replace, upsertNewModLoc: ui.upsert }));
+vi.mock("../src/locCommands", () => ({
+  prepareLocalizationWrite: async (
+    _cfg: unknown,
+    _lookup: unknown,
+    key: string,
+    context: { targetFile?: string }
+  ) => ({
+    apply: async (value: string) => {
+      if (!context.targetFile) return ui.upsert(_cfg, key, value);
+      if (!(await ui.replace(context.targetFile, 0, key, value)))
+        throw new Error("The localization key was removed");
+      return context.targetFile;
+    },
+  }),
+}));
 import { translateNextCommand } from "../src/translationLoop";
 
 const root = path.resolve(".local/testing/translation-loop");

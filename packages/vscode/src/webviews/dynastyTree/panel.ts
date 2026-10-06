@@ -39,6 +39,8 @@ import { getProjectSetting } from "@px-lsp/protocol/projectSettings";
 import { readProjectAuthoringSettings } from "../../projectConfigFile";
 import { readModName } from "@px-lsp/protocol/modName";
 import type { PxConfig } from "../../config";
+import { readDocument, writeDocument } from "../../documentWrite";
+import { assertModWritePath } from "../../modWrite";
 import { calendarForMod } from "../../calendarInsert";
 import {
   applyDefinitionEdits,
@@ -53,7 +55,7 @@ import { resolveImage, type ImageRoot } from "../../creators/images";
 import type { LocLookup } from "../../locCommands";
 import { characterBlock, characterForm, dynastyBlock, houseBlock, unquotableValue } from "./blocks";
 import { dynastyTreeHtml } from "./html";
-import { WriteJournal } from "./journal";
+import { WriteJournal, type JournalState } from "./journal";
 import { dnaPasteBlock, parseDnaPaste, scanBlocks, uniqueKey, type ScriptBlock } from "./scan";
 import { dnaFiles, gameDnaCopy } from "./dna";
 import type { AppToHost, HostToApp, ModTarget, OptionSets, TraitStats, TraitTip } from "./messages";
@@ -170,8 +172,8 @@ export class DynastyTreePanel {
   private readonly files = new Map<string, { mtimeMs: number; blocks: Map<string, ScriptBlock> }>();
   /** Every write this panel made, newest last: what undo puts back. */
   private readonly journal = new WriteJournal({
-    read: (file) => this.docText(file),
-    write: (file, text) => this.replaceDocument(file, text),
+    read: (file) => this.journalState(file),
+    write: (file, text, expected) => this.replaceDocument(file, text, expected),
     refuse: (message) => this.post({ type: "toast", message, variant: "destructive" }),
   });
 
@@ -389,14 +391,14 @@ export class DynastyTreePanel {
       case "saveDynasty": {
         if (this.refuseQuote(msg.form)) return;
         const written = await this.write(TARGETS.dynasty, msg.form.id, dynastyBlock(msg.form), msg.file);
-        if (written) await this.writeName(msg.form.nameKey, msg.name);
+        if (written) await this.writeName(msg.form.nameKey, msg.name, written.modPath);
         if (written && msg.openTree) await this.loadTree(msg.form.id);
         return;
       }
       case "saveHouse": {
         if (this.refuseQuote(msg.form)) return;
         const written = await this.write(TARGETS.house, msg.form.id, houseBlock(msg.form), msg.file);
-        if (written) await this.writeName(msg.form.nameKey, msg.name);
+        if (written) await this.writeName(msg.form.nameKey, msg.name, written.modPath);
         return;
       }
     }
@@ -935,6 +937,7 @@ export class DynastyTreePanel {
       mine.map((file) => ({ file, count: this.fileBlocks(file).size })).sort((a, b) => b.count - a.count)[0]
         ?.file ?? path.join(dir, `${sanitizeFileName(path.basename(modPath))}_dna.txt`);
     try {
+      assertModWritePath({ ...this.options.cfg, modPath }, target);
       if (!fs.existsSync(target)) {
         fs.mkdirSync(path.dirname(target), { recursive: true });
         // Script `.txt` is UTF-8 WITH BOM; the game reads a headerless file
@@ -953,7 +956,13 @@ export class DynastyTreePanel {
         this.post({ type: "toast", message: refused, variant: "destructive" });
         return;
       }
-      if ((await applyDefinitionEdits(target, text, result.edits, { reveal: false })) !== "saved") return;
+      if (
+        (await applyDefinitionEdits(target, text, result.edits, {
+          cfg: { ...this.options.cfg, modPath },
+          reveal: false,
+        })) !== "saved"
+      )
+        return;
       await this.remember(target, text);
     } catch (err) {
       this.post({ type: "toast", message: message(err), variant: "destructive" });
@@ -1027,8 +1036,7 @@ export class DynastyTreePanel {
   }
 
   /**
-   * Write one block into a `.txt` of the mod's folder. Returns true when
-   * something was written.
+   * Write one block into a `.txt` of the mod's folder and retain its owner.
    *
    * The target, the offsets and the application are the shared creator flow:
    * `pickSaveTarget` opens the file and hands back the text the server must
@@ -1043,7 +1051,7 @@ export class DynastyTreePanel {
     choice?: SaveTargetChoice | null,
     source?: { file: string; id: string; text: string },
     character = false
-  ): Promise<boolean> {
+  ): Promise<{ modPath: string } | false> {
     const stage = this.options.meta.stageRoots?.[0];
     const folder = stage ? `${stage}/${target.folder}` : target.folder;
     const where = await this.saveTarget(folder, target.kind, previousFile, choice);
@@ -1073,12 +1081,18 @@ export class DynastyTreePanel {
     // an editor over the tree each time. The inspector says what was written
     // and offers the link instead.
     if (source) await this.checkCharacterSource(source);
-    if ((await applyDefinitionEdits(abs, text, result.edits, { reveal: false })) !== "saved") return false;
+    if (
+      (await applyDefinitionEdits(abs, text, result.edits, {
+        cfg: { ...this.options.cfg, modPath: where.modPath },
+        reveal: false,
+      })) !== "saved"
+    )
+      return false;
     await this.remember(abs, text);
 
     this.post({ type: "saved", name, file: abs, line: await this.blockLine(abs, name) });
     this.reloadSoon();
-    return true;
+    return { modPath: where.modPath };
   }
 
   /**
@@ -1088,7 +1102,8 @@ export class DynastyTreePanel {
    */
   private async remember(abs: string, text: string, join = false): Promise<void> {
     const after = await this.docText(abs);
-    if (after !== null) this.journal.record({ file: abs, before: text, after }, join);
+    if (after !== null)
+      this.journal.record({ file: abs, before: text, after, disk: fs.readFileSync(abs) }, join);
     this.postJournal();
   }
 
@@ -1115,14 +1130,29 @@ export class DynastyTreePanel {
     }
   }
 
-  /** Put a whole file back, as one edit, the way every other write here lands. */
-  private async replaceDocument(file: string, text: string): Promise<boolean> {
+  private async journalState(file: string): Promise<JournalState | null> {
     try {
-      const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
-      const edit = new vscode.WorkspaceEdit();
-      edit.replace(doc.uri, new vscode.Range(doc.positionAt(0), doc.positionAt(doc.getText().length)), text);
-      if (!(await vscode.workspace.applyEdit(edit))) throw new Error("The history edit was rejected");
-      if (!(await doc.save())) throw new Error(`${path.basename(file)} could not be saved`);
+      const snapshot = await readDocument(file);
+      return { text: snapshot.text, disk: snapshot.disk };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Put a whole file back, as one edit, the way every other write here lands. */
+  private async replaceDocument(file: string, text: string, expected?: JournalState): Promise<boolean> {
+    try {
+      const modPath = this.options.mods.find((mod) => isInside(mod.path, file))?.path;
+      const cfg = { ...this.options.cfg, modPath: modPath ?? null };
+      assertModWritePath(cfg, file);
+      const snapshot = await readDocument(file);
+      if (
+        expected &&
+        (snapshot.text !== expected.text || (expected.disk && !snapshot.disk.equals(expected.disk)))
+      )
+        throw new Error(`${path.basename(file)} changed during the history step. Try again.`);
+      assertModWritePath(cfg, file);
+      await writeDocument(snapshot, text, true);
       return true;
     } catch (err) {
       this.post({ type: "toast", message: message(err), variant: "destructive" });
@@ -1151,13 +1181,15 @@ export class DynastyTreePanel {
     kind: string,
     previousFile?: string,
     choice?: SaveTargetChoice | null
-  ): Promise<{ abs: string; text: string } | null> {
-    const inMod = previousFile && this.options.mods.some((m) => isInside(m.path, previousFile));
+  ): Promise<{ modPath: string; abs: string; text: string } | null> {
+    const owner = previousFile ? this.options.mods.find((m) => isInside(m.path, previousFile)) : undefined;
+    const inMod = !!owner;
     const wanted = choice ? path.join(choice.modPath, ...folder.split("/"), choice.file) : null;
     if (inMod && (!wanted || samePath(wanted, previousFile!))) {
       try {
+        assertModWritePath({ ...this.options.cfg, modPath: owner!.path }, previousFile!);
         const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(previousFile!));
-        return { abs: previousFile!, text: doc.getText() };
+        return { modPath: owner!.path, abs: previousFile!, text: doc.getText() };
       } catch (err) {
         this.post({ type: "toast", message: message(err), variant: "destructive" });
         return null;
@@ -1165,10 +1197,10 @@ export class DynastyTreePanel {
     }
     if (choice) {
       const opened = await openSaveTarget(this.options.cfg, folder, choice);
-      return opened ? { abs: opened.abs, text: opened.text } : null;
+      return opened;
     }
     const picked = await pickSaveTarget(this.options.cfg, folder, { kind });
-    return picked ? { abs: picked.abs, text: picked.text } : null;
+    return picked;
   }
 
   /** The line the block ended up on, so the file opens where it was written. */
@@ -1199,12 +1231,12 @@ export class DynastyTreePanel {
   }
 
   /** The prepared destination is also the source of the undo pre-image. */
-  private async writeName(key: string, value: string): Promise<void> {
+  private async writeName(key: string, value: string, modPath: string): Promise<void> {
     if (!key || !value) return;
     try {
       let file: string;
       if (this.actions.prepareLoc) {
-        const plan = await this.actions.prepareLoc(key, this.targetChoice()?.modPath ?? this.options.modRoot);
+        const plan = await this.actions.prepareLoc(key, modPath);
         if (!plan) return;
         const open = vscode.workspace.textDocuments.find((document) =>
           samePath(document.uri.fsPath, plan.file)
@@ -1220,9 +1252,9 @@ export class DynastyTreePanel {
         }
         file = await plan.apply(value);
         // Undo a created file's added keys while retaining a valid empty localization file.
-        before ??= `\uFEFFl_${plan.language}:\n`;
+        before ??= `l_${plan.language}:\n`;
         const after = (await vscode.workspace.openTextDocument(vscode.Uri.file(plan.file))).getText();
-        this.journal.record({ file: plan.file, before, after }, true);
+        this.journal.record({ file: plan.file, before, after, disk: fs.readFileSync(plan.file) }, true);
         this.postJournal();
       } else {
         // Older embedders expose separate prediction and write callbacks.

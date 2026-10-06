@@ -24,7 +24,12 @@ import { getParse } from "../parseCache";
 import { contextFromStatements, inlineKind, type BlockContext } from "../context";
 import { classifyKeyword } from "../contextKeywords";
 import { scopeWordDoc } from "../data/keywordDocs";
-import { EVENT_ID, nestedDefinitionKind, topLevelDefinitionKind } from "../index/extract";
+import {
+  EVENT_ID,
+  nestedDefinitionKind,
+  normalizeDeclarationName,
+  topLevelDefinitionKind,
+} from "../index/extract";
 import { implicitKindsForField } from "../index/references";
 import { datafunctionExpressionRanges, provideDatafunctionSemanticSpans } from "./datafunctionSemanticTokens";
 import {
@@ -250,6 +255,10 @@ export function provideScriptSemanticSpans(
   ): string[] | undefined => {
     if (key.quoted) return undefined;
     if (form === "scalar") {
+      const weighted = parent && !parent.key.quoted && fields?.get(parent.key.text);
+      if (weighted && weighted.weighted && weighted.form !== "scalar" && /^\d+$/.test(key.text)) {
+        return weighted.kinds;
+      }
       const implicit = implicitKindsForField(key.text, parent?.key.text);
       if (implicit) return implicit;
     }
@@ -289,12 +298,16 @@ export function provideScriptSemanticSpans(
         if (!stmt.key.quoted) pushAs(stmt.key, "property");
       } else {
         const extraction = entry?.extraction ?? "top-level-key";
+        const declaration =
+          !stmt.key.quoted && !ancestors.length && extraction === "top-level-key"
+            ? normalizeDeclarationName(stmt.key.text)
+            : null;
         const declared =
           (!stmt.key.quoted && NAME.test(stmt.key.text) ? inlineKind(result.root, stmt) : undefined) ??
           (entry && nestedDefinitionKind(entry, [...named, stmt])) ??
           (entry &&
           !stmt.key.quoted &&
-          NAME.test(stmt.key.text) &&
+          (NAME.test(stmt.key.text) || declaration) &&
           (stmt.op === "=" || stmt.op === "?=") &&
           ((extraction === "top-level-key" && !ancestors.length && stmt.key.text !== "namespace") ||
             (extraction === "event-id" && !ancestors.length && EVENT_ID.test(stmt.key.text)) ||
@@ -303,9 +316,18 @@ export function provideScriptSemanticSpans(
               /^[ekdcb]_/.test(stmt.key.text)))
             ? topLevelDefinitionKind(entry, stmt)
             : undefined);
-        if (declared)
-          pushAs(stmt.key, definitionTokenType(declared), ["declaration", ...kindModifiers(declared)]);
-        else
+        if (declared) {
+          if (declaration?.entryMode) {
+            push(stmt.key.range.start, declaration.offset - 1, {
+              type: "keyword",
+              modifiers: ["defaultLibrary"],
+            });
+            push(stmt.key.range.start + declaration.offset, declaration.name.length, {
+              type: definitionTokenType(declared),
+              modifiers: ["declaration", ...kindModifiers(declared)],
+            });
+          } else pushAs(stmt.key, definitionTokenType(declared), ["declaration", ...kindModifiers(declared)]);
+        } else
           pushScalar(
             stmt.key,
             context === "trigger"

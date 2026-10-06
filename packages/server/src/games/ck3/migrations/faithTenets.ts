@@ -6,7 +6,7 @@ import { assignments, children, field, scalar, editText, resolveFileConstants } 
 /** Read only the custom doctrine icons named by captured definitions. */
 export async function discoverFaithIcons(context: MigrationContext) {
   const { parseScript } = await import("../../../parser/parser");
-  const paths = new Set<string>();
+  const paths = new Map<string, { root: "mod" | "source"; path: string }>();
   for (const path of context
     .list("mod", "common/religion/doctrine_types")
     .filter((p) => p.endsWith(".txt"))) {
@@ -16,14 +16,18 @@ export async function discoverFaithIcons(context: MigrationContext) {
       const icon = field(definition, "icon") ? scalar(field(definition, "icon")) : definition.key.text;
       if (!icon || !/^[A-Za-z0-9_.-]+$/.test(icon)) continue;
       const source = `gfx/interface/icons/faith_doctrines/${icon}.dds`;
-      if (
-        context.fileInfo("mod", source) &&
-        !context.fileInfo("mod", `gfx/interface/icons/faith_tenets/${icon}.dds`)
+      const target = `gfx/interface/icons/faith_tenets/${icon}.dds`;
+      if (context.fileInfo("mod", source) && !context.fileInfo("mod", target))
+        paths.set(`mod:${source}`, { root: "mod", path: source });
+      else if (
+        !context.fileInfo("mod", target) &&
+        !context.fileInfo("target", target) &&
+        context.fileInfo("source", source)
       )
-        paths.add(source);
+        paths.set(`source:${source}`, { root: "source", path: source });
     }
   }
-  return [...paths].sort().map((path) => ({ root: "mod" as const, path }));
+  return [...paths].sort(([a], [b]) => a.localeCompare(b)).map(([, value]) => value);
 }
 
 /** Target tenet schema changes are applied only where their scope is established. */
@@ -44,13 +48,15 @@ export function convertCustomTenets(w: FaithWork, definitions: Definition[], ten
     if (icon && /^[A-Za-z0-9_.-]+$/.test(icon)) {
       const oldPath = `gfx/interface/icons/faith_doctrines/${icon}.dds`;
       const newPath = `gfx/interface/icons/faith_tenets/${icon}.dds`;
-      const previous = w.context.readBytes("mod", oldPath);
+      const previous =
+        w.context.readBytes("mod", oldPath) ??
+        (!w.context.fileInfo("target", newPath) ? w.context.readBytes("source", oldPath) : undefined);
       if (!w.context.fileInfo("mod", newPath)) {
         if (previous) w.binaryCreates.set(newPath, previous);
         else if (!w.context.fileInfo("target", newPath))
           w.fail(
             `tenet-icon:${def.id}`,
-            `Tenet ${def.id} needs ${newPath}. Supply it or capture the old mod icon ${oldPath} so it can be copied.`,
+            `Tenet ${def.id} needs ${newPath}. Supply it or capture its exact old mod or source icon ${oldPath} so it can be copied.`,
             def
           );
       }
@@ -171,5 +177,63 @@ export function convertCustomTenets(w: FaithWork, definitions: Definition[], ten
     const text = resolveFileConstants(edited, def.node.range.start, def.node.range.end + delta);
     w.creates.set(`common/religion/tenet_types/px_migrated_${def.id}.txt`, text + "\n");
     w.addEdit(def.path, { ...def.node.range, text: "" });
+  }
+}
+
+/** Core tenets no longer belong to doctrine groups in the captured target schema. */
+export function removeConvertedTenetGroups(w: FaithWork, tenets: Set<string>, converted: Set<string>): void {
+  const prefix = "common/religion/doctrine_group_types";
+  const oldTenets = new Set<string>();
+  for (const path of w.context.list("source", prefix).filter((p) => p.endsWith(".txt"))) {
+    const text = w.context.readText("source", path);
+    if (!text) continue;
+    for (const group of assignments(w.parse(text).root.statements)) {
+      if (scalar(field(group, "category")) !== "core_tenets") continue;
+      const members = field(group, "doctrine_types");
+      if (members?.value?.kind === "block")
+        for (const member of members.value.statements)
+          if (member.kind === "value" && member.value.kind === "scalar") oldTenets.add(member.value.text);
+    }
+  }
+  for (const path of w.context.list("mod", prefix).filter((p) => p.endsWith(".txt"))) {
+    const text = w.context.readText("mod", path);
+    if (text === undefined) continue;
+    for (const group of assignments(w.parse(text).root.statements)) {
+      const members = field(group, "doctrine_types");
+      if (members?.value?.kind !== "block") continue;
+      const values = members.value.statements.flatMap((member) =>
+        member.kind === "value" && member.value.kind === "scalar" ? [member.value.text] : []
+      );
+      if (!values.some((id) => converted.has(id))) continue;
+      const schema = w.context.readText("target", `${prefix}/_doctrine_group_types.info`);
+      const schemaRoot = schema && assignments(w.parse(schema).root.statements)[0];
+      const targetHasGroup = w.context.list("target", prefix).some((candidate) => {
+        if (!candidate.endsWith(".txt")) return false;
+        const definition = w.context.readText("target", candidate);
+        return (
+          definition !== undefined &&
+          assignments(w.parse(definition).root.statements).some((n) => n.key.text === group.key.text)
+        );
+      });
+      if (
+        !schemaRoot ||
+        field(schemaRoot, "doctrine_types") ||
+        targetHasGroup ||
+        scalar(field(group, "category")) !== "core_tenets" ||
+        scalar(field(group, "number_of_picks")) !== "3" ||
+        values.length !== members.value.statements.length ||
+        values.some((id) => !tenets.has(id) && !oldTenets.has(id)) ||
+        children(group).some((n) => !["category", "number_of_picks", "doctrine_types"].includes(n.key.text))
+      ) {
+        w.fail(
+          `tenet-group:${group.key.text}`,
+          `Doctrine group ${group.key.text} contains converted tenets and needs a manual target-schema review. Only an obsolete group containing known core tenets and no additional behavior can be removed.`,
+          { path },
+          group.range.start
+        );
+        continue;
+      }
+      w.addEdit(path, { ...group.range, text: "" });
+    }
   }
 }

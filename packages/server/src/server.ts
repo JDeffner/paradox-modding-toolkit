@@ -57,6 +57,7 @@ import {
   exampleWikiEntryRequest,
   exampleWikiVariableKinds,
   type ExampleWikiEntryParams,
+  type ExampleWikiParams,
   type ExampleWikiKind,
   dynastyTreeRequest,
   eventGraphRequest,
@@ -130,6 +131,7 @@ import { computeGuiDependencies, computeGuiUses } from "./gui/guiDependencies";
 import { provideGuiCompletion, provideGuiHover } from "./features/guiLanguage";
 import { provideGuiDefinition, type GuiPaths } from "./features/guiNavigation";
 import { provideDataFnCompletion, provideDataFnHover, provideDataFnSignature } from "./features/datafunction";
+import { datafunctionExpressionAt } from "./features/datafunctionContext";
 import { getLineText, isScriptLanguage } from "./documents";
 import { computeEventDetail } from "./overview/eventDetail";
 import {
@@ -140,6 +142,7 @@ import {
   type WikiVariable,
   type WikiVariableSite,
 } from "./overview/exampleWiki";
+import { ExampleWikiReference } from "./overview/exampleWikiReference";
 import { LIST_KIND_PREFIX, VAR_KIND_PREFIX, variableTypes } from "./scopes/varTypes";
 import { loadTokenData, parseOnActionsLog } from "./data/docsParser";
 import { loadDataTypes } from "./data/dataTypes";
@@ -1979,11 +1982,40 @@ connection.onRequest(eventDetailRequest, (params: EventDetailParams) =>
 
 // The Examples Wiki: one row per name the server knows (the search catalog),
 // and everything known about one of them (the reading pane).
-connection.onRequest(exampleWikiRequest, () => buildExampleWikiIndex(exampleWikiSources()));
+const referenceWiki = new ExampleWikiReference();
+connection.onRequest(exampleWikiRequest, async (params: ExampleWikiParams | null) => {
+  if (!params?.context || params.context.gameId === activeProfile().id) {
+    return {
+      ...buildExampleWikiIndex(exampleWikiSources()),
+      gameId: activeProfile().id,
+      gameName: activeProfile().name,
+    };
+  }
+  const reference = await referenceWiki.load(
+    params.context,
+    clientDataDir || path.resolve(__dirname, "..", "data"),
+    storageDir,
+    params.refresh
+  );
+  const index = buildExampleWikiIndex(reference.sources);
+  return {
+    ...index,
+    gameId: reference.gameId,
+    gameName: reference.gameName,
+    sources: [...reference.notes, ...index.sources],
+  };
+});
 
-connection.onRequest(exampleWikiEntryRequest, (params: ExampleWikiEntryParams) =>
-  computeExampleWikiEntry(exampleWikiSources(), params, exampleSites)
-);
+connection.onRequest(exampleWikiEntryRequest, async (params: ExampleWikiEntryParams) => {
+  if (!params?.context || params.context.gameId === activeProfile().id)
+    return computeExampleWikiEntry(exampleWikiSources(), params, exampleSites);
+  const reference = await referenceWiki.load(
+    params.context,
+    clientDataDir || path.resolve(__dirname, "..", "data"),
+    storageDir
+  );
+  return computeExampleWikiEntry(reference.sources, params, reference.sites);
+});
 
 connection.onRequest(dependenciesRequest, (params: DependenciesParams) => {
   let name = params?.name;
@@ -2284,7 +2316,13 @@ connection.onSignatureHelp((params) => {
   if (!doc) return null;
   if (doc.languageId === "paradox-gui" || doc.languageId === "paradox-loc") {
     const lineText = getLineText(doc, params.position.line);
-    return provideDataFnSignature(data.dataTypes, data.dataFnUsage, lineText, params.position.character);
+    return provideDataFnSignature(
+      data.dataTypes,
+      data.dataFnUsage,
+      lineText,
+      params.position.character,
+      datafunctionExpressionAt(doc, doc.offsetAt(params.position))
+    );
   }
   if (!isScriptLanguage(doc.languageId)) return null;
   return provideSignatureHelp(data, doc, params.position, schema);

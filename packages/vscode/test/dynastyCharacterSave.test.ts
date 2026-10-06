@@ -88,6 +88,8 @@ beforeEach(() => {
     if (before !== host.text) return "stale";
     for (const edit of [...edits].sort((a, b) => b.start - a.start))
       host.text = host.text.slice(0, edit.start) + edit.newText + host.text.slice(edit.end);
+    mkdirSync(path.dirname(host.file), { recursive: true });
+    writeFileSync(host.file, "\uFEFF" + host.text);
     return "saved";
   });
   actions = {

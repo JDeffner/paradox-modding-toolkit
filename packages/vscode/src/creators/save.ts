@@ -21,6 +21,8 @@ import { readModName } from "@px-lsp/protocol/modName";
 import { writeLocSmart, type LocLookup } from "../locCommands";
 import { scaffoldPrefix } from "../scaffold/command";
 import { effectiveLocConfig, localizationRoots } from "../localizationProject";
+import { assertModWritePath } from "../modWrite";
+import { readDocument, writeDocument } from "../documentWrite";
 import {
   BOM,
   defaultDefinitionFileName,
@@ -228,6 +230,8 @@ export async function openSaveTarget(
   choice: SaveTargetChoice
 ): Promise<SaveTarget | null> {
   if (!isPlainScriptFileName(choice.file)) return null;
+  if (!writableMods(cfg).some((root) => samePath(root, choice.modPath)))
+    throw new Error("Choose a writable workspace mod");
   const gameFiles = cfg.gamePath ? listTxt(path.join(cfg.gamePath, ...folder.split("/"))) : [];
   const clash = vanillaNameClash(choice.file, gameFiles, folder);
   if (clash) {
@@ -237,9 +241,10 @@ export async function openSaveTarget(
 
   const dir = path.join(choice.modPath, ...folder.split("/"));
   const abs = path.join(dir, choice.file);
+  assertModWritePath({ ...cfg, modPath: choice.modPath }, abs);
   if (!fs.existsSync(abs)) {
     fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(abs, BOM, "utf8");
+    fs.writeFileSync(abs, BOM, { encoding: "utf8", flag: "wx" });
   }
   const doc = await vscode.workspace.openTextDocument(abs);
   return { modPath: choice.modPath, file: choice.file, abs, text: doc.getText() };
@@ -267,24 +272,24 @@ export async function applyDefinitionEdits(
   abs: string,
   text: string,
   edits: readonly GuiTextEdit[],
-  opts: { reveal?: boolean } = {}
+  opts: { cfg: PxConfig; reveal?: boolean }
 ): Promise<DefinitionSaveResult> {
   try {
-    const doc = await vscode.workspace.openTextDocument(abs);
-    if (doc.getText() !== text) {
+    assertModWritePath(opts.cfg, abs);
+    const snapshot = await readDocument(abs);
+    const doc = snapshot.document;
+    if (snapshot.text !== text) {
       void vscode.window.showWarningMessage(
         `Paradox Modding Toolkit: ${path.basename(abs)} changed while the editor was open, so nothing was written. Try again.`
       );
       return "stale";
     }
-    if (edits.length > 0) {
-      const edit = new vscode.WorkspaceEdit();
-      for (const e of edits) {
-        edit.replace(doc.uri, new vscode.Range(doc.positionAt(e.start), doc.positionAt(e.end)), e.newText);
-      }
-      if (!(await vscode.workspace.applyEdit(edit))) throw new Error("The definition edit was rejected");
+    let body = text;
+    for (const edit of [...edits].sort((a, b) => b.start - a.start)) {
+      body = body.slice(0, edit.start) + edit.newText + body.slice(edit.end);
     }
-    if (!(await doc.save())) throw new Error(`${path.basename(abs)} could not be saved`);
+    assertModWritePath(opts.cfg, abs);
+    await writeDocument(snapshot, body, true);
     if (opts.reveal !== false) {
       await vscode.window.showTextDocument(doc, {
         viewColumn: vscode.ViewColumn.Beside,
@@ -338,7 +343,7 @@ export async function writeLocValues(
       await writeLocSmart(cfg, lookup, key, value, {
         sourcePath: target?.file,
         relatedKeys,
-        fallbackPath: newKeyFile,
+        newKeyFallbackPath: newKeyFile,
       })
     );
   }

@@ -17,6 +17,11 @@ await writeFile(
   join(scratch, "Mod/events/graph_save.txt"),
   "\uFEFFnamespace = graph_save\n\ngraph_save.1 = {\n\ttype = character_event\n\ttrigger = {\n\t\tgold >= 10  prestige >= 3 # preserve both conditions\n\t}\n}\n"
 );
+// Linked event syntax comes from eventGraphEdges.test.ts.
+await writeFile(
+  join(scratch, "Mod/events/graph_chain.txt"),
+  "\uFEFFnamespace = graph_save\n\ngraph_save.2 = { type = character_event immediate = { trigger_event = { id = graph_save.3 days = 30 } } }\ngraph_save.3 = { type = character_event }\n"
+);
 await writeFile(
   join(scratch, "user/User/settings.json"),
   JSON.stringify({

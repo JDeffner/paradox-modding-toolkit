@@ -1845,6 +1845,192 @@
       "gameVersion": "1.20.0.3",
       "corpus": "Installed CK3 plus AGOT mod corpus, two-root workspace",
       "note": "Single before/after samples on the same corpus and Node version. OS cache and desktop load were not controlled. Ranking over 1,400 positions and regenerated frequencies stayed identical; timing and memory differences are observations, not isolated causal measurements. A synthetic scratch file receives the save."
+    },
+    {
+      "version": "0.5.2-audit-fixes-before",
+      "recordedAt": "2026-10-05",
+      "workspace": "performance.code-workspace",
+      "roots": 2,
+      "build": "Pre-audit packaged server 0.3.7 from integration/upcoming",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor",
+        "totalMemGb": 32,
+        "node": "v24.18.1"
+      },
+      "results": {
+        "timeToIndexedMs": 9909,
+        "definitions": 522801,
+        "completionCold": 266,
+        "completionWarm": 8,
+        "semanticTokens": 3,
+        "hover": 9,
+        "documentSymbol": 1,
+        "completionAfterSave": 180,
+        "tokensAfterSave": 1,
+        "heapMb": 298,
+        "rssAtBuildMb": 764,
+        "internedIdentifiers": 601847,
+        "peakRssMb": 832,
+        "rssSamples": 26
+      },
+      "gameVersion": "1.20.0.3",
+      "corpus": "Installed CK3 plus Realms in Exile scratch mod, two-root workspace, asset indexing disabled",
+      "note": "Same workspace and Node version. First after sample followed a machine restart and cold filesystem reads. Warm pair repeated sequentially afterward. Desktop load and OS caches were not controlled; individual timing differences do not isolate code effects. All runs indexed 522801 definitions with 298 MB post-GC heap. A synthetic scratch file receives the save."
+    },
+    {
+      "version": "0.5.2-audit-fixes-after",
+      "recordedAt": "2026-10-05",
+      "workspace": "performance.code-workspace",
+      "roots": 2,
+      "build": "integration/upcoming with release audit fixes",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor",
+        "totalMemGb": 32,
+        "node": "v24.18.1"
+      },
+      "results": {
+        "timeToIndexedMs": 24010,
+        "definitions": 522801,
+        "completionCold": 175,
+        "completionWarm": 6,
+        "semanticTokens": 3,
+        "hover": 8,
+        "documentSymbol": 1,
+        "completionAfterSave": 137,
+        "tokensAfterSave": 1,
+        "heapMb": 298,
+        "rssAtBuildMb": 727,
+        "internedIdentifiers": 601847,
+        "peakRssMb": 801,
+        "rssSamples": 58
+      },
+      "gameVersion": "1.20.0.3",
+      "corpus": "Installed CK3 plus Realms in Exile scratch mod, two-root workspace, asset indexing disabled",
+      "note": "Same workspace and Node version. First after sample followed a machine restart and cold filesystem reads. Warm pair repeated sequentially afterward. Desktop load and OS caches were not controlled; individual timing differences do not isolate code effects. All runs indexed 522801 definitions with 298 MB post-GC heap. A synthetic scratch file receives the save."
+    },
+    {
+      "version": "0.5.2-audit-fixes-before-warm",
+      "recordedAt": "2026-10-05",
+      "workspace": "performance.code-workspace",
+      "roots": 2,
+      "build": "Pre-audit packaged server 0.3.7 from integration/upcoming",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor",
+        "totalMemGb": 32,
+        "node": "v24.18.1"
+      },
+      "results": {
+        "timeToIndexedMs": 8091,
+        "definitions": 522801,
+        "completionCold": 169,
+        "completionWarm": 7,
+        "semanticTokens": 3,
+        "hover": 7,
+        "documentSymbol": 1,
+        "completionAfterSave": 141,
+        "tokensAfterSave": 1,
+        "heapMb": 298,
+        "rssAtBuildMb": 787,
+        "internedIdentifiers": 601847,
+        "peakRssMb": 905,
+        "rssSamples": 22
+      },
+      "gameVersion": "1.20.0.3",
+      "corpus": "Installed CK3 plus Realms in Exile scratch mod, two-root workspace, asset indexing disabled",
+      "note": "Same workspace and Node version. First after sample followed a machine restart and cold filesystem reads. Warm pair repeated sequentially afterward. Desktop load and OS caches were not controlled; individual timing differences do not isolate code effects. All runs indexed 522801 definitions with 298 MB post-GC heap. A synthetic scratch file receives the save."
+    },
+    {
+      "version": "0.5.2-audit-fixes-after-warm",
+      "recordedAt": "2026-10-05",
+      "workspace": "performance.code-workspace",
+      "roots": 2,
+      "build": "integration/upcoming with release audit fixes",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor",
+        "totalMemGb": 32,
+        "node": "v24.18.1"
+      },
+      "results": {
+        "timeToIndexedMs": 8327,
+        "definitions": 522801,
+        "completionCold": 264,
+        "completionWarm": 9,
+        "semanticTokens": 2,
+        "hover": 12,
+        "documentSymbol": 1,
+        "completionAfterSave": 185,
+        "tokensAfterSave": 1,
+        "heapMb": 298,
+        "rssAtBuildMb": 798,
+        "internedIdentifiers": 601847,
+        "peakRssMb": 885,
+        "rssSamples": 22
+      },
+      "gameVersion": "1.20.0.3",
+      "corpus": "Installed CK3 plus Realms in Exile scratch mod, two-root workspace, asset indexing disabled",
+      "note": "Same workspace and Node version. First after sample followed a machine restart and cold filesystem reads. Warm pair repeated sequentially afterward. Desktop load and OS caches were not controlled; individual timing differences do not isolate code effects. All runs indexed 522801 definitions with 298 MB post-GC heap. A synthetic scratch file receives the save."
+    },
+    {
+      "version": "0.5.5-preview",
+      "recordedAt": "2026-10-05",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "integration/upcoming, prepared Toolkit 0.5.5 and server 0.3.8",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor",
+        "totalMemGb": 32,
+        "node": "v24.18.1"
+      },
+      "results": {
+        "timeToIndexedMs": 9093,
+        "definitions": 516116,
+        "completionCold": 163,
+        "completionWarm": 6,
+        "semanticTokens": 2,
+        "hover": 7,
+        "documentSymbol": 1,
+        "completionAfterSave": 131,
+        "tokensAfterSave": 1,
+        "heapMb": 302,
+        "rssAtBuildMb": 766,
+        "internedIdentifiers": 597764,
+        "peakRssMb": 870,
+        "rssSamples": 22
+      },
+      "gameVersion": "1.20.0.3",
+      "corpus": "Installed CK3 and five Cultivation workspace mods; Agent Courier excluded; asset indexing enabled",
+      "note": "Sequential samples after verification and editor capture hosts stopped. OS caches and desktop background load were not controlled. The driver uses minimal completion and a synthetic save probe, leaving real mod and game roots read-only. These index measurements do not measure migration latency."
+    },
+    {
+      "version": "0.5.5-preview",
+      "recordedAt": "2026-10-05",
+      "workspace": "cultivation.code-workspace",
+      "roots": 6,
+      "build": "integration/upcoming, prepared Toolkit 0.5.5 and server 0.3.8",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor",
+        "totalMemGb": 32,
+        "node": "v24.18.1"
+      },
+      "results": {
+        "timeToIndexedMs": 7785,
+        "definitions": 516116,
+        "completionCold": 196,
+        "completionWarm": 7,
+        "semanticTokens": 2,
+        "hover": 7,
+        "documentSymbol": 1,
+        "completionAfterSave": 143,
+        "tokensAfterSave": 1,
+        "heapMb": 302,
+        "rssAtBuildMb": 768,
+        "internedIdentifiers": 597764,
+        "peakRssMb": 889,
+        "rssSamples": 20
+      },
+      "gameVersion": "1.20.0.3",
+      "corpus": "Installed CK3 and five Cultivation workspace mods; Agent Courier excluded; asset indexing enabled",
+      "note": "Sequential samples after verification and editor capture hosts stopped. OS caches and desktop background load were not controlled. The driver uses minimal completion and a synthetic save probe, leaving real mod and game roots read-only. These index measurements do not measure migration latency."
     }
   ]
 }

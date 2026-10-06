@@ -94,7 +94,8 @@ describe("frozen file transactions", () => {
       },
     });
     expect(result).toMatchObject({ status: "failed", completed: ["first.txt"], error: "Source changed" });
-    expect(checks).toBe(3);
+    // Initial check, before the first write, after staging, then before the second write.
+    expect(checks).toBe(4);
     await expect(fs.stat(path.join(root, "metadata.json"))).rejects.toMatchObject({ code: "ENOENT" });
     expect(
       JSON.parse(await fs.readFile(journalPath, "utf8")).files.map((file: { state: string }) => file.state)
@@ -141,7 +142,8 @@ describe("frozen file transactions", () => {
       },
     };
     expect(await applyFileChanges(changes, settings)).toMatchObject({ status: "applied", journalPath });
-    expect(checks).toBe(3);
+    // Initial, before-write, after-staging and final checks all retain the frozen callback.
+    expect(checks).toBe(4);
     expect(await fs.readFile(path.join(capturedRoot, "first.txt"))).toEqual(first().after);
   });
 

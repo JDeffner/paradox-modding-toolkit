@@ -1,6 +1,6 @@
 /**
  * Translation workflow v2 (rework plan Phase 5): a coverage-driven
- * "translate next" loop — pick a language, then walk its untranslated and
+ * "translate next" loop , pick a language, then walk its untranslated and
  * missing keys one input box at a time. Esc stops the loop; everything else
  * writes straight to the yml (BOM preserved).
  */
@@ -9,7 +9,7 @@ import type { LanguageClient } from "vscode-languageclient/node";
 import { locCoverageRequest, type LocCoverage } from "@px-lsp/protocol/protocol";
 import { samePath, containsPath } from "./commandTargets";
 import type { PxConfig } from "./config";
-import { replaceLocLineValue, upsertNewModLoc } from "./locCommands";
+import { prepareLocalizationWrite } from "./locCommands";
 
 /** "french" (the l_french file suffix) shown as "French" in titles. */
 function displayLanguage(language: string): string {
@@ -45,7 +45,7 @@ export async function translateNextCommand(
     .filter((l) => l.untranslated.length + l.missing.length > 0);
   if (candidates.length === 0) {
     void vscode.window.showInformationMessage(
-      "Paradox Modding Toolkit: localization coverage is complete — nothing to translate."
+      "Paradox Modding Toolkit: localization coverage is complete , nothing to translate."
     );
     return;
   }
@@ -74,55 +74,58 @@ export async function translateNextCommand(
   const langName = displayLanguage(lang.language);
 
   for (const item of lang.untranslated) {
-    const value = await vscode.window.showInputBox({
-      title: `Translate to ${langName} (${done + 1}/${total}) — Esc stops`,
-      // Source text shown for reference, never prefilled as the answer.
-      prompt: `${item.key}${item.value ? ` — source: ${item.value}` : ""} · leave empty to skip`,
-      value: "",
-    });
-    if (value === undefined) {
-      stopped = true;
-      break;
-    }
-    if (item.file !== undefined && item.line !== undefined && value !== "" && value !== item.value) {
-      try {
-        if (!(await replaceLocLineValue(item.file, item.line, item.key, value))) {
-          throw new Error("The localization key changed or was removed. Run Translate Missing Keys again.");
-        }
-        onLocFileChanged(item.file);
-        written++;
-      } catch (err) {
-        void vscode.window.showErrorMessage(
-          `Paradox Modding Toolkit: failed to write ${item.key}: ${String(err)}`
-        );
+    try {
+      const plan = await prepareLocalizationWrite(cfg, async () => [], item.key, {
+        language: lang.language,
+        targetFile: item.file,
+        requireExisting: true,
+      });
+      const value = await vscode.window.showInputBox({
+        title: `Translate to ${langName} (${done + 1}/${total}) , Esc stops`,
+        // Source text shown for reference, never prefilled as the answer.
+        prompt: `${item.key}${item.value ? ` , source: ${item.value}` : ""} · leave empty to skip`,
+        value: "",
+      });
+      if (value === undefined) {
         stopped = true;
         break;
       }
+      if (value !== "" && value !== item.value) {
+        onLocFileChanged(await plan!.apply(value));
+        written++;
+      }
+      done++;
+    } catch (err) {
+      void vscode.window.showErrorMessage(
+        `Paradox Modding Toolkit: failed to write ${item.key}: ${String(err)}`
+      );
+      stopped = true;
+      break;
     }
-    done++;
   }
 
   for (const item of lang.missing) {
     if (stopped || done >= total) break;
-    const value = await vscode.window.showInputBox({
-      title: `Create in ${langName} (${done + 1}/${total}) — Esc stops`,
-      prompt: `${item.key} (missing everywhere) · leave empty to skip`,
-      value: "",
-    });
-    if (value === undefined) break;
-    if (value !== "") {
-      try {
-        const file = await upsertNewModLoc(cfg, item.key, value, lang.language);
+    try {
+      const plan = await prepareLocalizationWrite(cfg, async () => [], item.key, { language: lang.language });
+      const value = await vscode.window.showInputBox({
+        title: `Create in ${langName} (${done + 1}/${total}) , Esc stops`,
+        prompt: `${item.key} (missing everywhere) · leave empty to skip`,
+        value: "",
+      });
+      if (value === undefined) break;
+      if (value !== "") {
+        const file = await plan!.apply(value);
         onLocFileChanged(file);
         written++;
-      } catch (err) {
-        void vscode.window.showErrorMessage(
-          `Paradox Modding Toolkit: failed to create ${item.key}: ${String(err)}`
-        );
-        break;
       }
+      done++;
+    } catch (err) {
+      void vscode.window.showErrorMessage(
+        `Paradox Modding Toolkit: failed to create ${item.key}: ${String(err)}`
+      );
+      break;
     }
-    done++;
   }
 
   if (done > 0) {

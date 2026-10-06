@@ -3,6 +3,7 @@ import * as path from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { URI } from "vscode-uri";
 import { ck3Meta } from "@px-lsp/server/games/ck3/meta";
+import { vic3Meta } from "@px-lsp/server/games/vic3/meta";
 import type { AppToHost, HostToApp } from "../src/webviews/wiki/messages";
 
 interface Watcher {
@@ -18,6 +19,8 @@ const host = vi.hoisted(() => ({
   receive: (_message: AppToHost) => {},
   close: () => {},
   reveal: () => {},
+  execute: vi.fn(),
+  error: vi.fn(),
 }));
 vi.mock("vscode", () => {
   const disposable = { dispose() {} };
@@ -51,6 +54,7 @@ vi.mock("vscode", () => {
       },
     },
     window: {
+      showErrorMessage: host.error,
       createWebviewPanel: () => ({
         visible: true,
         reveal() {},
@@ -76,6 +80,7 @@ vi.mock("vscode", () => {
         },
       }),
     },
+    commands: { executeCommand: host.execute },
   };
 });
 vi.mock("../src/webviews/tabIcons", () => ({ tabIcon: () => undefined }));
@@ -101,6 +106,8 @@ function latest() {
 beforeEach(() => {
   host.posted = [];
   host.watchers = [];
+  host.execute.mockReset();
+  host.error.mockReset();
   const base = path.resolve(".local/testing");
   fs.mkdirSync(base, { recursive: true });
   scratch = fs.mkdtempSync(path.join(base, "wiki-tests-"));
@@ -121,7 +128,13 @@ it("loads all games on ready and replaces changed, deleted and recreated source 
   expect(initial).toMatchObject({
     type: "content",
     hub: expect.arrayContaining([
-      { label: "Launch Options", icon: "play", tip: expect.any(String), target: { page: "launch-options" } },
+      {
+        label: "Launch Options",
+        selectedGame: true,
+        icon: "play",
+        tip: expect.any(String),
+        target: { page: "launch-options" },
+      },
     ]),
   });
   if (initial.type !== "content") throw new Error("Expected content");
@@ -169,4 +182,92 @@ it("rereads on page refresh and reveal, and replaces watchers when resolved path
   fs.writeFileSync(path.join(alternative, ck3Meta.launchOptionsFile!), "-fixture_new_deps");
   WikiPanel.show({} as never, ck3Meta, { ...deps(), gamePath: () => alternative });
   expect(latest()).toContain("-fixture_new_deps");
+});
+
+it("passes a selected game to Examples and rejects unknown game or command messages", async () => {
+  show();
+  host.receive({ type: "run", command: "px.showExamplesWiki", game: "vic3" });
+  await vi.waitFor(() =>
+    expect(host.execute).toHaveBeenCalledWith("px.showExamplesWiki", { gameId: "vic3" })
+  );
+  host.receive({ type: "run", command: "px.showExamplesWiki", game: "missing-game" });
+  host.receive({ type: "run", command: "unrelated.command", game: "ck3" });
+  expect(host.execute).toHaveBeenCalledTimes(1);
+  expect(host.error).toHaveBeenCalledWith(expect.stringContaining("not supported"));
+  host.receive({ type: "run", command: "px.showExamplesWiki" });
+  expect(host.execute).toHaveBeenLastCalledWith("px.showExamplesWiki");
+  host.receive({ type: "ready" });
+  WikiPanel.refresh(vic3Meta);
+  expect(host.posted).toContainEqual({
+    type: "hub",
+    hub: expect.arrayContaining([expect.objectContaining({ label: "Vic3 Mod Report (workspace)" })]),
+  });
+});
+
+it("attaches bundled revisions to owned articles without dating live sources or unsupported placeholders", () => {
+  const date = "2026-01-02T03:04:05+00:00";
+  const entries: [string, string, boolean][] = [
+    ["image-guidelines", "packages/vscode/media/image-guidelines.md", true],
+    ["steam-error-codes", "packages/vscode/media/steam-workshop-error-codes.md", false],
+    ["steam-bbcode", "packages/vscode/media/steam-bbcode.md", false],
+    ["credits", "packages/vscode/src/webviews/credits/credits.ts", false],
+    ["modding-tools", "packages/vscode/src/webviews/wiki/moddingTools.ts", false],
+    ["modding-guides", "packages/vscode/src/webviews/wiki/moddingGuides.ts", false],
+    ["PX1001", "docs/diagnostics/PX1001.md", true],
+  ];
+  for (const [_, source] of entries) {
+    if (!source.endsWith(".md")) continue;
+    const packaged = source.startsWith("docs/")
+      ? source.replace("docs/", "dist/")
+      : source.replace("packages/vscode/", "");
+    const file = path.join(scratch, packaged);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, "# Fixture article\n");
+  }
+  fs.writeFileSync(
+    path.join(scratch, "dist/wiki-revisions.json"),
+    JSON.stringify(
+      Object.fromEntries(
+        entries.map(([_, source, uncommitted]) => [source, { lastEdited: date, uncommitted }])
+      )
+    )
+  );
+  show();
+  host.receive({ type: "ready" });
+  const message = host.posted[0];
+  if (message.type !== "content") throw new Error("Expected content");
+  for (const [id, _, uncommitted] of entries) {
+    const article = message.articles.find((a) => a.id === id && (!a.game || a.game === "ck3"));
+    expect(article?.revision, id).toEqual({ lastEdited: date, uncommitted });
+  }
+  expect(message.articles.filter((a) => a.id === "launch-options").every((a) => !a.revision)).toBe(true);
+  expect(
+    message.articles.filter((a) => a.id === "image-guidelines" && a.game !== "ck3").every((a) => !a.revision)
+  ).toBe(true);
+});
+
+it("loads owned articles with unavailable dates when metadata is missing or invalid", () => {
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    show();
+    host.receive({ type: "ready" });
+    let message = host.posted.at(-1)!;
+    if (message.type !== "content") throw new Error("Expected content");
+    expect(message.articles.find((a) => a.id === "credits")?.revision).toEqual({ uncommitted: false });
+    expect(warning).not.toHaveBeenCalled();
+    fs.mkdirSync(path.join(scratch, "dist"), { recursive: true });
+    fs.writeFileSync(
+      path.join(scratch, "dist/wiki-revisions.json"),
+      JSON.stringify({
+        "packages/vscode/src/webviews/credits/credits.ts": { lastEdited: "invalid", uncommitted: false },
+      })
+    );
+    host.receive({ type: "ready" });
+    message = host.posted.at(-1)!;
+    if (message.type !== "content") throw new Error("Expected content");
+    expect(message.articles.find((a) => a.id === "credits")?.revision).toEqual({ uncommitted: false });
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining("invalid revision"));
+  } finally {
+    warning.mockRestore();
+  }
 });

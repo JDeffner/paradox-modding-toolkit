@@ -19,6 +19,14 @@ interface Editor {
   positionAt(offset: number): { line: number; character: number };
   save(): Promise<boolean>;
 }
+interface Watcher {
+  base: string;
+  pattern: string;
+  disposed: boolean;
+  change?: (uri: URI) => void;
+  create?: (uri: URI) => void;
+  delete?: (uri: URI) => void;
+}
 const ui = vi.hoisted(() => ({
   state: undefined as PatchViewState | undefined,
   experimental: true,
@@ -29,6 +37,9 @@ const ui = vi.hoisted(() => ({
   updates: [] as { key: string; target: number }[],
   rejectEdit: "",
   launcher: null as string | null,
+  watchers: [] as Watcher[],
+  workspaceFolders: [] as { uri: URI }[],
+  editorChanged: undefined as ((event: { document: { uri: URI } }) => void) | undefined,
 }));
 vi.mock("../src/config", async () => ({
   ...(await vi.importActual<typeof import("../src/config")>("../src/config")),
@@ -38,6 +49,12 @@ vi.mock("vscode", () => {
   const disposable = { dispose() {} };
   return {
     Uri: URI,
+    RelativePattern: class {
+      constructor(
+        readonly base: string,
+        readonly pattern: string
+      ) {}
+    },
     ViewColumn: { One: 1 },
     ConfigurationTarget: { Global: 1 },
     DiagnosticSeverity: { Error: 0, Warning: 1 },
@@ -71,6 +88,9 @@ vi.mock("vscode", () => {
       },
       get textDocuments() {
         return ui.documents;
+      },
+      get workspaceFolders() {
+        return ui.workspaceFolders;
       },
       getConfiguration: () => ({
         get: (key: string, fallback: unknown) =>
@@ -124,13 +144,35 @@ vi.mock("vscode", () => {
         return true;
       },
       registerTextDocumentContentProvider: () => disposable,
-      onDidChangeTextDocument: () => disposable,
-      createFileSystemWatcher: () => ({
-        onDidChange: () => disposable,
-        onDidCreate: () => disposable,
-        onDidDelete: () => disposable,
-        dispose() {},
-      }),
+      onDidChangeTextDocument: (callback: typeof ui.editorChanged) => {
+        ui.editorChanged = callback;
+        return disposable;
+      },
+      createFileSystemWatcher: (pattern: { base: string; pattern: string } | string) => {
+        const watcher: Watcher = {
+          base: typeof pattern === "string" ? "" : pattern.base,
+          pattern: typeof pattern === "string" ? pattern : pattern.pattern,
+          disposed: false,
+        };
+        ui.watchers.push(watcher);
+        return {
+          onDidChange: (callback: (uri: URI) => void) => {
+            watcher.change = callback;
+            return disposable;
+          },
+          onDidCreate: (callback: (uri: URI) => void) => {
+            watcher.create = callback;
+            return disposable;
+          },
+          onDidDelete: (callback: (uri: URI) => void) => {
+            watcher.delete = callback;
+            return disposable;
+          },
+          dispose() {
+            watcher.disposed = true;
+          },
+        };
+      },
     },
   };
 });
@@ -142,7 +184,7 @@ vi.mock("../src/webviews/devReload", () => ({
 
 import * as vscode from "vscode";
 import { PatchWorkbench } from "../src/compatch/patches";
-import { readPatchBindings } from "../src/machineSettings";
+import { readPatchBindings, writePatchBindings } from "../src/machineSettings";
 
 const script = "common/decisions/overlap.txt";
 const config = ".px-toolkit/compatibility.json";
@@ -233,6 +275,21 @@ async function prepared() {
 async function editor(root: string, relative: string) {
   return (await vscode.workspace.openTextDocument(URI.file(path.join(root, relative)))) as unknown as Editor;
 }
+function diskEvent(event: "create" | "change" | "delete", uri: URI) {
+  const within = (root: string) => {
+    const relative = path.relative(root, uri.fsPath);
+    return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+  };
+  // VS Code filters filesystem events against the lexical glob before notifying
+  // extensions. String globs additionally require a workspace folder.
+  for (const watcher of ui.watchers) {
+    if (
+      !watcher.disposed &&
+      (watcher.base ? within(watcher.base) : ui.workspaceFolders.some((folder) => within(folder.uri.fsPath)))
+    )
+      watcher[event]?.(uri);
+  }
+}
 
 beforeEach(async () => {
   const parent = path.join(process.cwd(), ".local/testing");
@@ -257,6 +314,9 @@ beforeEach(async () => {
   ui.trusted = true;
   ui.rejectEdit = "";
   ui.launcher = path.join(scratch, "launcher");
+  ui.watchers = [];
+  ui.workspaceFolders = [];
+  ui.editorChanged = undefined;
   ui.folders.mockReset();
 });
 afterEach(async () => {
@@ -584,6 +644,137 @@ describe("maintained patch host", () => {
     expect(state().error).toContain("UTF-8 with BOM");
     expect(await fs.readFile(path.join(output, "descriptor.mod"))).toEqual(before);
     await expect(fs.stat(path.join(output, script))).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it.each(["create", "change", "delete"] as const)(
+    "disables Apply for output %s events through a junction spelling",
+    async (event) => {
+      await prepared();
+      const watcher =
+        ui.watchers.find((item) => !item.disposed && item.base === output) ??
+        ui.watchers.find((item) => !item.disposed);
+      expect(watcher?.pattern).toBe("**/*");
+      const alias = path.join(scratch, "output-alias");
+      await fs.symlink(output, alias, "junction");
+      if (event === "create") await put(output, script, "\uFEFFexternal output after preview\n");
+      // Delete events and missing destination paths resolve through the root alias.
+      const relative = event === "create" ? script : "common/decisions/missing.txt";
+      watcher![event]!(URI.file(path.join(alias, relative)));
+      expect(state().canApply).toBe(false);
+      expect(state().files).toEqual([]);
+      expect(state().needsRefresh).toBe(false);
+      expect(state().status).toContain("Build the patch again");
+      expect(
+        ui.watchers
+          .filter((item) => !item.disposed && item.base)
+          .map((item) => item.base)
+          .sort()
+      ).toEqual([output, ...sources].sort());
+      if (event === "create")
+        expect(await fs.readFile(path.join(output, script), "utf8")).toBe(
+          "\uFEFFexternal output after preview\n"
+        );
+    }
+  );
+
+  it("invalidates source analysis and output buffers through junction aliases", async () => {
+    const bench = await prepared();
+    const alias = path.join(scratch, "source-alias");
+    await fs.symlink(sources[0], alias, "junction");
+    const watcher =
+      ui.watchers.find((item) => !item.disposed && item.base === sources[0]) ??
+      ui.watchers.find((item) => !item.disposed);
+    watcher!.change!(URI.file(path.join(alias, script)));
+    expect(state().canApply).toBe(false);
+    expect(state().needsRefresh).toBe(true);
+    expect(state().status).toContain("Refresh conflicts");
+    await scan(bench);
+    await bench.handle({ type: "prepare" });
+    expect(state().canApply).toBe(true);
+    const outputAlias = path.join(scratch, "output-alias");
+    await fs.symlink(output, outputAlias, "junction");
+    const before = await fs.readFile(path.join(output, "descriptor.mod"));
+    const doc = await editor(outputAlias, "descriptor.mod");
+    doc.text += "\n# unsaved alias document";
+    doc.version++;
+    doc.isDirty = true;
+    const dirtyText = doc.text;
+    ui.editorChanged!({ document: doc });
+    expect(state().canApply).toBe(false);
+    await bench.handle({ type: "prepare" });
+    expect(state().error).toBeUndefined();
+    expect(state().canApply).toBe(true);
+    await bench.handle({ type: "apply" });
+    expect(state().error).toBeUndefined();
+    expect(doc.text).toContain("unsaved alias document");
+    expect(doc.isDirty).toBe(false);
+    expect(await fs.readFile(path.join(output, "descriptor.mod"), "utf8")).toContain(
+      "unsaved alias document"
+    );
+    await bench.handle({ type: "restore" });
+    expect(state().error).toBeUndefined();
+    expect(doc.text).toBe(dirtyText);
+    expect(doc.isDirty).toBe(true);
+    expect(await fs.readFile(path.join(output, "descriptor.mod"))).toEqual(before);
+  });
+
+  it("receives source events filtered through the workspace junction spelling", async () => {
+    await prepared();
+    const alias = path.join(scratch, "source-workspace-alias");
+    await fs.symlink(sources[1], alias, "junction");
+    ui.workspaceFolders = [{ uri: URI.file(alias) }];
+    await put(sources[1], script, "\uFEFFalpha = { upstream = changed }\n");
+    diskEvent("change", URI.file(path.join(alias, script)));
+    expect(state().needsRefresh).toBe(true);
+    expect(state().canPrepare).toBe(false);
+    expect(state().canApply).toBe(false);
+    expect(state().status).toContain("Source content changed. Refresh conflicts before building.");
+  });
+
+  it.each(["create", "change", "delete"] as const)(
+    "invalidates reopened source bindings that use a junction for %s events",
+    async (event) => {
+      const bench = await prepared();
+      const aliasParent = path.join(scratch, "bound-parent-alias");
+      await fs.symlink(scratch, aliasParent, "junction");
+      const alias = path.join(aliasParent, path.basename(sources[1]));
+      const projectId = (await project()).id;
+      const local = readPatchBindings(projectId);
+      const sourceId = Object.entries(local.bindings!.sources).find(([, root]) => root === sources[1])![0];
+      await writePatchBindings(
+        projectId,
+        { ...local.bindings!, sources: { ...local.bindings!.sources, [sourceId]: alias } },
+        local.stamp
+      );
+      await bench.open(URI.file(output));
+      await scan(bench);
+      await bench.handle({ type: "prepare" });
+      expect(state().canApply).toBe(true);
+      const relative = event === "create" ? "common/decisions/new.txt" : script;
+      if (event === "delete") await fs.unlink(path.join(sources[1], relative));
+      else await put(sources[1], relative, "\uFEFFalpha = { upstream = changed }\n");
+      diskEvent(event, URI.file(path.join(alias, relative)));
+      expect(state().needsRefresh).toBe(true);
+      expect(state().canPrepare).toBe(false);
+      expect(state().canApply).toBe(false);
+      expect(state().status).toContain("Source content changed. Refresh conflicts before building.");
+    }
+  );
+
+  it("replaces bound-root watchers on setup changes and disposes them with the workbench", async () => {
+    const bench = await create();
+    const watchers = ui.watchers.filter((watcher) => !watcher.disposed);
+    const source = state().inputs[0];
+    await bench.handle({ type: "remove", id: source.id });
+    expect(watchers.every((watcher) => watcher.disposed)).toBe(true);
+    expect(
+      ui.watchers
+        .filter((watcher) => !watcher.disposed && watcher.base)
+        .map((watcher) => watcher.base)
+        .sort()
+    ).toEqual([output, ...sources.slice(1)].sort());
+    bench.dispose();
+    expect(ui.watchers.every((watcher) => watcher.disposed)).toBe(true);
   });
 
   it.each(["output", "source", "metadata", "dirty-output", "dirty-source"] as const)(

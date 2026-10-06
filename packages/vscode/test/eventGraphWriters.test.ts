@@ -8,6 +8,7 @@ interface Document {
   text: string;
   version: number;
   encoding: string;
+  eol: number;
   getText(): string;
   positionAt(offset: number): number;
   save(): Promise<boolean>;
@@ -16,9 +17,11 @@ const host = vi.hoisted(() => ({
   documents: new Map<string, Document>(),
   save: "ok" as "ok" | "false" | "throw",
   rejectEdit: false,
+  newDocumentEol: 1,
   applyEdit: vi.fn(),
 }));
 vi.mock("vscode", () => ({
+  EndOfLine: { LF: 1, CRLF: 2 },
   Uri: { file: (fsPath: string) => ({ fsPath }) },
   Range: class {
     constructor(
@@ -42,6 +45,7 @@ vi.mock("vscode", () => ({
           text: disk.replace(/^\uFEFF/, ""),
           version: 1,
           encoding: disk.startsWith("\uFEFF") ? "utf8bom" : "utf8",
+          eol: disk.includes("\r\n") ? 2 : disk.includes("\n") ? 1 : host.newDocumentEol,
           getText() {
             return this.text;
           },
@@ -77,6 +81,7 @@ beforeEach(() => {
   writers = new EventGraphWriters();
   host.save = "ok";
   host.rejectEdit = false;
+  host.newDocumentEol = 1;
   host.applyEdit
     .mockReset()
     .mockImplementation(
@@ -86,7 +91,8 @@ beforeEach(() => {
         if (host.rejectEdit) return false;
         for (const change of edit.changes) {
           const doc = host.documents.get(change.uri.fsPath)!;
-          doc.text = doc.text.slice(0, change.range.start) + change.text + doc.text.slice(change.range.end);
+          const replacement = change.text.replace(/\r\n|\n/g, doc.eol === 2 ? "\r\n" : "\n");
+          doc.text = doc.text.slice(0, change.range.start) + replacement + doc.text.slice(change.range.end);
           doc.version++;
         }
         return true;
@@ -104,6 +110,7 @@ async function dirty(text: string) {
   await vscode.workspace.openTextDocument(vscode.Uri.file(file));
   const document = host.documents.get(file)!;
   document.text = text;
+  document.eol = text.includes("\r\n") ? 2 : 1;
   document.version++;
 }
 function saved(): string {
@@ -150,6 +157,64 @@ describe("Event Graph script writers", () => {
   it("creates a BOM file starting with its namespace", async () => {
     await create();
     expect(saved().startsWith("namespace = sample\n\nsample.2 = {")).toBe(true);
+  });
+
+  it("retries localization for a native CRLF new document without inserting a duplicate event", async () => {
+    host.newDocumentEol = 2;
+    const finish = vi.fn(noop).mockRejectedValueOnce(new Error("Loc save failed"));
+    await expect(create(finish)).rejects.toThrow("Loc save failed");
+    const partial = fs.readFileSync(file);
+    await create(finish);
+    expect(fs.readFileSync(file)).toEqual(partial);
+    expect(saved()).toMatch(/^namespace = sample\r\n\r\nsample\.2 = \{/);
+    expect(saved()).not.toMatch(/(?<!\r)\n/);
+    expect(saved().match(/sample\.2 = \{/g)).toHaveLength(1);
+    expect(host.applyEdit).toHaveBeenCalledTimes(1);
+    expect(finish).toHaveBeenCalledTimes(5);
+  });
+
+  it("retries a failed native CRLF new document save without inserting a duplicate event", async () => {
+    host.newDocumentEol = 2;
+    host.save = "false";
+    await expect(create()).rejects.toThrow("could not be saved");
+    expect(fs.readFileSync(file)).toEqual(Buffer.alloc(0));
+    host.save = "ok";
+    await create();
+    expect(saved()).toMatch(/^namespace = sample\r\n/);
+    expect(saved().match(/sample\.2 = \{/g)).toHaveLength(1);
+  });
+
+  it.each(["event", "option"] as const)(
+    "retries a native CRLF single-line %s destination without inserting twice",
+    async (kind) => {
+      host.newDocumentEol = 2;
+      seed(kind === "event" ? "namespace = sample" : "namespace = sample sample.1 = {}");
+      const finish = vi.fn(noop).mockRejectedValueOnce(new Error("Loc save failed"));
+      const write = () =>
+        kind === "event" ? create(finish) : writers.addOption("sample.1", file, 0, finish);
+      await expect(write()).rejects.toThrow("Loc save failed");
+      const partial = fs.readFileSync(file);
+      await write();
+      expect(fs.readFileSync(file)).toEqual(partial);
+      expect(saved()).not.toMatch(/(?<!\r)\n/);
+      expect(saved().match(kind === "event" ? /sample\.2 = \{/g : /name = sample\.1\.a/g)).toHaveLength(1);
+      expect(host.applyEdit).toHaveBeenCalledTimes(1);
+    }
+  );
+
+  it("rejects changed native CRLF recovery text and preserves the partial event bytes", async () => {
+    host.newDocumentEol = 2;
+    const finish = vi.fn(noop).mockRejectedValueOnce(new Error("Loc save failed"));
+    await expect(create(finish)).rejects.toThrow("Loc save failed");
+    const partial = fs.readFileSync(file);
+    const document = host.documents.get(file)!;
+    await dirty(document.text + "# user's unsaved work\r\n");
+    const changed = document.text;
+    await expect(create(finish)).rejects.toThrow("changed after an incomplete write");
+    expect(document.text).toBe(changed);
+    expect(fs.readFileSync(file)).toEqual(partial);
+    expect(host.applyEdit).toHaveBeenCalledTimes(1);
+    expect(finish).toHaveBeenCalledTimes(1);
   });
 
   it("adds a missing namespace without deleting existing comments or events", async () => {

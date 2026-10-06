@@ -525,7 +525,7 @@ export interface EventDetail {
 
 /**
  * Request: the searchable catalog behind the Examples Wiki;
- * `null` -> {@link ExampleWikiIndex}.
+ * `null` or {@link ExampleWikiParams} -> {@link ExampleWikiIndex}.
  *
  * One compact row per name the server knows about, so a client can filter and
  * rank the whole vocabulary without asking again. Everything expensive (the
@@ -533,6 +533,20 @@ export interface EventDetail {
  * {@link exampleWikiEntryRequest}.
  */
 export const exampleWikiRequest = "paradox/exampleWiki";
+
+/** Read-only game references, without changing the server's workspace game. */
+export interface ExampleWikiContext {
+  gameId: string;
+  gamePath?: string | null;
+  logsPath?: string | null;
+  locLanguage?: string;
+}
+
+export interface ExampleWikiParams {
+  context?: ExampleWikiContext;
+  /** Reread this reference context after new dumps or game files arrive. */
+  refresh?: boolean;
+}
 
 /**
  * What an Examples Wiki row is. The first four are engine tokens from
@@ -592,6 +606,9 @@ export interface ExampleWikiEntry {
 }
 
 export interface ExampleWikiIndex {
+  /** Identity of the reference being read. Optional for older servers. */
+  gameId?: string;
+  gameName?: string;
   /** Every row, most-used first. */
   entries: ExampleWikiEntry[];
   /** Plain sentences naming where the rows came from, for an About line. */
@@ -613,6 +630,7 @@ export const exampleWikiEntryRequest = "paradox/exampleWikiEntry";
 export interface ExampleWikiEntryParams {
   name: string;
   kind: ExampleWikiKind;
+  context?: ExampleWikiContext;
 }
 
 /** One place in the game or mod files that uses the name. */

@@ -143,10 +143,14 @@ export interface LocalizationWriteContext {
   sourcePath?: string;
   relatedKeys?: string[];
   fallbackPath?: string;
+  /** Source-derived fallback for new keys; overrides use the policy's replace destination. */
+  newKeyFallbackPath?: string;
   /** Explicit user selection or a previously resolved preview destination. */
   targetFile?: string;
   language?: string;
   override?: boolean;
+  /** Coverage-driven edits must not recreate an entry removed before the prompt. */
+  requireExisting?: boolean;
 }
 
 export interface LocalizationWritePlan {
@@ -190,10 +194,17 @@ export async function prepareLocalizationWrite(
   const matchingRoot = roots.find((folder) => folder.startsWith(`${sourceStage}/`));
   if (matchingRoot) roots.splice(0, 0, ...roots.splice(roots.indexOf(matchingRoot), 1));
   const subject = sourcePath?.split("/").slice(-2, -1)[0] ?? "mod";
-  const fallback = context.fallbackPath
-    ? path.isAbsolute(context.fallbackPath)
-      ? relative(root, context.fallbackPath)
-      : context.fallbackPath
+  const override =
+    context.override ??
+    defs.some(
+      (def) =>
+        def.source === "vanilla" || (cfg.parentPaths ?? []).some((parent) => containsPath(parent, def.file))
+    );
+  const fallbackPath = context.fallbackPath ?? (!override ? context.newKeyFallbackPath : undefined);
+  const fallback = fallbackPath
+    ? path.isAbsolute(fallbackPath)
+      ? relative(root, fallbackPath)
+      : fallbackPath
     : undefined;
   const suggestion = suggestLocalizationTarget({
     key,
@@ -204,12 +215,7 @@ export async function prepareLocalizationWrite(
     sourcePath,
     relatedKeys: context.relatedKeys,
     subject,
-    override:
-      context.override ??
-      defs.some(
-        (def) =>
-          def.source === "vanilla" || (cfg.parentPaths ?? []).some((parent) => containsPath(parent, def.file))
-      ),
+    override,
     fallbackPath: fallback,
   });
   let file = context.targetFile;
@@ -240,6 +246,8 @@ export async function prepareLocalizationWrite(
   // Validate before asking the user for text or creating any files.
   upsertLocalizationText(original, language, key, "", project.defaults.entryVersion);
   const current = locEntry(original.replace(/^\uFEFF/, "").split(/\r?\n/), key)?.parts[2];
+  if (context.requireExisting && current === undefined)
+    throw new Error("The localization key changed or was removed. Run Translate Missing Keys again.");
   const targetFile = file;
   return {
     file: targetFile,

@@ -1,9 +1,11 @@
 import * as fs from "node:fs";
+import { EndOfLine } from "vscode";
 import { parseScript } from "@px-lsp/server/parser";
 import { readDocument, writeDocument, type DocumentSnapshot } from "./documentWrite";
 
 const bodyText = (text: string): string => text.replace(/^\uFEFF/, "");
-const eolFor = (text: string): string => (text.includes("\r\n") ? "\r\n" : "\n");
+const eolFor = (text: string, native: EndOfLine): string =>
+  text.includes("\r\n") ? "\r\n" : text.includes("\n") ? "\n" : native === EndOfLine.CRLF ? "\r\n" : "\n";
 
 function namespaceFor(id: string): string {
   if (!/^[A-Za-z0-9_-]+\.\d+$/.test(id)) throw new Error("Use an event id in namespace.number format");
@@ -76,7 +78,7 @@ export class EventGraphWriters {
           throw new Error(`Option ${key} already exists`);
         const close = block.closeBrace;
         if (close === null) throw new Error(`Event ${id} has no closing brace`);
-        const eol = eolFor(text);
+        const eol = eolFor(text, snapshot.document.eol);
         const closeLine = text.lastIndexOf("\n", close - 1) + 1;
         const keyLine = text.lastIndexOf("\n", event.key.range.start - 1) + 1;
         const indent = /^\s*$/.test(text.slice(keyLine, event.key.range.start))
@@ -127,7 +129,7 @@ export class EventGraphWriters {
           )
         )
           throw new Error(`The event file must have one namespace = ${namespace} header`);
-        const eol = eolFor(text);
+        const eol = eolFor(text, snapshot.document.eol);
         if (!headers.length) text = `namespace = ${namespace}${eol}${eol}${text}`;
         else if (statements[0] !== headers[0])
           throw new Error("The event file must start with its namespace header");

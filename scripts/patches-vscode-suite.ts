@@ -148,6 +148,7 @@ async function checks(): Promise<void> {
       if (attempt === 99) throw new Error("Create patch folder picker did not appear");
       await pause(100);
     }
+    await ui.sendWorkbench("Page.bringToFront", {});
     await ui.evalWorkbench(
       "(()=>{const input=document.querySelector('.quick-input-widget input');input.focus();input.select();})()"
     );

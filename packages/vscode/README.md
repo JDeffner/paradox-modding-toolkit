@@ -21,13 +21,15 @@ For Crusader Kings III, Victoria 3 and Europa Universalis V.
 2. Run **Paradox: Run Setup & Health Check**. Check the detected game, mod and data paths. CK3 and Victoria 3 include vocabulary snapshots; EU5 needs your own `script_docs` dump.
 3. Open a script file. Completion offers engine words and indexed definitions; hover explains the word under the cursor. The Project panel opens the visual tools and publishing commands. Use **Paradox: Validate Mod** from the Command Palette to check your mod.
 
-New to modding? Follow [Your first CK3 mod](https://github.com/JDeffner/paradox-modding-toolkit/wiki/First-Mod). For an existing project, use [Getting Started](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Getting-Started). If setup does not work, start with [Troubleshooting](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Troubleshooting).
+New to modding? Start with [Getting Started](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Getting-Started). The [VS Code Setup Guide](https://github.com/JDeffner/paradox-modding-toolkit/wiki/VS-Code-Setup-Guide) shows installation, game setup and a first edit.
 
 This is a beta. Check generated content in the game before publishing it. After game patches, regenerate your dumps to match the installed version.
 
+The upcoming 0.6.0 update is prepared as the 0.5.5 prerelease. Its changes are listed under **0.6.0** in the [changelog](CHANGELOG.md).
+
 ## At the cursor
 
-- **Toolkit Settings:** open Project > Settings > All settings for one searchable catalogue. Each setting labels its save destination and active source. Use Details to choose another destination; question-mark help appears on hover or keyboard focus. Drafts survive context changes, and stale saves leave newer values intact.
+- **Toolkit Settings:** open Project > Settings > All settings for one searchable catalogue. Each setting shows its save destination and active source, with destination controls on the row. Question-mark help appears on hover or keyboard focus. Drafts survive context changes, and stale saves leave newer values intact.
 
 - **Live editing:** suggestions, navigation and rename follow unsaved edits. Problems update when referenced events or required translations change in another file.
 
@@ -38,9 +40,9 @@ This is a beta. Check generated content in the game before publishing it. After 
 - **Graphics assets:** CK3 and Victoria 3 `.asset` indexing, context-specific completion, reference navigation and DDS previews. Use `px.indexAssets` to toggle scanning.
 - **Section folding:** `### Title` or longer hash headings fold through the next heading or the end of the file, across closing braces.
 - **Validation:** instant structural checks for malformed files, encodings and folder mistakes. CK3 and Victoria 3 also integrate tiger for deeper validation.
-- **Localization:** coverage, inlay hints, quick fixes and workflows for adding languages or making a translation mod.
+- **Localization:** coverage, inlay hints, quick fixes and workflows for adding languages or making a translation mod. File and folder actions reuse owned entries, follow related localization files and offer mod-specific author defaults.
 - **Project settings:** shared authoring rules travel with `.px-toolkit/project.json`; personal paths stay in your VS Code User profile. Both are available in the same settings catalogue. Existing settings upgrade with conflict reporting and source preservation.
-- **Mod Compatibility (experimental):** exact game-version routes, reusable compatibility notes and migration recipes, required choices, reviewed changes and recovery. Includes CK3 faith/rite and portrait mask mip migrations. Enable `px.experimentalFeatures` to try it; target gameplay remains unverified.
+- **Mod Compatibility (experimental):** exact game-version routes, reusable compatibility notes and migration recipes, required choices, reviewed changes and recovery. Includes CK3 faith/rite and portrait mask mip migrations. A custom faith and mask fixture passed CK3 1.20.0.3 playtesting, including a separate clothes-gene merge; this does not establish compatibility for other mods. Enable `px.experimentalFeatures` to try it.
 - **Compatibility Patch (experimental):** combine an ordered set of CK3 mods, save contribution and field decisions, and review affected choices after updates. Build a separate patch with guarded writes, preservation of manual output edits and recovery. Unsupported work stays visible. Enable `px.experimentalFeatures` to try it.
 - **Context actions:** right-click files, definitions, overrides and localization references to open, compare or edit the selected source. Project shows the current mod, with **All Tools** and **Customize** in its title bar.
 - **BBCode preview:** choose **BBCode Preview** from VS Code's editor selector or open it beside the source. Preview includes unsaved edits and preserves the BBCode language mode.
@@ -63,17 +65,17 @@ Convert batches of DDS, PNG, JPEG and WebP images from Utils or file context men
 
 DDS conversion offers full or custom mip chains and a reference-matching option for format and mip count. Inspect stored mip levels in the viewer and export the displayed level. Conversion rejects texture arrays, cubemaps and volume textures instead of exporting only one surface.
 
-In the Workshop panel, **Create legacy version** makes a separate listing for a game version. Its first upload uses the current project files. Later uploads change Workshop information only, so keep a separate project if you need to update legacy mod files. **Stop waiting** ends a stalled wait without retrying the upload; check Steam before trying again if the result is uncertain.
+In the Workshop panel, **Create legacy version** makes a separate listing for a game version. Its first upload can use the current project files or a saved mod ZIP. Later uploads change Workshop information only, so keep a separate project if you need to update legacy mod files. **Stop waiting** ends a stalled wait without retrying the upload; check Steam before trying again if the result is uncertain.
 
 ## Choose your workflow
 
 | Task | Guide |
 |---|---|
-| Create a mod and test it in CK3 | [First Mod](https://github.com/JDeffner/paradox-modding-toolkit/wiki/First-Mod) |
+| Create a mod and test it in CK3 | [Getting Started](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Getting-Started) |
 | Work on a submod, total conversion or translation | [Multi Mod and Translation](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Multi-Mod-and-Translation) |
 | Design content or interfaces | [Content Creators](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Content-Creators), [GUI Editor](https://github.com/JDeffner/paradox-modding-toolkit/wiki/GUI-Editor) |
 | Publish or update a mod | [Steam Workshop](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Steam-Workshop) |
-| Tune settings or diagnose a problem | [Configuration](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Configuration), [Troubleshooting](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Troubleshooting) |
+| Tune settings or diagnose a problem | [Configuration](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Configuration), [VS Code Setup Guide](https://github.com/JDeffner/paradox-modding-toolkit/wiki/VS-Code-Setup-Guide) |
 
 ## Game and client support
 
@@ -85,7 +87,7 @@ In the Workshop panel, **Create legacy version** makes a separate listing for a 
 | CK3 content creators | Yes | No | No |
 | Coat-of-arms editor | Designer | Flag Builder | Flag Builder |
 
-EU5's schema is community-sourced and has not been verified against a live install. Read [Supported Games](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Supported-Games) for the full matrix and dump commands, and [Platform Support](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Platform-Support) for local, remote and non-Steam setups.
+EU5's schema is community-sourced and has not been verified against a live install. Read [Supported Games](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Supported-Games) for the full matrix and dump commands.
 
 The standalone language server is available as `@px-lsp/server`, with a tested [Neovim setup](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Outside-VS-Code). Zed and Helix integrations are currently unverified. Application authors can use the [Embedding guide](https://github.com/JDeffner/paradox-modding-toolkit/wiki/Embedding), including the browser library. Tiger and the visual tools remain VS Code features.
 

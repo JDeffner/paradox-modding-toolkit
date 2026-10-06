@@ -37,7 +37,9 @@ Open **Start Here** in the PX Toolkit sidebar to create a mod or find an existin
 
 ## What you get
 
-Open **Toolkit Settings** from Project > Settings > All settings to search, filter and reset settings, with an explicit choice of save scope. CK3 character-history edits preserve source formatting and comments. DDS conversion can match a reference texture or write a custom mip chain. Workshop legacy listings keep a separate item for each saved game version; their first upload uses the current project files, and later uploads change listing information only.
+The upcoming 0.6.0 update is prepared as the 0.5.5 prerelease. See the [preview release notes](docs/release/0.5.5.md) for its scope and validation limits.
+
+Open **Toolkit Settings** from Project > Settings > All settings to search, filter and reset settings, with an explicit choice of save scope. CK3 character-history edits preserve source formatting and comments. DDS conversion can match a reference texture or write a custom mip chain. Workshop legacy listings keep a separate item for each saved game version; their first upload can use the current project files or a saved mod ZIP, and later uploads change listing information only.
 
 Shared mod rules live in `.px-toolkit/project.json`; personal game and workspace paths stay in the VS Code User profile. Older settings upgrade on trusted startup, preserving legacy files and reporting conflicts. The optional **Mod Compatibility** workflow uses exact game-version routes, reusable notes and recipes, human decisions, reviewed edits and recovery. CK3 faith/rite and portrait mask migrations are experimental and off by default. They do not establish target-game compatibility.
 
@@ -82,8 +84,7 @@ about itself, ranked by real usage count.*
 
 ![Wiki hub](packages/vscode/media/screenshots/wiki-hub.png)
 
-*The wiki hub collects the reference views on one page: Examples Wiki, format
-docs, image guidelines, diagnostics, mod report and credits.*
+*The Wiki hub opens references and examples for the selected game, installed launch-option documentation where available, CK3 image guidelines, diagnostics, the workspace mod report and credits.*
 
 - **Completion that knows the grammar and the scope.** Key positions offer
   triggers and effects, value positions offer traits, events, on_actions and loc
@@ -193,6 +194,8 @@ a separate server process, and everything game-specific sits behind one
 | [`packages/server`](packages/server) | [`@px-lsp/server`](https://www.npmjs.com/package/@px-lsp/server) on npm: parser, index, scope engine, features, per-game profiles, bundled data. Speaks node-ipc and `--stdio`. |
 | [`packages/protocol`](packages/protocol) | [`@px-lsp/protocol`](https://www.npmjs.com/package/@px-lsp/protocol) on npm: the wire contract and the helpers shared between server and clients. |
 
+The `pxtk` command and local MCP tools are maintained in the separate `paradox-toolkit-cli` project, which consumes the shared server and protocol packages.
+
 ## Development
 
 ```bash
@@ -238,11 +241,6 @@ redistributed.
 
 PNG conversion bundles [pngjs](https://github.com/pngjs/pngjs) (MIT) to preserve all mask channels. Its license is included in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 
-The standalone CLI also bundles these libraries and their transitive dependencies. Its build includes the actual license texts in `dist/licenses/`.
-
 | Source | Use | License |
 |---|---|---|
-| [MCP TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk) | Local stdio MCP tools | MIT |
-| [Zod](https://github.com/colinhacks/zod) | Configuration and tool-input validation | MIT |
-| [Sharp](https://github.com/lovell/sharp) | CLI image decoding, encoding and resizing; installed native dependency | Apache-2.0; libvips LGPL-2.1-or-later |
 | [VS Code language-server libraries](https://github.com/microsoft/vscode-languageserver-node) | LSP transport and bundled server | MIT |

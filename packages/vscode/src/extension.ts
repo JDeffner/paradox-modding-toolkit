@@ -33,10 +33,15 @@ import {
   CREATOR_COMMANDS,
   type DefinitionTarget,
 } from "./commandTargets";
-import { modRootFor, allWorkspaceModCandidates, readConfig, gameDataDir, type PxConfig } from "./config";
+import {
+  modRootFor,
+  allWorkspaceModCandidates,
+  readConfig,
+  referenceGamePaths,
+  type PxConfig,
+} from "./config";
 import { migrateLegacyMachineSettings, readMachineSetting, writeMachineSetting } from "./machineSettings";
 import { migrateProjectStorage, type StorageUpgradeReport } from "./storageUpgrade";
-import { findGameFolder } from "./steamDetect";
 import { findStrayCalendar } from "./calendarSettingsCheck";
 import { writeCalendarFile } from "@px-lsp/protocol/calendarFile";
 import { EventGraphWriters } from "./eventGraphWriters";
@@ -164,6 +169,7 @@ import {
   type ExampleWikiDetail,
   type ExampleWikiEntryParams,
   type ExampleWikiIndex,
+  type ExampleWikiContext,
   dynastyTreeRequest,
   eventVocabularyRequest,
   guiTreeRequest,
@@ -763,7 +769,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (!e.affectsConfiguration("px")) return;
       const oldRoots = watchedRoots(cfg);
       cfg = resolveConfig();
-      WikiPanel.refresh();
+      WikiPanel.refresh(metaFor(cfg.gameId));
       tiger.resetErrorNotice();
       tiger.refreshStatus();
       updateStatus();
@@ -784,7 +790,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
       cfg = resolveConfig();
-      WikiPanel.refresh();
+      WikiPanel.refresh(metaFor(cfg.gameId));
       updateStatus();
       // Same trigger the PX item's visibility uses: a folder change can turn
       // the workspace into (or out of) a mod workspace, and tiger's gate
@@ -1056,8 +1062,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     return {
       modReport: () => buildModReport(lc, views.focusRoot()),
       gamePath: (meta) => {
-        const dir = (meta.id === cfg.gameId ? cfg.gamePath : null) ?? findGameFolder(meta.name);
-        return dir ? (gameDataDir(dir) ?? dir) : null;
+        return referenceGamePaths(meta, cfg).gamePath;
       },
     };
   }
@@ -1324,12 +1329,42 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     // The argument is optional: the palette entry and the Project panel open
     // the catalog, a hover link names the article it wants.
     vscode.commands.registerCommand("px.showExamplesWiki", (arg?: unknown) => {
+      const selected =
+        typeof arg === "object" && arg !== null ? (arg as { gameId?: unknown }).gameId : undefined;
+      if (
+        typeof arg === "object" &&
+        arg !== null &&
+        Object.hasOwn(arg, "gameId") &&
+        (typeof selected !== "string" || !Object.hasOwn(GAME_METAS, selected))
+      ) {
+        void vscode.window.showErrorMessage("Examples Wiki: the requested reference game is not supported.");
+        return;
+      }
+      const meta =
+        typeof selected === "string" && Object.hasOwn(GAME_METAS, selected)
+          ? GAME_METAS[selected]
+          : metaFor(cfg.gameId);
+      const reference: ExampleWikiContext | undefined =
+        meta.id !== cfg.gameId
+          ? { gameId: meta.id, ...referenceGamePaths(meta, cfg), locLanguage: cfg.locLanguage }
+          : undefined;
       ExampleWikiPanel.show(
         context,
         {
-          fetchIndex: () => lc.sendRequest<ExampleWikiIndex>(exampleWikiRequest, null),
+          gameId: meta.id,
+          gameName: meta.name,
+          shortName: meta.shortName,
+          contextKey: JSON.stringify(reference ?? [cfg.gameId, cfg.gamePath, cfg.logsPath, cfg.locLanguage]),
+          fetchIndex: (refresh) =>
+            lc.sendRequest<ExampleWikiIndex>(
+              exampleWikiRequest,
+              reference ? { context: reference, refresh } : null
+            ),
           fetchEntry: (params: ExampleWikiEntryParams) =>
-            lc.sendRequest<ExampleWikiDetail | null>(exampleWikiEntryRequest, params),
+            lc.sendRequest<ExampleWikiDetail | null>(exampleWikiEntryRequest, {
+              ...params,
+              ...(reference ? { context: reference } : {}),
+            }),
         },
         exampleWikiTarget(arg)
       );

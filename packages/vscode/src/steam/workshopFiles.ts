@@ -314,7 +314,7 @@ export function readPreviews(workshopDir: string): Previews | null {
   const byName = names
     .filter((n) => PREVIEW_EXTS.has(path.extname(n).toLowerCase()))
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-  const order = readLines(path.join(dir, ORDER_FILE)).filter((n) => byName.includes(n));
+  const order = [...new Set(readLines(path.join(dir, ORDER_FILE)).filter((n) => byName.includes(n)))];
   const images = [...order, ...byName.filter((n) => !order.includes(n))].map((n) => path.join(dir, n));
   return { images, videos: readLines(path.join(dir, VIDEOS_FILE)) };
 }

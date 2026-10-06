@@ -19,6 +19,18 @@ const DEF_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 export const EVENT_ID = /^[A-Za-z0-9_-]+\.\d+$/;
 const TITLE_KEY = /^[ekdcb]_[A-Za-z0-9_-]+$/;
 
+/** Database declarations and semantic spans share the profile's entry-mode grammar. */
+export function normalizeDeclarationName(text: string): {
+  name: string;
+  offset: number;
+  entryMode?: string;
+} | null {
+  const entryMode = activeProfile().entryModes?.find((mode) => text.startsWith(`${mode}:`));
+  const offset = entryMode ? entryMode.length + 1 : 0;
+  const name = text.slice(offset);
+  return DEF_NAME.test(name) ? { name, offset, ...(entryMode ? { entryMode } : {}) } : null;
+}
+
 /** Schema markers distinguish databases that share a folder across game versions. */
 export function topLevelDefinitionKind(entry: SchemaEntry, stmt: Statement): string {
   const rule = entry.kindByField;
@@ -123,11 +135,6 @@ export function extractDefinitionsParsed(
   // `alias = { a b }` (loc [Concept] links). Deduped per file.
   const seenInnerNames = new Set<string>();
 
-  // Database entry modes (`REPLACE:key = { ... }`), for games whose profile
-  // declares them: index under the bare name, keep the mode on the Definition.
-  const entryModes = activeProfile().entryModes;
-  const modePrefix = entryModes?.length ? new RegExp(`^(${entryModes.join("|")}):`) : null;
-
   switch (extraction) {
     case "named-block":
       for (const stmt of root.statements) {
@@ -144,15 +151,10 @@ export function extractDefinitionsParsed(
       for (const stmt of root.statements) {
         if (stmt.kind !== "assignment" || stmt.key.quoted) continue;
         if (stmt.op !== "=" && stmt.op !== "?=") continue;
-        let name = stmt.key.text;
-        let entryMode: string | undefined;
-        const mode = modePrefix?.exec(name);
-        if (mode) {
-          entryMode = mode[1];
-          name = name.slice(mode[0].length);
-        }
-        if (!DEF_NAME.test(name) || name === "namespace") continue;
-        push(name, stmt.key.range.start, undefined, topLevelDefinitionKind(entry, stmt));
+        const declaration = normalizeDeclarationName(stmt.key.text);
+        if (!declaration || declaration.name === "namespace") continue;
+        const { name, entryMode, offset } = declaration;
+        push(name, stmt.key.range.start + offset, undefined, topLevelDefinitionKind(entry, stmt));
         if (entryMode) defs[defs.length - 1].entryMode = entryMode;
         if (harvestParams) {
           const body = content.slice(stmt.range.start, stmt.range.end);

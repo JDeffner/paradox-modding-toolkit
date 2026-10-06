@@ -1,85 +1,83 @@
 # Changelog
 
-## Unreleased
+## 0.6.0 (upcoming; preview 0.5.5)
 
-- Recognize Crozier's standalone laws and law groups in indexing, navigation and semantic colors while retaining older nested law definitions. Check installed GUI and texture corpora against their actual files and DDS headers instead of older game-patch counts.
+Toolkit 0.5.5 is the opt-in prerelease of the upcoming 0.6.0 update. These changes cover all work since the published 0.5.0 release, including the unpublished 0.5.2 draft. Compatch features remain experimental and off by default.
 
-- Preserve unsaved text, comments, operators and neighboring statements in Event Graph saves. Reject stale forms, read-only sources, duplicate events and malformed destinations. Report failed edits or saves, keep queued options in order, and retry incomplete localization without overwriting keys already saved.
-- Give new game-update Compatch sessions a separate Result folder. Preserve original inputs and existing Result edits, copy the complete mod, and retain recovery checks for legacy in-place sessions.
+### Game references and script editing
 
-- Add standalone pxtk preparation commands for scaffolds, localization, formatting, game logs and images. The editor and CLI use the same profile scaffold renderer.
+- Refresh bundled CK3 script documentation and GUI data types for Crozier 1.20.0.2, generated with no mods enabled. Index standalone faiths, rites, tenets, laws and law groups while retaining older nested definitions.
+- Distinguish definitions, variables, scope chains, conditions and actions with bold declarations and built-in theme colors. Preserve user color overrides and identify data objects and functions inside GUI and localization expressions.
+- Provide completion, hover and signature help across multiline GUI bindings. Correct weighted reference colors, EU5 entry-mode declaration colors and saved-scope prefix colors during indexing.
+- Make Wiki game selection update Examples Wiki labels, search and reference data in an already-open panel. Keep the workspace game unchanged and prevent delayed replies from restoring the previous game's content. Identify workspace-only reports and CK3 image guidance.
+- Add Wiki > Launch Options from CK3's installed `_commandline_options.info`. Refresh it when the source or game path changes, and show when the source is unavailable.
+- Show automatic last-edited dates on Toolkit Wiki articles from their source history. Identify uncommitted changes and unavailable dates without using the build or installation time.
+- Add vanilla Explorer actions to copy a file into the focused mod at its game-relative path, or create a selected folder path and its parents. Preserve existing files and offer opening or comparison actions.
+- Keep the total Workspace Mods count visible and all mods reachable in the bounded list with a mouse or keyboard. Use the selected mod's private coat-of-arms library path in the designer and library picker.
+- Refresh scope annotations after game data, definitions or schema context changes without requiring another edit. Keep release asset checks from reading an unfinished index.
 
-- Add the separate `pxtk` CLI, local MCP tools, and a portable skill/plugin for research and validation without VS Code. Share game discovery and Tiger configuration/process handling with the editor.
-- Report malformed Tiger output and process failures as validation failures. Bound validation time and output, and stop a run when a declared dependency descriptor is missing instead of silently dropping it.
+### Localization and saved edits
 
-- Fix saving personal Workshop changelog defaults and show the shared mod override and reset fallback correctly.
-- Hide migration cancellation once journaled Apply or Restore writes begin, and finish recovery and route bookkeeping. When Restore needs to remove an unchanged generated file that is open, explain that it must first be closed.
-- Keep all Toolkit Settings in one searchable catalogue, with labels for each setting's save destination and active source. Choose a mod context without hiding settings, edit destinations per row, and preserve drafts across contexts and late replies. Save drafts for the same storage file together without invalidating one another. Question-mark help uses hover and keyboard tooltips; **Details** opens longer explanations.
-- Use the selected mod's private coat-of-arms library path in the designer and its library picker.
+- Add Create, Edit and Override Localization actions for keys. Follow related entries, source files and established layouts, including replace folders. Configure per-mod language, file templates and entry styles with Configure Localization Defaults.
+- Share localization destination selection and validation across creators, scaffolds and bare-LSP missing-key actions. Respect client edit capabilities, reuse one localization scan per request, preserve current buffers and explain ambiguous or invalid destinations.
+- Preserve unsaved text, comments, operators and neighboring statements in Event Graph saves. Open the exact source line from nodes, inspector fields and simulation links. Reject stale forms, read-only sources, duplicate events and malformed destinations.
+- Report failed Event Graph edits or saves, keep queued options in order and retry incomplete localization without overwriting keys already saved. Use native editor line endings for new files so retries do not duplicate events or options.
+- Preserve character-history comments, spacing, quotes, trait groups and detailed death blocks in the Dynasty Tree. Add death-reason suggestions, per-field quotation choices and project defaults, with grouped output for new characters.
+- Read unsaved character text, retain drafts after failed saves and keep dynasty names in their saved mod. Report failed creator saves and make interrupted dynasty undo safe to resume.
+- Allow creator and localization writes in a selected second workspace mod. Protect vanilla, reference mods and linked folders that escape the editable mod. Preserve script encoding and put new creator localization overrides in replace folders.
+- Preserve unsaved sources and unrelated content in flags, New Content, translation merges and exports, and calendar generation. Reject stale translation prompts, mismatched localization headers and defaults changed since preview.
+- Stop Translate Missing Keys completely on cancellation or write failure, with the progress summary retained. Keep localization ownership stable when Windows editor and disk paths differ in drive-letter casing.
 
-- Add experimental **Compatibility Patch** for ordered mod sets. Save contribution, field and manual decisions with the patch, reopen affected choices after source changes, and keep local folders in User settings. Review generated files, preserve independent output edits with three-way updates, and restore journaled writes. Unsupported work remains explicit. The feature is off by default.
-- Keep localization ownership stable when Windows editor URIs and disk paths use different drive-letter casing.
+### Toolkit settings
 
-- Store shared authoring rules in each mod's version-1 `project.json` and personal paths in User `px.machinePaths`, with separate game, workspace and folder bindings. Keep native editor preferences and import old scoped calendars into `calendar.json`. Upgrade older storage on trusted startup or with **Upgrade Toolkit Settings**, preserving legacy files and removing old settings only after verification. Report conflicts and failures.
+- Keep all Toolkit Settings in one searchable catalogue with category, change and sorting controls. Show each setting's save destination and active source, and provide detected paths, setup, validation and reset actions.
+- Choose a mod context without hiding settings and change destinations per row. Preserve drafts across contexts and delayed replies; save drafts for one storage file together. Show short help on hover or keyboard focus, with Details for longer explanations.
+- Store shared authoring rules in each mod's version-1 `project.json` and personal paths in User `px.machinePaths`, with separate game, workspace and folder bindings. Keep native editor preferences and import old scoped calendars into `calendar.json`.
+- Upgrade older storage on trusted startup or with Upgrade Toolkit Settings. Preserve legacy files, remove old settings only after verification, and report conflicts or write failures.
 
-- Load several compatibility contributions or whole folders, review discovered files and trust selected JavaScript once per batch. Failed imports preserve the previous library. Start recipe authoring with a working example that edits files across a folder and its subfolders.
+### DDS and visual tools
 
-- Make definitions, variables, scope chains, conditions and actions easier to distinguish in script. Use bold declarations and built-in theme colors related to the tooltip glyph families, preserve user color overrides, and distinguish data objects and functions inside GUI and localization expressions.
+- Match a reference DDS texture's format and mip count during conversion, with dimension checks and a read-only reference. Inspect stored mip levels through the viewer and export the selected level to PNG. Show declared counts even when pixels cannot be decoded.
+- Choose full or partial mip chains during conversion and creator picture imports. A count of 2 writes the base and one smaller mip. Use shared format, reference and mip choices, confirm replacements, reject changed destinations and keep remembered folders in their own mod.
+- Preserve PNG RGB channels under zero alpha for portrait masks. Use uncompressed output when BC1/BC3 cannot load the dimensions, and preserve distinct colors with equal luminance during compression.
+- Reject cubemap, texture-array and volume conversion instead of silently exporting one surface. Save preview PNG explicitly exports only the displayed surface and mip. Settle failed decode-worker requests so existing preview fallbacks can run.
+- Audit Image Guidelines against CK3 1.20.0.3 and Sparc's DDS FAQ. Separate community sizes from shipped examples, correct emblem and icon paths and portrait-mask mip counts, and explain converter limits. Keep long paths readable in narrow panes.
+- Cancel GUI layer drags without reordering source. Ignore late gesture checks and retain selection across relayout.
 
-- Add Wiki > Launch Options, read directly from CK3's installed `_commandline_options.info`. Refresh the page when the source or game path changes, and show when the source is unavailable.
+### Steam Workshop
 
-- Add Create, Edit and Override Localization actions for keys. Follow related entries, source files and established mod layouts, including replace folders, while preserving unsaved text and rejecting stale edits. Configure per-mod language, file templates and entry styles with Configure Localization Defaults.
-- Add vanilla Explorer actions to copy a file into the focused mod at its game-relative path, or create only a selected folder path and its parents. Existing files stay intact and can be opened or compared.
-- Route creators and scaffolds through the shared localization writer. Preserve unsaved sources and unrelated content in translation exports and calendar generation.
+- Create independent legacy listings for a game version from the current mod or a local ZIP archive. Store archive files and mod version separately from the live project, identify the archive source in upload confirmations and reject damaged or unsafe archives.
+- Switch between the live item and saved legacy items beside Upload, with explicit legacy labels and a fixed game version. Use shared themed menus and an inline form for version selection.
+- Prepare smaller local copies of oversized gallery images before upload. Keep upload-ready files in the selected Workshop folder's `previews/` directory and originals in `preview-originals/`; preserve order and reuse prepared images. Ignore duplicate image names and stop submission if conversion fails.
+- Include Steam compatibility-version tags from harvested per-game lists. Save personal changelog defaults correctly and show the shared mod override and reset fallback.
+- Preserve DLC query failures, detect stalled uploads and allow stopping the wait. Report uncertain Steam completion without retrying an upload, and reject stale listing downloads or messages for another selected item.
 
+### Experimental game-version updates
 
-- Keep upload-ready gallery images in the selected Workshop folder's `previews/` directory. Move full-size originals to `preview-originals/`, preserve order and reuse the smaller files on later uploads.
-- Include Steam's compatibility-version tags in the upload picker, using per-game tag lists harvested from Steam.
+- Add Compatch behind Experimental features, off by default. Disabling it blocks actions and stops target validation while retaining files and saved sessions.
+- Give new game-update sessions a separate Result folder. Preserve original inputs and existing Result edits, copy the complete mod and retain recovery checks for legacy sessions that write in place.
+- Add Mod Compatibility routes, compatibility notes and migration recipes for exact game builds. Include every contribution per transition, pause for author decisions or manual work and save progress per entry. Review exact diffs, apply one step at a time and restore in reverse order.
+- Load data-only JSON notes or explicitly trusted local JavaScript. Load several contributions or whole folders, review discovered files and trust selected JavaScript once per batch. Failed imports preserve the previous library.
+- Include CK3 1.19.0.6 to 1.20.0.2 and 1.20.0.3 faith/rite and portrait/clothing-mask recipes. Choose independent faiths, rite parents, holy-site roles and reference intent; unsupported cases remain blocked. Check dimensions, format and stored mip levels before applying a consumer-derived or explicit custom mask policy.
+- Preserve explicit female religious-head localization and fill missing values only from an unambiguous target mapping. Capture custom tenets' old vanilla icons. Remove obsolete core-tenet doctrine groups only when their captured members and settings have a known target meaning.
+- Group and search migration choices, show the scan stage and allow cancellation during file capture. Process selected mask batches without marking other work complete. Once journaled Apply or Restore starts, finish recovery and route bookkeeping before stopping.
+- Survey migration files in bounded parallel batches while retaining fresh-input, link and path checks. On one real mask fixture, Node API Scan fell from 80.9 to 28.0 seconds and Prepare from 84.2 to 53.0 seconds, with identical captured data, plans and output. Editor bookkeeping is excluded from those timings.
+- Recheck staged destinations and protect concurrent edits during Apply and Restore. Reject stale inputs and mismatched editor encoding. Explain when an unchanged generated file must be closed before Restore can remove it.
+- Keep the migration SDK and folder recipe examples as work in progress for future testing by outside authors. Route completion does not establish arbitrary whole-mod or save compatibility.
 
-- Refresh the preinstalled CK3 script documentation and GUI data types for version 1.20.0.2 (Crozier), using dumps generated with no mods enabled.
+The bounded Lantern faith and mask workflow has user-confirmed acceptance against CK3 1.20.0.3, including bookmarks, custom tenets, localization precedence, mask patterns and save/reload. Clothing-gene integration was a separate manual merge. This does not establish arbitrary whole-mod or save conversion.
 
-- Create a legacy Workshop version from a local ZIP archive. Save its mod files and mod version separately from the live project, show the archive source in upload confirmations, and reject damaged or unsafe archives before creating an item.
+### Experimental maintained patches
 
-- Add Compatch behind **Experimental features**, off by default. Hide its commands and views until enabled; disabling it blocks actions and stops target validation while retaining files and saved sessions.
-- Add experimental Mod Compatibility with explicit game-version routes, compatibility notes and migration recipes. Include all contributions per transition, pause for human decisions or manual work, and save per-entry progress. Load data-only JSON notes or explicitly trusted local JavaScript, review exact diffs, apply one step at a time and restore in reverse order. Reject stale inputs and mismatched editor encoding. Route completion is not a compatibility certificate.
-- Add CK3 1.19.0.6 to 1.20.0.2 and 1.20.0.3 recipes for faith and rite conversion and portrait/clothing mask mip levels. Choose independent faiths, rite parents, holy-site roles and reference intent; unsupported cases remain blocked. Match mask requirements from compatible target consumers or choose an explicit custom policy. Review DDS dimensions, format and stored levels before applying. Target gameplay remains unverified; no Crozier-compatible Tiger validator is available.
-- Use grouped, searchable migration choices and the toolkit's shared menus, buttons and layout. Show the current scan stage, allow cancellation during file capture, and process selected mask batches without marking the remaining work complete.
-- Update bundled CK3 documentation for Crozier and index standalone faiths, rites and tenets, retaining support for older nested faiths.
-- Use shared themed menus for Settings and Workshop version selection. Create legacy listings from an inline game-version form, then switch between the live item and saved legacy items beside Upload. Legacy views use the active theme's accent and explicit legacy upload labels.
-- Preserve oversized Workshop gallery images by asking to create smaller local copies before upload. Keep originals and stop submission if conversion fails.
+- Add Compatibility Patch for ordered mod sets. Save contribution, field and manual decisions with the patch, reopen affected choices after source changes and keep local folders in User settings.
+- Review complete generated files, preserve independent output edits with three-way updates and restore journaled writes. Invalidate previews when linked workspace paths or output files change. Unsupported loading rules require manual work.
+- Keep mod-to-mod runtime acceptance deferred for this release. Victoria 3 and EU5 gameplay and Workshop publication are outside this release's acceptance coverage. Province Painter and Artifact Creator are not part of this preview.
 
-## 0.5.2 (pre-release)
+### Packages and release preparation
 
-- Show the total Workspace Mods count and make the bounded list easier to scroll with a mouse or keyboard. Keep all workspace mods reachable without expanding the section for longer lists.
-- Arrange Toolkit Settings in responsive cards, with search, category and change filters, sorting and save scope at the top. Use the shared sidebar switches and preserve drafts when changing views.
-
-- Create independent legacy Workshop listings for a game version, initialized from the main item. Upload the current mod files once to a new item, then update only its Workshop information. Select saved versions in the upload view, with a distinct legacy color and fixed game version.
-- Preserve DLC query failures instead of treating unknown requirements as empty. Detect stalled Workshop uploads, allow stopping the wait, and report uncertain Steam completion without retrying uploads. Reject stale listing downloads and messages for a different selected item.
-- Show declared DDS mipmap counts even when pixel preview is unavailable, with an unknown state for invalid headers.
-- Keep saved-scope reference prefixes distinct under default light and dark themes, including during indexing.
-
-- Add a searchable Toolkit Settings tab that opens on All settings, with optional category filters, explicit User, Workspace and supported folder scopes, detected paths, setup and validation actions, and per-setting reset. Keep native settings storage, preserve drafts when settings change elsewhere, and report failed or stale saves. Correct calendar help to describe the existing fixed month lengths.
-
-- Preserve character history comments, spacing, quotation marks, trait groups and detailed death blocks when editing in the Dynasty Tree. Add death-reason suggestions, per-field quotation controls and project defaults, and grouped output for new characters. Read unsaved source text, reject stale forms and keep drafts after failed saves.
-
-- Choose a custom DDS mip level count in image conversion and creator picture imports. The count includes the base image, so 2 writes the base and one smaller mip. Reference matching still copies the original count.
-
-- Give creator picture imports the shared DDS format, reference and mipmap choices, with lossless full-chain defaults. Confirm replacements, reject changed destinations, and keep remembered folders inside their own mod.
-- Reject cubemap, texture-array and volume DDS conversion instead of silently exporting one surface. The viewer's Save preview PNG action explicitly exports only the displayed surface and mip level.
-- Index CK3 faiths and individual laws for completion, hover, navigation and typed references, including unsaved edits. Keep rename unavailable while indirect references are incomplete.
-
-- Match a reference DDS texture's format and mip count during image conversion, with dimension checks and a read-only reference. Inspect stored mip levels through the viewer's themed dropdown and export the selected level to PNG.
-
-- Fix DDS conversion for portrait masks: offer a full mip chain and preserve PNG RGB channels under zero alpha. Explain that texture array replacements must match the original dimensions, compression and mip levels. Auto uses uncompressed output for dimensions that BC1/BC3 cannot load, and compression preserves distinct colors with equal luminance.
-
-- Preserve unsaved editor text when saving flags, appending New Content or merging translations. Reject stale sources and failed edits or saves. Creator saves and dynasty undo/redo report failed saves without advancing subsequent work.
-- Stop Translate Missing Keys completely on cancellation or a write failure, retaining the progress summary.
-- Refresh scope annotations after game data, definitions or schema context changes without requiring another edit to the open document.
-- Settle texture decode requests when worker startup or dispatch fails so previews can use their existing fallback.
-- Cancel GUI layer drags without reordering source. Ignore late gesture checks, retain selection across relayout and separate selection identity from scene positions.
-- Align the development Node requirement with the test dependencies and correct the contributor profile, event namespace, GUI references and deferred compatch instructions.
-
-- Fix an intermittent release check failure caused by asset tests running before indexing finished.
+- Move the `pxtk` executable, local MCP tools and portable skill/plugin into the separate `paradox-toolkit-cli` project. Retain shared scaffold rendering, game discovery, Tiger handling and the external CLI contract in the server and protocol packages.
+- Report malformed Tiger output and process failures as validation failures. Bound validation time and output, and stop when a declared dependency descriptor is missing.
+- Prepare Toolkit 0.5.5 as a prerelease of this upcoming 0.6.0 update. Keep server 0.3.8 and protocol 0.2.8 independently versioned. New prerelease npm versions use `next`, stable versions use `latest`. Discord prereleases mention only the dedicated prerelease role; stable announcements retain the stable role.
 
 ## 0.5.0 (beta) - editor improvements
 

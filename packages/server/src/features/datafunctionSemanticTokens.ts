@@ -1,36 +1,17 @@
 import type { TextDocument } from "vscode-languageserver-textdocument";
 import { membersOf, type DataTypeMember } from "../data/dataTypes";
 import { activeProfile } from "../games/active";
-import { parseLoc } from "../parser/locParser";
+import { datafunctionExpressionRanges, datafunctionLiteralEnd as literalEnd } from "./datafunctionContext";
 import type { ServerData } from "../serverData";
 import { definitionTokenType, type SemanticSpan, type TokenType } from "./semanticTokenTypes";
+
+export { datafunctionExpressionRanges } from "./datafunctionContext";
 
 interface ExpressionToken {
   text: string;
   offset: number;
   length: number;
   kind: "name" | "literal" | "punctuation";
-}
-
-/** The grammar protects single-quoted arguments, including escaped quotes and brackets. */
-function literalEnd(text: string, start: number, end: number): number {
-  let i = start + 1;
-  while (i < end) {
-    if (text[i] === "\\") i += 2;
-    else if (text[i++] === "'") return i;
-  }
-  return end + 1;
-}
-
-function expressionEnd(text: string, start: number, end: number): number {
-  let i = start;
-  while (i < end) {
-    if (text[i] === "'") i = literalEnd(text, i, end);
-    else if (text[i] === "\\") i += 2;
-    else if (text[i] === "]" || text[i] === '"') break;
-    else i++;
-  }
-  return Math.min(i, end);
 }
 
 function expressionTokens(text: string, start: number, end: number): ExpressionToken[] {
@@ -167,40 +148,6 @@ function collectExpression(
     if (tokens[i].kind === "name") i = chain(i);
     else i++;
   }
-}
-
-/** Bracket ranges include delimiters, so the script collector can leave their entire grammar alone. */
-export function datafunctionExpressionRanges(document: TextDocument): { start: number; end: number }[] {
-  const text = document.getText();
-  const ranges: { start: number; end: number }[] = [];
-  const scan = (start: number, end: number, gui: boolean) => {
-    let quoted = false;
-    let i = start;
-    while (i < end) {
-      const ch = text[i];
-      if (ch === "\\") {
-        i += 2;
-      } else if (gui && ch === '"') {
-        quoted = !quoted;
-        i++;
-      } else if (gui && !quoted && ch === "#") {
-        while (i < end && text[i] !== "\n" && text[i] !== "\r") i++;
-      } else if (ch === "[") {
-        const close = expressionEnd(text, i + 1, end);
-        const rangeEnd = close + (text[close] === "]" ? 1 : 0);
-        ranges.push({ start: i, end: rangeEnd });
-        i = rangeEnd;
-      } else {
-        i++;
-      }
-    }
-  };
-  if (document.languageId === "paradox-gui") {
-    scan(0, text.length, true);
-  } else if (document.languageId === "paradox-loc") {
-    for (const entry of parseLoc(text).entries) scan(entry.valueRange.start, entry.valueRange.end, false);
-  }
-  return ranges;
 }
 
 /** Resolve only embedded expressions, leaving prose, punctuation and unknown names to TextMate. */

@@ -539,7 +539,10 @@ export class TraitCreatorPanel {
       this.post({ type: "saved", ok: false, name: save.name });
       return null;
     }
-    if ((await applyDefinitionEdits(abs, text, result.edits)) !== "saved") {
+    if (
+      (await applyDefinitionEdits(abs, text, result.edits, { cfg: { ...cfg, modPath: choice.modPath } })) !==
+      "saved"
+    ) {
       this.post({ type: "saved", ok: false, name: save.name });
       return null;
     }

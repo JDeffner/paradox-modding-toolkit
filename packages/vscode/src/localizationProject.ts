@@ -10,6 +10,7 @@ import {
 import type { PxConfig } from "./config";
 import { containsPath, samePath } from "./commandTargets";
 import { metaFor } from "./meta";
+import { assertModWritePath, physicalPath } from "./modWrite";
 
 export function localizationDefaultsFile(cfg: PxConfig): string {
   if (!cfg.modPath) throw new Error("Choose a mod before configuring localization");
@@ -43,28 +44,9 @@ export function localizationRoots(cfg: PxConfig): string[] {
   return [...(metaFor(cfg.gameId).stageRoots ?? []).map((stage) => `${stage}/localization`), "localization"];
 }
 
-function physicalPath(file: string): string {
-  let ancestor = path.resolve(file);
-  const missing: string[] = [];
-  while (!fs.existsSync(ancestor)) {
-    const parent = path.dirname(ancestor);
-    if (parent === ancestor) throw new Error(`Cannot resolve ${file}`);
-    missing.unshift(path.basename(ancestor));
-    ancestor = parent;
-  }
-  return path.join(fs.realpathSync(ancestor), ...missing);
-}
-
 /** Check existing ancestors too, so a junction cannot redirect a mod write. */
 export function assertLocalizationPath(cfg: PxConfig, file: string, language: string): void {
-  if (
-    !cfg.modPath ||
-    !containsPath(cfg.modPath, file) ||
-    !containsPath(physicalPath(cfg.modPath), physicalPath(file))
-  )
-    throw new Error("Localization destination must stay inside the selected mod");
-  if (cfg.gamePath && containsPath(physicalPath(cfg.gamePath), physicalPath(file)))
-    throw new Error("Vanilla localization is read-only");
+  assertModWritePath(cfg, file);
   if (!localizationRoots(cfg).some((root) => containsPath(path.join(cfg.modPath!, root), file)))
     throw new Error("Choose a file in one of the mod's localization folders");
   if (!file.toLowerCase().endsWith(`_l_${language}.yml`))

@@ -140,7 +140,15 @@ export async function insertDateCommand(cfg: PxConfig): Promise<void> {
  * again after a calendar change regenerates in place.
  */
 export async function generateCalendarLocCommand(cfg: PxConfig): Promise<void> {
+  const sourceChecks: (() => void)[] = [];
   try {
+    if (cfg.modPath) {
+      const names = metaFor(cfg.gameId);
+      for (const file of ["localization.json", CALENDAR_FILE]) {
+        const prepared = await prepareProjectConfigWrite(cfg.modPath, names, file);
+        sourceChecks.push(prepared.assertCurrent);
+      }
+    }
     cfg = effectiveLocConfig(cfg);
   } catch (error) {
     void vscode.window.showErrorMessage(`Could not generate calendar localization: ${String(error)}`);
@@ -234,6 +242,7 @@ export async function generateCalendarLocCommand(cfg: PxConfig): Promise<void> {
       }
     };
     for (let i = 0; i < targets.length; i++) assertTargetCurrent(i);
+    for (const assertCurrent of sourceChecks) assertCurrent();
     for (const source of sources) assertDocumentCurrent(source);
     const owned = new Set([
       CAL_YEAR_KEY,
@@ -265,6 +274,7 @@ export async function generateCalendarLocCommand(cfg: PxConfig): Promise<void> {
       ) {
         throw new Error(`${path.basename(targets[i])} changed during the operation. Try again.`);
       }
+      for (const assertCurrent of sourceChecks) assertCurrent();
       await writeDocument(snapshot, bodies[i], true, sources);
     }
     await vscode.window.showTextDocument(vscode.Uri.file(targets[targets.length - 1]));

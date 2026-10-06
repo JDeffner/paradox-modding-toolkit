@@ -61,8 +61,8 @@ export interface FileChangeApplyOptions {
   journalPath: string;
   documents?: MigrationDocument[];
   documentHost?: MigrationDocumentHost;
-  /** Compare every captured input with the baseline, accounting only for completed owned writes. */
-  assertFresh?: () => Promise<void>;
+  /** Compare every captured input with the baseline, excluding only this write's owned temporary file. */
+  assertFresh?: (stagedFile?: string) => Promise<void>;
   /** Advance that baseline from the completed change. Receives an isolated copy. */
   onApplied?: (file: AppliedFileChange) => void | Promise<void>;
   planId?: string;
@@ -233,12 +233,22 @@ export interface MigrationCaptureOptions {
   /** Lower limits support focused checks without large fixtures. Never raises production limits. */
   limits?: Partial<{ [K in keyof typeof MIGRATION_LIMITS]: number }>;
 }
-export async function captureMigration(
+export function captureMigration(
   roots: MigrationRoots,
   manifest: MigrationManifest,
   gameId: string,
   documents: MigrationDocument[] = [],
   options: MigrationCaptureOptions = {}
+): Promise<MigrationSnapshot> {
+  return captureMigrationSnapshot(roots, manifest, gameId, documents, options);
+}
+async function captureMigrationSnapshot(
+  roots: MigrationRoots,
+  manifest: MigrationManifest,
+  gameId: string,
+  documents: MigrationDocument[],
+  options: MigrationCaptureOptions,
+  stagedFile?: string
 ): Promise<MigrationSnapshot> {
   const checkCancelled = () => {
     if (options.signal?.aborted) throw new Error("Migration cancelled.");
@@ -346,13 +356,25 @@ export async function captureMigration(
     if (!root) throw new Error(`Required input root is unavailable: ${input.root}`);
     const matches = (relative: string) =>
       migrationInputMatches(input, input.root, relative) && (!input.matchModFiles || modPaths.has(relative));
+    interface VisitEntry {
+      relative: string;
+      parentChecked?: boolean;
+      entry?: import("node:fs").Dirent;
+    }
+    interface VisitResult {
+      children?: VisitEntry[];
+      capture?: () => Promise<void>;
+    }
     async function visit(
       relative: string,
       parentChecked = false,
       entry?: import("node:fs").Dirent
-    ): Promise<void> {
+    ): Promise<VisitResult | undefined> {
       checkCancelled();
       validateMigrationPath(relative, true);
+      // Only the exact wx-created file for this pending write is transaction
+      // storage. Other temporary-looking files remain ordinary captured inputs.
+      if (input.root === "mod" && stagedFile === path.resolve(root!, relative)) return;
       if (entry?.isSymbolicLink()) throw new Error(`Links are not migration inputs: ${relative}`);
       if (entry?.isFile() && !matches(relative)) return;
       // Recursive names come from a checked parent listing. Do not rescan every
@@ -375,9 +397,13 @@ export async function captureMigration(
         );
         if (new Set(entries.map((child) => key(child.name))).size !== entries.length)
           throw new Error(`Case collision: ${relative}`);
-        for (const child of entries)
-          await visit(relative ? `${relative}/${child.name}` : child.name, true, child);
-        return;
+        return {
+          children: entries.map((child) => ({
+            relative: relative ? `${relative}/${child.name}` : child.name,
+            parentChecked: true,
+            entry: child,
+          })),
+        };
       }
       if (++listingCount > limits.listingEntries) failLimit();
       listing.push(`${relative}:file`);
@@ -394,17 +420,49 @@ export async function captureMigration(
         (selector) => migrationInputMatches(selector, input.root, relative) && selector.capture !== "listing"
       );
       const full = selectors.some((selector) => !selector.capture || selector.capture === "bytes");
-      await captureFile(
-        input.root,
-        relative,
-        full ? "bytes" : "prefix",
-        Math.max(0, ...selectors.map((selector) => selector.prefixBytes ?? 0)),
-        parentChecked
-      );
+      return {
+        capture: () =>
+          captureFile(
+            input.root,
+            relative,
+            full ? "bytes" : "prefix",
+            Math.max(0, ...selectors.map((selector) => selector.prefixBytes ?? 0)),
+            parentChecked
+          ),
+      };
     }
-    if (input.matchModFiles) {
-      for (const relative of [...modPaths].sort()) if (matches(relative)) await visit(relative);
-    } else await visit(input.path);
+    let pending: VisitEntry[] = input.matchModFiles
+      ? [...modPaths]
+          .sort()
+          .filter(matches)
+          .map((relative) => ({ relative }))
+      : [{ relative: input.path }];
+    // Bound metadata reads while retaining every path check. Byte admission stays
+    // ordered, so capture limits reject a file before its bytes are read.
+    for (let index = 0; index < pending.length;) {
+      const end = Math.min(index + 16, pending.length);
+      const visited = await Promise.allSettled(
+        pending
+          .slice(index, end)
+          .map(({ relative, parentChecked, entry }) => visit(relative, parentChecked, entry))
+      );
+      index = end;
+      checkCancelled();
+      // Wait for the complete batch before reporting failure. No capture work
+      // remains in flight when the caller starts another action or disposes.
+      for (const result of visited) if (result.status === "rejected") throw result.reason;
+      for (const result of visited) {
+        if (result.status !== "fulfilled" || !result.value) continue;
+        for (const child of result.value.children ?? []) pending.push(child);
+        await result.value.capture?.();
+      }
+      // Release processed entries in large batches. Copy at most one remaining
+      // entry per consumed entry, rather than shifting the queue on every visit.
+      if (index >= 4096 && index >= pending.length / 2) {
+        pending = pending.slice(index);
+        index = 0;
+      }
+    }
     if (input.root === "mod")
       for (const [relative, document] of overlays) {
         checkCancelled();
@@ -453,10 +511,14 @@ export async function captureMigration(
     for (const request of selected) await captureFile(request.root, request.path, "bytes");
     if (
       (await hashSnapshot(
-        await captureMigration(roots, manifest, gameId, documents, {
-          limits: options.limits,
-          signal: options.signal,
-        })
+        await captureMigrationSnapshot(
+          roots,
+          manifest,
+          gameId,
+          documents,
+          { limits: options.limits, signal: options.signal },
+          stagedFile
+        )
       )) !== seedHash
     )
       throw new Error("Migration inputs changed during capture. Inspect again.");
@@ -494,18 +556,33 @@ async function currentDocuments(
   }
   return result;
 }
-async function writeBytes(filename: string, bytes: Uint8Array | undefined): Promise<void> {
-  if (bytes === undefined) {
-    await fs.unlink(filename);
-    return;
-  }
+interface FileWriteGuard {
+  disk: Uint8Array | undefined;
+  temporaryDirectory: string;
+  assertCurrent: (stagedFile?: string) => Promise<void>;
+  changedMessage: string;
+}
+class FileWriteConflict extends Error {}
+async function writeBytes(
+  filename: string,
+  bytes: Uint8Array | undefined,
+  guard?: FileWriteGuard
+): Promise<void> {
   const temporary = path.join(
-    path.dirname(filename),
+    guard?.temporaryDirectory ?? path.dirname(filename),
     `.${path.basename(filename)}.${randomUUID()}.migration-tmp`
   );
   try {
-    await fs.writeFile(temporary, bytes, { flag: "wx" });
-    await fs.rename(temporary, filename);
+    if (bytes !== undefined) await fs.writeFile(temporary, bytes, { flag: "wx" });
+    // Stage bytes before the final path, buffer and destination checks. These
+    // checks close the staging window; replacement is not a cross-process CAS.
+    if (guard) {
+      await guard.assertCurrent(bytes === undefined ? undefined : temporary);
+      if (!equal(await readBytes(filename), guard.disk)) throw new FileWriteConflict(guard.changedMessage);
+    }
+    if (bytes === undefined) await fs.unlink(filename);
+    else if (guard && guard.disk === undefined) await fs.link(temporary, filename);
+    else await fs.rename(temporary, filename);
   } finally {
     await fs.unlink(temporary).catch((error: NodeJS.ErrnoException) => {
       if (error.code !== "ENOENT") throw error;
@@ -630,15 +707,16 @@ export async function applyMigration(
         documents: options.documents,
         documentHost: options.documentHost,
         planId: hash,
-        assertFresh: async () => {
-          const fresh = await captureMigration(
+        assertFresh: async (stagedFile) => {
+          const fresh = await captureMigrationSnapshot(
             roots,
             options.manifest,
             options.gameId,
             await currentDocuments(options),
             {
               capture: plan.capture,
-            }
+            },
+            stagedFile
           );
           if ((await hashSnapshot(fresh)) !== (snapshot ? await hashSnapshot(snapshot) : plan.snapshotHash))
             throw new Error(
@@ -752,17 +830,25 @@ async function applyFrozenFileChanges(
         throw new Error(`Editor changed during apply: ${file.path}`);
       file.state = "pending";
       await saveJournal(journalFilename, journal);
-      await fs.mkdir(path.dirname(filename), { recursive: true });
-      await resolveFileChangeRoots(roots.root, roots.protectedRoots);
-      await safePath(roots.root, file.path);
-      if (!equal(await readBytes(filename), decode(file.before)))
-        throw new Error(`Destination changed during apply: ${file.path}`);
-      if (
-        options.documentHost &&
-        !sameDocument(await options.documentHost.read(file.path), file.documentBefore)
-      )
-        throw new Error(`Editor changed during apply: ${file.path}`);
+      const guard: FileWriteGuard = {
+        disk: decode(file.before),
+        temporaryDirectory: roots.root,
+        changedMessage: `Destination changed during apply: ${file.path}`,
+        assertCurrent: async (stagedFile) => {
+          await options.assertFresh?.(stagedFile);
+          await fs.mkdir(path.dirname(filename), { recursive: true });
+          await resolveFileChangeRoots(roots.root, roots.protectedRoots);
+          await safePath(roots.root, file.path);
+          if (
+            options.documentHost &&
+            !sameDocument(await options.documentHost.read(file.path), file.documentBefore)
+          )
+            throw new FileWriteConflict(`Editor changed during apply: ${file.path}`);
+        },
+      };
       if (file.documentBefore) {
+        await guard.assertCurrent();
+        if (!equal(await readBytes(filename), guard.disk)) throw new FileWriteConflict(guard.changedMessage);
         let saved: MigrationDocument;
         try {
           saved = await options.documentHost!.write(
@@ -791,7 +877,7 @@ async function applyFrozenFileChanges(
           throw new Error(`Editor save did not write planned bytes: ${file.path}`);
         }
         file.documentAfter = saved;
-      } else await writeBytes(filename, decode(file.after));
+      } else await writeBytes(filename, decode(file.after), guard);
       file.state = "applied";
       completed.push(file.path);
       await saveJournal(journalFilename, journal);
@@ -857,7 +943,7 @@ export async function restoreFileChanges(
       const disk = await readBytes(filename);
       const before = decode(file.before);
       const after = decode(file.after);
-      const document = await options.documentHost?.read(file.path);
+      const document = structuredClone(await options.documentHost?.read(file.path));
       // The document host can edit buffers, but cannot close an editor before deleting its file.
       if (
         !file.documentBefore &&
@@ -921,10 +1007,16 @@ export async function restoreFileChanges(
         conflicts.push(file.path);
         continue;
       }
+      let expectedDocument = document;
       if (document && originalDocument && !restoredBufferMatches) {
         if (options.documentHost!.restore)
-          await options.documentHost!.restore(file.path, originalDocument, document.version);
-        else await options.documentHost!.write(file.path, originalDocument.text, document.version);
+          expectedDocument = structuredClone(
+            await options.documentHost!.restore(file.path, originalDocument, document.version)
+          );
+        else
+          expectedDocument = structuredClone(
+            await options.documentHost!.write(file.path, originalDocument.text, document.version)
+          );
       }
       await resolveFileChangeRoots(roots.root, roots.protectedRoots);
       await safePath(roots.root, file.path);
@@ -933,9 +1025,34 @@ export async function restoreFileChanges(
         conflicts.push(file.path);
         continue;
       }
-      if (!equal(currentDisk, before)) await writeBytes(filename, before);
-      if (document && !sameDocumentContent(await options.documentHost!.read(file.path), originalDocument))
-        throw new Error(`Editor changed during restore: ${file.path}`);
+      if (document && !sameDocumentContent(expectedDocument, originalDocument))
+        throw new Error(`Editor restore did not produce the original buffer: ${file.path}`);
+      const guard: FileWriteGuard = {
+        disk: currentDisk,
+        temporaryDirectory: roots.root,
+        changedMessage: `Destination changed during restore: ${file.path}`,
+        assertCurrent: async () => {
+          await resolveFileChangeRoots(roots.root, roots.protectedRoots);
+          await safePath(roots.root, file.path);
+          if (
+            options.documentHost &&
+            !sameDocument(await options.documentHost.read(file.path), expectedDocument)
+          )
+            throw new FileWriteConflict(`Editor changed during restore: ${file.path}`);
+        },
+      };
+      try {
+        if (!equal(currentDisk, before)) await writeBytes(filename, before, guard);
+        else {
+          await guard.assertCurrent();
+          if (!equal(await readBytes(filename), guard.disk))
+            throw new FileWriteConflict(guard.changedMessage);
+        }
+      } catch (error) {
+        if (!(error instanceof FileWriteConflict)) throw error;
+        conflicts.push(file.path);
+        continue;
+      }
       file.state = "restored";
       completed.push(file.path);
       await saveJournal(journalPath, journal);

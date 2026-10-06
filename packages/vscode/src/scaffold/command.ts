@@ -18,6 +18,7 @@ import { metaFor } from "../meta";
 import { readDocument, writeDocument } from "../documentWrite";
 import { writeLocSmart } from "../locCommands";
 import { effectiveLocConfig } from "../localizationProject";
+import { assertModWritePath } from "../modWrite";
 
 /** Remembers the last-used prefix within a session so repeat scaffolds are quick. */
 let lastPrefix: string | null = null;
@@ -141,8 +142,9 @@ interface WriteOutcome {
   cursorLineOffset: number;
 }
 
-async function materializeFile(modPath: string, file: ScaffoldFile): Promise<WriteOutcome> {
-  const absPath = path.join(modPath, ...file.relPath.split("/"));
+async function materializeFile(cfg: PxConfig, file: ScaffoldFile): Promise<WriteOutcome> {
+  const absPath = path.join(cfg.modPath!, ...file.relPath.split("/"));
+  assertModWritePath(cfg, absPath);
   const snapshot = await readDocument(absPath, true);
 
   if (!snapshot.created) {
@@ -169,12 +171,14 @@ async function materializeFile(modPath: string, file: ScaffoldFile): Promise<Wri
     const prefixText = trimmedExisting + eol + eol;
     const cursorLineOffset = prefixText.split(eol).length - 1;
     const combined = prefixText + block;
+    assertModWritePath(cfg, absPath);
     await writeDocument(snapshot, combined, file.bom);
     return { absPath, action: "appended", cursorLineOffset };
   }
 
   const eol = process.platform === "win32" ? "\r\n" : "\n";
   const body = file.content.replace(/\n/g, eol);
+  assertModWritePath(cfg, absPath);
   await writeDocument(snapshot, body, file.bom);
   return { absPath, action: "created", cursorLineOffset: 0 };
 }
@@ -205,7 +209,7 @@ async function materialize(
       }
       continue;
     }
-    const outcome = await materializeFile(cfg.modPath!, file);
+    const outcome = await materializeFile(cfg, file);
     onFileChanged(outcome.absPath);
     if (outcome.action === "created") created.push(file.relPath);
     else if (outcome.action === "appended") appended.push(file.relPath);

@@ -6,33 +6,19 @@ the shared helpers change. Before the split it moved inside the extension's
 version (up to 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
-## Unreleased
+## 0.2.8 (upcoming)
 
-- Add optional `EventDetail.sourceHash` to identify the decoded text used for event coordinates. Older servers remain supported through client source checks.
+Prepared for Toolkit 0.6.0, first available in the 0.5.5 prerelease. This section includes the unpublished 0.2.7 draft; the protocol keeps its independent version.
 
-- Extend the pxtk command contract with preparation operations, preview tokens, exact reference sites and focused validation coverage.
-
-- Add the versioned `pxtk` JSON result contract in `agentTools`. Share Steam discovery, Tiger configuration, dependency blocks, and bounded process handling with the standalone CLI.
-- Add opt-in strict Tiger report parsing. Preserve the existing tolerant parser default; process integrations reject incomplete reports instead of reporting a false pass.
-
-- Add the shared localization policy: validated author defaults, deterministic destination suggestions, generated-file detection, and edits that preserve headers, comments, line endings and entry versions.
-
-## 0.2.7
-
-Ships with the toolkit's 0.5.2 release.
-
-- Extend version-1 machine settings with private patch bindings keyed by portable project and source IDs. Preserve unknown fields and relocate bindings with Move Mod. This adds no LSP methods.
-
-- Add version-1 portable project rules and a per-game personal-path model. Resolve config artifacts independently, reject unsafe paths and escaped links, preserve unknown settings, and include `project.json` in index watches. Keep whole-directory helpers as deprecated compatibility exports.
-
-- Add the shared localization policy: validated author defaults, deterministic destination suggestions, generated-file detection, and edits that preserve headers, comments, line endings and entry versions.
-
-- Add `@px-lsp/protocol/migration` types for exact-build contributions, compatibility notes, version routes and per-entry completions. Version-2 sessions retain routes, reference builds, answers and manual notes. This adds no LSP methods or client capabilities.
-- Add SDK 2 selective input capture, frozen discovery selections and optional question groups, while retaining SDK 1 contribution support.
-
-- Add optional `DynastyCharacter.deathReason` for the first dated death block. Clarify that character names can be localization keys.
-
-- Deduplicate directory aliases during file enumeration while retaining configured linked roots and cycle guards. Add `iterFilesInRoots` so consumers can prioritize semantic folders over a containing fallback root. Report unavailable symlink test cases as skipped, with a reason, instead of passing them without assertions.
+- Add optional game reference context to `paradox/exampleWiki` and `paradox/exampleWikiEntry`. Identify the reference game in catalogue results and allow refresh without changing workspace settings. Existing requests retain their workspace behavior.
+- Add optional `EventDetail.sourceHash` for the decoded text behind event coordinates. Older servers remain supported through client source checks.
+- Add version-1 portable project rules and per-game personal-path storage, including private patch bindings keyed by portable project and source IDs. Resolve artifacts independently, reject unsafe paths and escaped links, preserve unknown settings and watch `project.json`. Keep whole-directory helpers as deprecated compatibility exports.
+- Add the shared localization policy: validated author defaults, deterministic destination suggestions, generated-file detection and edits that preserve headers, comments, line endings and entry versions. Expose header validation and prepared destination selection so batch writers parse each document once.
+- Add `@px-lsp/protocol/migration` types for exact-build contributions, compatibility notes, routes and per-entry completion. Version-2 sessions retain routes, reference builds, answers and manual notes. SDK 2 supports selective capture, frozen discovery and optional question groups while retaining SDK 1 contributions. This adds no LSP methods or client capabilities; outside-author SDK testing remains future work.
+- Add optional `DynastyCharacter.deathReason` for the first dated death block, and clarify that names can be localization keys.
+- Keep the versioned `pxtk` JSON result contract in `agentTools` for the separate `paradox-toolkit-cli` project. Include preparation operations, preview tokens, exact reference sites and focused validation coverage. Share Steam discovery, Tiger configuration, dependency blocks and bounded process handling.
+- Add opt-in strict Tiger report parsing. Preserve the tolerant default; process integrations reject incomplete reports instead of reporting a false pass.
+- Deduplicate directory aliases while retaining configured linked roots and cycle guards. Add `iterFilesInRoots` so consumers can prioritize semantic folders over a containing fallback root. Report unavailable symlink test cases as skipped with a reason.
 
 ## 0.2.6
 

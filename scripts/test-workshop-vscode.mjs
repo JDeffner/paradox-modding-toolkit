@@ -64,6 +64,14 @@ await writeFile(
   join(scratch, "Mod/descriptor.mod"),
   '\uFEFFname="Workshop fixture"\nversion="2.0"\nsupported_version="1.20.*"\n'
 );
+const previews = join(scratch, "Mod/.px-toolkit/workshop/previews");
+await mkdir(previews, { recursive: true });
+const png = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jv+kAAAAASUVORK5CYII=",
+  "base64"
+);
+for (const name of ["a.png", "b.png"]) await writeFile(join(previews, name), png);
+await writeFile(join(previews, "order.txt"), "b.png\na.png\nb.png\na.png\n");
 const legacyZip = new AdmZip();
 legacyZip.addFile(
   "old-release/mod/descriptor.mod",

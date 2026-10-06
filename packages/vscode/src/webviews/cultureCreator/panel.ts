@@ -443,7 +443,11 @@ export class CultureCreatorPanel {
       this.post({ type: "error", message: refused });
       return null;
     }
-    if ((await applyDefinitionEdits(abs, text, result.edits)) !== "saved") {
+    if (
+      (await applyDefinitionEdits(abs, text, result.edits, {
+        cfg: { ...this.cfg, modPath: choice.modPath },
+      })) !== "saved"
+    ) {
       this.post({ type: "idle" });
       return null;
     }

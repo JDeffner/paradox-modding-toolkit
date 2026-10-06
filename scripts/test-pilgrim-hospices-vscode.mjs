@@ -1,4 +1,5 @@
 import { runTests } from "@vscode/test-electron";
+import { build } from "esbuild";
 import AdmZip from "adm-zip";
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
@@ -9,6 +10,26 @@ if (!fixture || !executable || !target)
 await mkdir(target);
 for (const folder of ["Practice", "Vanilla 1.18", "Vanilla 1.19", "Reference 1.19"])
   await cp(join(fixture, folder), join(target, folder), { recursive: true });
+await mkdir(join(target, "Result"));
+await writeFile(
+  join(target, "Practice/.px-toolkit/compatch.json"),
+  JSON.stringify({ version: 1, vanilla: "../Vanilla 1.18", newGame: "../Vanilla 1.19", output: "../Result" })
+);
+await mkdir(join(target, "user/User"), { recursive: true });
+await writeFile(
+  join(target, "user/User/settings.json"),
+  JSON.stringify({
+    "security.workspace.trust.enabled": false,
+    "extensions.autoUpdate": false,
+    "extensions.autoCheckUpdates": false,
+    "update.mode": "none",
+    "files.autoSave": "off",
+    "chat.disableAIFeatures": true,
+    "workbench.startupEditor": "none",
+    "git.openRepositoryInParentFolders": "never",
+    "px.notifications.startup": false,
+  })
+);
 await writeFile(
   join(target, "Practice/.vscode/settings.json"),
   JSON.stringify({
@@ -25,11 +46,21 @@ const { version } = JSON.parse(await readFile(join(root, "packages/vscode/packag
 new AdmZip(join(root, `packages/vscode/px-toolkit-test-${version}.vsix`)).extractAllTo(
   join(target, "package")
 );
+const suite = join(target, "suite.cjs");
+await build({
+  entryPoints: [join(root, "scripts/pilgrim-hospices-vscode-suite.ts")],
+  bundle: true,
+  platform: "node",
+  format: "cjs",
+  external: ["vscode"],
+  outfile: suite,
+});
+console.log(`Pilgrim Hospices separate-result editor checks: ${target}`);
 delete process.env.ELECTRON_RUN_AS_NODE;
 await runTests({
   vscodeExecutablePath: executable,
   extensionDevelopmentPath: join(target, "package/extension"),
-  extensionTestsPath: resolve("dist/pilgrim-hospices-vscode-suite.cjs"),
+  extensionTestsPath: suite,
   launchArgs: [
     join(target, "Practice"),
     "--profile",
@@ -38,6 +69,7 @@ await runTests({
     join(target, "user"),
     "--extensions-dir",
     join(target, "extensions"),
+    "--remote-debugging-port=9339",
     "--disable-gpu",
     "--skip-welcome",
     "--skip-release-notes",

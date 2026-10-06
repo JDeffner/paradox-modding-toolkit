@@ -26,7 +26,7 @@ import {
   type Piece,
 } from "./faithSyntax";
 import { convertFaithConsumers } from "./faithConsumers";
-import { convertCustomTenets } from "./faithTenets";
+import { convertCustomTenets, removeConvertedTenetGroups } from "./faithTenets";
 import { rebaseFaith } from "./faithRebase";
 
 export const RELIGIONS = "common/religion/religion_types";
@@ -185,6 +185,70 @@ function renderReligion(id: string, fields: Piece[], details: Set<string>, tail:
     .filter((p) => !details.has(p.key))
     .map((p) => p.raw)
     .join("")}${tail}\n}`;
+}
+/** Crozier requires this term; its value comes from captured target religion localization. */
+function supplyFemaleHeadTitle(
+  w: FaithWork,
+  def: Definition,
+  text: string,
+  targetReligions: Map<string, Definition>
+): string {
+  const localization = field(assignments(w.parse(text).root.statements)[0], "localization");
+  const terms = children(localization);
+  const heads = terms.filter((node) => node.key.text === "ReligiousHeadName");
+  if (!heads.length || terms.some((node) => node.key.text === "ReligiousHeadNameFemale")) return text;
+  const literal = (node: AssignmentNode | undefined): string | undefined => {
+    const value = scalar(node);
+    return value && !value.startsWith("@") && !value.includes("$") ? value : undefined;
+  };
+  const head = heads.length === 1 ? literal(heads[0]) : undefined;
+  const candidates = new Map<string | undefined, string | undefined>();
+  if (head)
+    for (const target of targetReligions.values()) {
+      const targetTerms = children(field(target.node, "localization"));
+      const targetHeads = targetTerms.filter((node) => node.key.text === "ReligiousHeadName");
+      if (!targetHeads.some((node) => literal(node) === head)) continue;
+      const female = targetTerms.filter((node) => node.key.text === "ReligiousHeadNameFemale");
+      const key = targetHeads.length === 1 && female.length === 1 ? literal(female[0]) : undefined;
+      if (!candidates.has(key))
+        candidates.set(
+          key,
+          key ? target.text.slice(female[0].value!.range.start, female[0].value!.range.end) : undefined
+        );
+    }
+  const value = [...candidates.values()][0];
+  if (candidates.size !== 1 || value === undefined) {
+    w.fail(
+      `religious-head-female:${def.religion ? "faith" : "religion"}:${def.id}`,
+      `Cannot derive ${def.id}.ReligiousHeadNameFemale from one complete captured target religion mapping. Add an explicit ReligiousHeadNameFemale localization assignment and refresh the preview.`,
+      def,
+      field(def.node, "localization")?.range.start ?? def.node.range.start
+    );
+    return text;
+  }
+  const block = localization!.value;
+  if (block?.kind !== "block" || block.closeBrace === null) {
+    w.fail(
+      `religious-head-localization:${def.id}`,
+      "Repair the localization block before adding the required female head title.",
+      def,
+      def.node.range.start
+    );
+    return text;
+  }
+  const lineStart = text.lastIndexOf("\n", block.closeBrace - 1) + 1;
+  const indent = text.slice(lineStart, block.closeBrace);
+  const closingLine = /^[\t ]*$/.test(indent);
+  const at = closingLine ? lineStart : block.closeBrace;
+  return editText(text, [
+    {
+      start: at,
+      end: at,
+      text: closingLine
+        ? `${indent}\tReligiousHeadNameFemale = ${value}\n`
+        : `\n\t\tReligiousHeadNameFemale = ${value}\n\t`,
+    },
+  ]);
 }
 export async function buildFaithMigration(
   context: MigrationContext,
@@ -511,6 +575,7 @@ export async function buildFaithMigration(
     modDoctrineDefs.filter((d) => customIds.has(d.id)),
     tenets
   );
+  removeConvertedTenetGroups(w, tenets, customIds);
   const output = new Map<
     string,
     { def: Definition; fields: Piece[]; extra: string[]; tail: string; kind: string }
@@ -735,7 +800,7 @@ export async function buildFaithMigration(
             .join("")}`
         : `\n\tfaith = ${parent ?? ""}${item.fields.map((p) => p.raw).join("")}`;
     if (item.kind === "rite" && !parent) continue;
-    const converted = rebaseFaith(
+    let converted = rebaseFaith(
       w,
       item.def,
       sourceRel.get(item.def.religion!.id),
@@ -745,6 +810,7 @@ export async function buildFaithMigration(
       tenets,
       item.kind
     );
+    if (item.kind === "independent") converted = supplyFemaleHeadTitle(w, item.def, converted, targetRel);
     const parsedDefinition = assignments(parse(converted).root.statements)[0];
     for (const property of children(parsedDefinition)) {
       const fieldsToCheck = property.key.text === "faith_details" ? children(property) : [property];
@@ -771,7 +837,12 @@ export async function buildFaithMigration(
         );
     const tail = pieces(religion.node, religion.text).tail;
     const comments = commentText(religion.text.slice(religion.node.range.start, religion.node.range.end), w);
-    const rendered = renderReligion(religion.id, fields, religionDetails, tail);
+    const rendered = supplyFemaleHeadTitle(
+      w,
+      religion,
+      renderReligion(religion.id, fields, religionDetails, tail),
+      targetRel
+    );
     const constants = unresolvedFileConstants(rendered);
     if (constants.length)
       w.fail(

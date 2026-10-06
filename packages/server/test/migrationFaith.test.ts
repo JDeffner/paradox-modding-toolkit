@@ -9,6 +9,7 @@ import {
 } from "../src/games/ck3/migrations/faith";
 import { resolveProfile } from "../src/games/registry";
 import { inspectMigration, prepareMigration } from "../src/migrations/engine";
+import { discoverFaithIcons } from "../src/games/ck3/migrations/faithTenets";
 import type {
   MigrationAnswers,
   MigrationContext,
@@ -248,14 +249,92 @@ describe("faith and rite conversion", () => {
     expect(result[`${D}/custom.txt`]).toContain("@cost = 100");
     expect(result[`${D}/custom.txt`]).toContain("unrelated = { keep = yes }");
   });
+  it("captures and copies exact source-vanilla icons when the target has no counterpart", async () => {
+    const oldIcon = "gfx/interface/icons/faith_doctrines/core_tenet_example.dds";
+    const newIcon = "gfx/interface/icons/faith_tenets/core_tenet_example.dds";
+    const mod = {
+      [`${R}/custom.txt`]: "religion = { faiths = { parent = { doctrine = custom_tenet } } }",
+      [`${D}/custom.txt`]: "custom_tenet = { icon = core_tenet_example }",
+    };
+    const c = context(mod, DOCS, { ...SOURCE, [oldIcon]: "exact old vanilla icon bytes" });
+    expect(await discoverFaithIcons(c)).toEqual([{ root: "source", path: oldIcon }]);
+    expect(ck3FaithMigration.manifest.inputs).toContainEqual({
+      root: "source",
+      path: "gfx/interface/icons/faith_doctrines",
+      extensions: [".dds"],
+      capture: "listing",
+    });
+    const plan = await ck3FaithMigration.prepare(
+      c,
+      await answerAll(c, {
+        [faithDecisionKey("parent")]: "independent",
+        "doctrine:custom_tenet:database": "tenet",
+      })
+    );
+    expect(plan.unresolved).toEqual([]);
+    expect(output(plan, mod)[newIcon]).toBe("exact old vanilla icon bytes");
+    const overridden = context({ ...mod, [oldIcon]: "mod-owned pixels" }, DOCS, {
+      ...SOURCE,
+      [oldIcon]: "vanilla pixels",
+    });
+    expect(await discoverFaithIcons(overridden)).toEqual([{ root: "mod", path: oldIcon }]);
+    const targetOwns = context(
+      mod,
+      { ...DOCS, [newIcon]: "target pixels" },
+      { ...SOURCE, [oldIcon]: "old pixels" }
+    );
+    expect(await discoverFaithIcons(targetOwns)).toEqual([]);
+  });
+  it("removes obsolete core-tenet membership while preserving unrelated group content", async () => {
+    const groups = "common/religion/doctrine_group_types";
+    const p = `${groups}/custom.txt`;
+    const mod = {
+      [`${R}/custom.txt`]: "religion = { faiths = { parent = { doctrine = custom_tenet } } }",
+      [`${D}/custom.txt`]: "custom_tenet = { icon = known }",
+      [p]: "\uFEFF# preserve group comment\ncore_group = { category = core_tenets number_of_picks = 3 doctrine_types = { removed_vanilla_tenet custom_tenet } }\nuntouched = { category = clergy }\n",
+    };
+    const target = {
+      ...DOCS,
+      [`${groups}/_doctrine_group_types.info`]:
+        "example = { category = x divergence = x is_available_on_create = {} }",
+      "gfx/interface/icons/faith_tenets/known.dds": "pixels",
+    };
+    const source = {
+      ...SOURCE,
+      [`${groups}/old.txt`]:
+        "core_group = { category = core_tenets doctrine_types = { removed_vanilla_tenet } }",
+    };
+    const c = context(mod, target, source);
+    const answers = await answerAll(c, {
+      [faithDecisionKey("parent")]: "independent",
+      "doctrine:custom_tenet:database": "tenet",
+    });
+    const plan = await ck3FaithMigration.prepare(c, answers);
+    expect(plan.unresolved).toEqual([]);
+    expect(output(plan, mod)[p]).toBe(
+      "\uFEFF# preserve group comment\n\nuntouched = { category = clergy }\n"
+    );
+    for (const text of [
+      "core_group = { category = core_tenets doctrine_types = { custom_tenet unknown_member } }",
+      "core_group = { category = core_tenets doctrine_types = { custom_tenet } is_available_on_create = { always = no } }",
+    ]) {
+      const blocked = await ck3FaithMigration.prepare(
+        context({ ...mod, [p]: text }, target, source),
+        answers
+      );
+      expect(blocked.groups).toEqual([]);
+      expect(blocked.unresolved.some((f) => f.id === "tenet-group:core_group")).toBe(true);
+    }
+  });
   it("registers a versioned recipe with stable author decision keys", () => {
     expect(ck3FaithMigration.manifest).toMatchObject({
       id: "ck3.faiths-to-rites.decisions",
-      revision: "2",
+      revision: "4",
       kind: "recipe",
       fromVersion: "1.19.0.6",
       toVersion: "1.20.0.2",
     });
+    expect(ck3FaithMigration12003.manifest.revision).toBe("4");
     expect(
       resolveProfile("ck3").migrations.some((r) => r.manifest.id === ck3FaithMigration.manifest.id)
     ).toBe(true);
@@ -297,6 +376,99 @@ describe("faith and rite conversion", () => {
       necessity: "advisory",
       status: "not-run",
     });
+  });
+  it.each(["religion", "faith"])(
+    "adds the target female head title to a converted %s localization block",
+    async (level) => {
+      const p = `${R}/custom.txt`;
+      // Installed 1.20.0.3 Buddhism adds this pair; archived Buddhism has only the first key.
+      const localization =
+        "localization = { ReligiousHeadName = buddhism_religious_head_title # keep title comment\n }";
+      const mod = {
+        [p]: `custom = { family = f ${level === "religion" ? localization : ""} faiths = { parent = { ${level === "faith" ? localization : ""} } } }\n# keep unrelated tail\n`,
+      };
+      const target = {
+        ...DOCS,
+        [`${R}/buddhism.txt`]:
+          "buddhism_religion = { religion_details = { family = f } localization = { ReligiousHeadName = buddhism_religious_head_title ReligiousHeadNameFemale = buddhism_religious_head_title } }",
+      };
+      const plan = await ck3FaithMigration.prepare(context(mod, target), {
+        [faithDecisionKey("parent")]: "independent",
+      });
+      expect(plan.unresolved).toEqual([]);
+      const result = output(plan, mod);
+      const text = result[level === "religion" ? p : `${F}/px_migrated_parent.txt`];
+      expect(text).toContain("ReligiousHeadNameFemale = buddhism_religious_head_title");
+      expect(text).toContain("# keep title comment");
+      expect(result[p]).toContain("# keep unrelated tail");
+      expect(mod[p]).not.toContain("ReligiousHeadNameFemale");
+    }
+  );
+  it("preserves an explicit female head title without needing a target mapping", async () => {
+    const p = `${R}/custom.txt`;
+    const mod = {
+      [p]: "religion = { family = f localization = { ReligiousHeadName = custom_head ReligiousHeadNameFemale = custom_female } faiths = { parent = {} } }",
+    };
+    const plan = await ck3FaithMigration.prepare(context(mod), {
+      [faithDecisionKey("parent")]: "independent",
+    });
+    expect(plan.unresolved).toEqual([]);
+    expect(output(plan, mod)[p]).toContain("ReligiousHeadNameFemale = custom_female");
+  });
+  it("copies a distinct captured female key and deduplicates equivalent target pairs", async () => {
+    const p = `${R}/custom.txt`;
+    const mod = {
+      [p]: "religion = { family = f localization = { ReligiousHeadName = head_title } faiths = { parent = {} } }",
+    };
+    const target = {
+      ...DOCS,
+      [`${R}/pairs.txt`]:
+        'first = { localization = { ReligiousHeadName = head_title ReligiousHeadNameFemale = "female_title" } } second = { localization = { ReligiousHeadName = head_title ReligiousHeadNameFemale = female_title } }',
+    };
+    const plan = await ck3FaithMigration.prepare(context(mod, target), {
+      [faithDecisionKey("parent")]: "independent",
+    });
+    expect(plan.unresolved).toEqual([]);
+    expect(output(plan, mod)[p]).toContain('ReligiousHeadNameFemale = "female_title"');
+    expect(output(plan, mod)[p]).not.toContain("ReligiousHeadNameFemale = head_title");
+  });
+  it.each([
+    ["missing", "head_title", ""],
+    [
+      "conflicting",
+      "head_title",
+      "first = { localization = { ReligiousHeadName = head_title ReligiousHeadNameFemale = first_female } } second = { localization = { ReligiousHeadName = head_title ReligiousHeadNameFemale = second_female } }",
+    ],
+    [
+      "incomplete alongside a complete mapping",
+      "head_title",
+      "first = { localization = { ReligiousHeadName = head_title ReligiousHeadNameFemale = first_female } } second = { localization = { ReligiousHeadName = head_title } }",
+    ],
+    [
+      "nonliteral mod title",
+      "{ head_title }",
+      "first = { localization = { ReligiousHeadName = head_title ReligiousHeadNameFemale = first_female } }",
+    ],
+    [
+      "nonliteral target title",
+      "head_title",
+      "first = { localization = { ReligiousHeadName = head_title ReligiousHeadNameFemale = { first_female } } }",
+    ],
+  ])("blocks a %s female head mapping with a located author action", async (_label, head, pairs) => {
+    const p = `${R}/custom.txt`;
+    const mod = {
+      [p]: `religion = {\n family = f\n localization = { ReligiousHeadName = ${head} }\n faiths = { parent = {} }\n}`,
+    };
+    const plan = await ck3FaithMigration.prepare(context(mod, { ...DOCS, [`${R}/pairs.txt`]: pairs }), {
+      [faithDecisionKey("parent")]: "independent",
+    });
+    expect(plan.groups).toEqual([]);
+    const failure = plan.unresolved.find(
+      (finding) => finding.id === "religious-head-female:religion:religion"
+    );
+    expect(failure).toMatchObject({ severity: "error", path: p, line: 3 });
+    expect(failure?.message).toContain("Add an explicit ReligiousHeadNameFemale");
+    expect(failure?.message).toContain("refresh the preview");
   });
   it("rebases a vanilla religion on new upstream defaults and offers genuine conflicts", async () => {
     const p = `${R}/vanilla.txt`;

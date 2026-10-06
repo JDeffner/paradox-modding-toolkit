@@ -104,7 +104,7 @@ import { ck3Meta } from "../../server/src/games/ck3/meta";
 import { renderScaffold } from "../../server/src/games/renderScaffold";
 import { TraitCreatorPanel } from "../src/webviews/traitCreator/panel";
 import { DynastyTreePanel } from "../src/webviews/dynastyTree/panel";
-import { WriteJournal } from "../src/webviews/dynastyTree/journal";
+import { WriteJournal, type JournalState } from "../src/webviews/dynastyTree/journal";
 
 let root: string;
 let cfg: PxConfig;
@@ -689,9 +689,9 @@ describe("creator save outcomes", () => {
   it("distinguishes stale text from a rejected save with no new edits", async () => {
     const file = path.join(root, "audit.txt");
     seed(file, "old = {}\n");
-    expect(await applyDefinitionEdits(file, "wrong", [])).toBe("stale");
+    expect(await applyDefinitionEdits(file, "wrong", [], { cfg })).toBe("stale");
     editor.saveMode = "reject";
-    expect(await applyDefinitionEdits(file, "old = {}\n", [])).toBe("failed");
+    expect(await applyDefinitionEdits(file, "old = {}\n", [], { cfg })).toBe("failed");
   });
 });
 
@@ -702,12 +702,16 @@ describe.each(["edit", "reject", "throw"] as const)("dynasty history with %s fai
       const file = path.join(root, "history.txt");
       seed(file, "after");
       const post = vi.fn();
-      const panel = Object.assign(Object.create(DynastyTreePanel.prototype), { post }) as {
-        replaceDocument(file: string, text: string): Promise<boolean>;
+      const panel = Object.assign(Object.create(DynastyTreePanel.prototype), {
+        post,
+        options: { cfg, mods: [{ path: root }] },
+      }) as {
+        journalState(file: string): Promise<JournalState | null>;
+        replaceDocument(file: string, text: string, expected?: JournalState): Promise<boolean>;
       };
       const journal = new WriteJournal({
-        read: async (file) => (await vscode.workspace.openTextDocument(file)).getText(),
-        write: (file, text) => panel.replaceDocument(file, text),
+        read: (file) => panel.journalState(file),
+        write: (file, text, expected) => panel.replaceDocument(file, text, expected),
         refuse: post,
       });
       journal.record({ file, before: "before", after: "after" });

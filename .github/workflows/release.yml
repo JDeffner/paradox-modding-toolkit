@@ -29,6 +29,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: refs/tags/${{ inputs.tag }}
+          fetch-depth: 0 # Preserve article history for bundled Wiki edit dates.
 
       - name: Check tag version and collect release notes
         run: node scripts/prepare-release.mjs
@@ -125,34 +126,24 @@ jobs:
           if [ "$PRERELEASE" = "true" ]; then LATEST=false; fi
           gh release edit "$RELEASE_TAG" --prerelease="$PRERELEASE" --latest="$LATEST"
 
-      # Announce the release in the Discord server's #toolkit-updates, pinging
-      # the @Paradox Toolkit role. DISCORD_RELEASE_WEBHOOK is a plain Discord
-      # webhook URL (repo secret). The whole post is a plain message, no embed:
-      # `content` caps at 2000 chars, so the notes are cut at 1600 on a line
-      # boundary. Both URLs are wrapped in <> so Discord does not attach its
-      # own link-preview embed to a post that is meant to be embed-free.
-      # Missing secret = silent skip; a failed post warns but never fails a
-      # release that already shipped.
+      # Each channel can mention only its own role. A missing or invalid role
+      # skips the announcement with a warning; prereleases never fall back to
+      # the stable audience. The builder caps content without splitting Unicode.
+      # A missing webhook skips; a failed post warns after the release shipped.
       - name: Announce on Discord
         if: success() && steps.marketplace.outcome == 'success'
         env:
           WEBHOOK: ${{ secrets.DISCORD_RELEASE_WEBHOOK }}
+          PRERELEASE: ${{ inputs.prerelease }}
+          DISCORD_STABLE_ROLE_ID: "1534329963933864079"
+          DISCORD_PRERELEASE_ROLE_ID: ${{ vars.DISCORD_PRERELEASE_ROLE_ID }}
         run: |
           [ -z "$WEBHOOK" ] && exit 0
-          URL="https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG"
-          # head -c cuts BYTES: a multibyte character split at the boundary
-          # would reach jq as invalid UTF-8 and kill the post. iconv -c drops
-          # the incomplete sequence (the line-boundary cut below usually
-          # removes it anyway; this covers the cut landing on a newline).
-          NOTES=$(head -c 1600 release-body.md | iconv -c -f UTF-8 -t UTF-8)
-          if [ "$(wc -c < release-body.md)" -gt 1600 ]; then
-            NOTES=$(printf '%s' "$NOTES" | sed '$d')
-            NOTES="$NOTES"$'\n'"…"
+          if ! node scripts/discord-release-message.mjs > discord-release-payload.json; then
+            echo "::warning::Discord release announcement skipped: invalid channel role or release payload"
+            exit 0
           fi
-          jq -n --arg tag "$RELEASE_TAG" --arg url "$URL" --arg notes "$NOTES" \
-            '{content: "<@&1534329963933864079> **Paradox Toolkit \($tag)** is out.\n\n\($notes)\n\nRelease: <\($url)>\nFull changelog: <https://github.com/JDeffner/paradox-modding-toolkit/blob/main/packages/vscode/CHANGELOG.md>",
-              allowed_mentions: {roles: ["1534329963933864079"]}}' \
-            | curl -sf -H "Content-Type: application/json" -d @- "$WEBHOOK" \
+          curl -sf -H "Content-Type: application/json" --data-binary @discord-release-payload.json "$WEBHOOK" \
             || echo "::warning::Discord release announcement failed"
 
       # Package versions are independent. Publish only versions missing from npm.
@@ -160,11 +151,13 @@ jobs:
       - name: Publish npm packages (only versions not on npm yet)
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          PRERELEASE: ${{ inputs.prerelease }}
         run: |
           if [ -z "$NODE_AUTH_TOKEN" ]; then
             echo "::warning::NPM_TOKEN secret missing, npm publish skipped"
             exit 0
           fi
+          NPM_TAG=$(node scripts/release-channel.mjs)
           for dir in packages/protocol packages/server; do
             NAME=$(node -p "require('./$dir/package.json').name")
             VERSION=$(node -p "require('./$dir/package.json').version")
@@ -186,7 +179,7 @@ jobs:
             if [ -n "$FOUND" ]; then
               echo "$NAME@$VERSION already on npm, skipping"
             else
-              echo "Publishing $NAME@$VERSION"
-              (cd "$dir" && pnpm publish --no-git-checks --access public)
+              echo "Publishing $NAME@$VERSION with npm tag $NPM_TAG"
+              (cd "$dir" && pnpm publish --no-git-checks --access public --tag "$NPM_TAG")
             fi
           done

@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import * as path from "node:path";
 import type { MigrationDocument, MigrationDocumentHost } from "@px-lsp/server/migrations/node/files";
+import { physicalPath } from "../modWrite";
 
 const within = (root: string, filename: string) => {
   const relative = path.relative(root, filename);
@@ -14,9 +15,14 @@ const record = (relative: string, doc: vscode.TextDocument): MigrationDocument =
 });
 
 export function patchDocuments(root: string): MigrationDocument[] {
-  return vscode.workspace.textDocuments
-    .filter((doc) => !doc.isClosed && doc.uri.scheme === "file" && within(root, doc.uri.fsPath))
-    .map((doc) => record(path.relative(root, doc.uri.fsPath).split(path.sep).join("/"), doc));
+  const canonicalRoot = physicalPath(root);
+  return vscode.workspace.textDocuments.flatMap((doc) => {
+    if (doc.isClosed || doc.uri.scheme !== "file") return [];
+    const filename = physicalPath(doc.uri.fsPath);
+    return within(canonicalRoot, filename)
+      ? [record(path.relative(canonicalRoot, filename).split(path.sep).join("/"), doc)]
+      : [];
+  });
 }
 
 export function patchDocumentHost(root: string): MigrationDocumentHost {
@@ -25,7 +31,7 @@ export function patchDocumentHost(root: string): MigrationDocumentHost {
       (doc) =>
         !doc.isClosed &&
         doc.uri.scheme === "file" &&
-        path.relative(doc.uri.fsPath, path.resolve(root, relative)) === ""
+        path.relative(physicalPath(doc.uri.fsPath), physicalPath(path.resolve(root, relative))) === ""
     );
   const edit = async (relative: string, text: string, expectedVersion: number, save: boolean) => {
     const doc = find(relative);

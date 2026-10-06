@@ -20,7 +20,7 @@ const COVERAGE = [
 export const ck3FaithMigration = {
   manifest: {
     id: "ck3.faiths-to-rites.decisions",
-    revision: "2",
+    revision: "4",
     sdkVersion: 2,
     gameId: "ck3",
     fromVersion: "1.19.0.6",
@@ -55,6 +55,12 @@ export const ck3FaithMigration = {
       { root: "target", path: "common/defines" },
       { root: "mod", path: "gfx/interface/icons/faith_doctrines", extensions: [".dds"], capture: "listing" },
       { root: "mod", path: "gfx/interface/icons/faith_tenets", extensions: [".dds"], capture: "listing" },
+      {
+        root: "source",
+        path: "gfx/interface/icons/faith_doctrines",
+        extensions: [".dds"],
+        capture: "listing",
+      },
       { root: "target", path: "gfx/interface/icons/faith_tenets", extensions: [".dds"], capture: "listing" },
       { root: "target", path: "history/faiths" },
       { root: "target", path: "history/_characters.info" },

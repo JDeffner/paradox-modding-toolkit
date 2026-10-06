@@ -172,6 +172,7 @@ ${uiCss}
 <body>
 <div id="app">
   <div id="toolbar">
+    <span id="referenceGame" class="px-muted px-xs"></span>
     <div class="px-input-group">${icon("search")}<input id="query" class="px-input" data-size="sm" autocomplete="off" spellcheck="false" placeholder="Search triggers, effects, datafunctions…" data-tip="Type any part of a name. The most used names come first." data-tip-wrap /></div>
     <button id="back" class="px-btn" data-variant="ghost" data-size="icon-sm" disabled data-tip="Back to the article you came from (Alt+Left)">${icon("chevronLeft")}</button>
     <button id="forward" class="px-btn" data-variant="ghost" data-size="icon-sm" disabled data-tip="Forward to the article you came back from (Alt+Right)">${icon("chevronRight")}</button>

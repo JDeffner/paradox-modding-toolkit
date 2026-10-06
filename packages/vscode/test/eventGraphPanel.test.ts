@@ -4,6 +4,7 @@ import * as path from "node:path";
 import { URI } from "vscode-uri";
 import { eventSourceHash } from "@px-lsp/server/overview/eventSourceHash";
 import type { PendingEdit } from "../src/webviews/eventGraph/history";
+import type { AppToHost } from "../src/webviews/eventGraph/messages";
 
 const host = vi.hoisted(() => ({
   text: "",
@@ -14,6 +15,9 @@ const host = vi.hoisted(() => ({
   file: "",
   mod: "",
   game: "",
+  openError: "",
+  showDocument: vi.fn(),
+  showError: vi.fn(),
 }));
 vi.mock("vscode", async () => {
   const fs = await import("node:fs");
@@ -53,34 +57,43 @@ vi.mock("vscode", async () => {
     Range,
     WorkspaceEdit,
     EndOfLine: { LF: 1, CRLF: 2 },
+    ViewColumn: { Beside: 2 },
+    window: {
+      visibleTextEditors: [],
+      showTextDocument: host.showDocument,
+      showErrorMessage: host.showError,
+    },
     workspace: {
       get workspaceFolders() {
         return [{ uri: URI.file(host.mod) }, { uri: URI.file(host.game) }];
       },
-      openTextDocument: async () => ({
-        uri: URI.file(host.file),
-        version: 1,
-        isClosed: false,
-        encoding: "utf8",
-        getText: () => host.text,
-        positionAt,
-        offsetAt,
-        eol: 1,
-        get lineCount() {
-          return host.text.split("\n").length;
-        },
-        lineAt: (n: number) => ({
-          text: host.text.split("\n")[n],
-          range: new Range(new Position(n, 0), new Position(n, host.text.split("\n")[n].length)),
-        }),
-        save: async () => {
-          if (host.save) {
-            host.saved = host.text;
-            fs.writeFileSync(host.file, host.saved);
-          }
-          return host.save;
-        },
-      }),
+      openTextDocument: async () => {
+        if (host.openError) throw new Error(host.openError);
+        return {
+          uri: URI.file(host.file),
+          version: 1,
+          isClosed: false,
+          encoding: "utf8",
+          getText: () => host.text,
+          positionAt,
+          offsetAt,
+          eol: 1,
+          get lineCount() {
+            return host.text.split("\n").length;
+          },
+          lineAt: (n: number) => ({
+            text: host.text.split("\n")[n],
+            range: new Range(new Position(n, 0), new Position(n, host.text.split("\n")[n].length)),
+          }),
+          save: async () => {
+            if (host.save) {
+              host.saved = host.text;
+              fs.writeFileSync(host.file, host.saved);
+            }
+            return host.save;
+          },
+        };
+      },
       applyEdit: async (edit: WorkspaceEdit) => {
         if (!host.apply) return false;
         const edits = edit.edits.map((e) => ({
@@ -131,6 +144,7 @@ function panel(actions: Record<string, unknown> = {}) {
   });
   return instance as {
     applyEdits(edits: PendingEdit[]): Promise<{ applied: number[]; error?: string }>;
+    onMessage(message: AppToHost): Promise<void>;
     session: { pending: PendingEdit[] };
   };
 }
@@ -141,9 +155,41 @@ beforeEach(() => {
   host.game = path.join(host.mod, "vanilla");
   host.file = path.join(host.mod, "events.txt");
   fs.writeFileSync(host.file, source);
-  Object.assign(host, { text: source, saved: source, apply: true, save: true, changes: 0 });
+  Object.assign(host, { text: source, saved: source, apply: true, save: true, changes: 0, openError: "" });
+  host.showDocument.mockClear();
+  host.showError.mockClear();
 });
 afterEach(() => fs.rmSync(host.mod, { recursive: true, force: true }));
+it.each([
+  [undefined, 0],
+  [0, 0],
+  [1, 1],
+  [2, 2],
+  [-1, 0],
+  [99, 4],
+])("opens zero-based source line %s at editor line %s", async (line, expected) => {
+  await panel().onMessage({ type: "open", file: host.file, line });
+  expect(host.showDocument).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ uri: URI.file(host.file) }),
+    {
+      viewColumn: 2,
+      preserveFocus: true,
+      selection: {
+        start: { line: expected, character: 0 },
+        end: { line: expected, character: 0 },
+      },
+    }
+  );
+  expect(host.showError).not.toHaveBeenCalled();
+});
+it("reports a source-open failure instead of showing an editor", async () => {
+  host.openError = "The source file no longer exists";
+  await panel().onMessage({ type: "open", file: host.file, line: 2 });
+  expect(host.showDocument).not.toHaveBeenCalled();
+  expect(host.showError).toHaveBeenCalledExactlyOnceWith(
+    `Event Graph: cannot open ${host.file}: The source file no longer exists`
+  );
+});
 it("preserves the operator, spacing, neighboring statement and inline comment", async () => {
   expect(await panel().applyEdits([field("25")])).toEqual({ applied: [0] });
   expect(host.saved).toBe(source.replace("gold >= 10", "gold >= 25"));

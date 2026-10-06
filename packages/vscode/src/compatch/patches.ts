@@ -50,6 +50,7 @@ import { patchHtml } from "../webviews/patches/html";
 import type { PatchViewMessage, PatchViewState } from "../webviews/patches/messages";
 import { patchDocuments, patchDocumentHost } from "./documents";
 import { PatchOutputGuard, routePatchLocalization } from "./patchOutput";
+import { physicalPath } from "../modWrite";
 
 const CONFIG = "compatibility.json";
 const RECENT = "compatibilityPatch.recent.v1";
@@ -76,6 +77,7 @@ export class PatchWorkbench implements vscode.Disposable {
   readonly ready: Promise<void>;
   private readonly panel: vscode.WebviewPanel;
   private readonly disposables: vscode.Disposable[] = [];
+  private readonly rootWatchers: vscode.Disposable[] = [];
   private readonly policy: PatchPolicy;
   private project?: PatchProject;
   private bindings?: PatchBindings;
@@ -148,24 +150,9 @@ export class PatchWorkbench implements vscode.Disposable {
           this.previews.get(uri.toString()) ?? "Preview no longer available.",
       })
     );
-    const changed = (uri: vscode.Uri) => {
-      if (this.applying || uri.scheme !== "file" || !this.bindings) return;
-      if (Object.values(this.bindings.sources).some((root) => within(root, uri.fsPath))) {
-        this.state.needsRefresh = true;
-        this.plan = undefined;
-        this.state.status = "Source content changed. Refresh conflicts before building.";
-        this.post();
-      } else if (within(this.bindings.output, uri.fsPath)) {
-        this.plan = undefined;
-        this.post();
-      }
-    };
-    this.disposables.push(vscode.workspace.onDidChangeTextDocument((event) => changed(event.document.uri)));
-    const watcher = vscode.workspace.createFileSystemWatcher("**/*");
-    watcher.onDidChange(changed, undefined, this.disposables);
-    watcher.onDidCreate(changed, undefined, this.disposables);
-    watcher.onDidDelete(changed, undefined, this.disposables);
-    this.disposables.push(watcher);
+    this.disposables.push(
+      vscode.workspace.onDidChangeTextDocument((event) => this.changed(event.document.uri))
+    );
     context.subscriptions.push(this);
     this.ready = this.resume();
   }
@@ -187,9 +174,54 @@ export class PatchWorkbench implements vscode.Disposable {
     if (this.disposed) return;
     this.disposed = true;
     this.controller?.abort();
+    this.rootWatchers.splice(0).forEach((item) => item.dispose());
     this.disposables.splice(0).forEach((item) => item.dispose());
     this.previews.clear();
     this.panel.dispose();
+  }
+  private changed(uri: vscode.Uri): void {
+    if (this.applying || this.disposed || uri.scheme !== "file" || !this.bindings) return;
+    try {
+      // Stored bindings, events and buffers can use different junction spellings.
+      // Deleted and new paths resolve through their nearest existing parent.
+      const file = physicalPath(uri.fsPath);
+      if (Object.values(this.bindings.sources).some((root) => within(physicalPath(root), file))) {
+        this.state.needsRefresh = true;
+        this.plan = undefined;
+        this.state.status = "Source content changed. Refresh conflicts before building.";
+        this.post();
+      } else if (within(physicalPath(this.bindings.output), file)) {
+        this.plan = undefined;
+        this.state.status = "Output content changed. Build the patch again.";
+        this.post();
+      }
+    } catch (error) {
+      this.plan = undefined;
+      this.state.needsRefresh = true;
+      this.state.error = `Could not check changed patch input: ${String(error)}`;
+      this.post();
+      return;
+    }
+  }
+  private watchRoots(): void {
+    this.rootWatchers.splice(0).forEach((item) => item.dispose());
+    if (!this.bindings) return;
+    // VS Code filters RelativePattern events before our handler sees them. The
+    // workspace glob also receives junction spellings; bound roots cover external mods.
+    const patterns = [
+      "**/*",
+      ...[this.bindings.output, ...Object.values(this.bindings.sources)].map(
+        (root) => new vscode.RelativePattern(root, "**/*")
+      ),
+    ];
+    for (const pattern of patterns) {
+      const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+      const changed = (uri: vscode.Uri) => this.changed(uri);
+      watcher.onDidChange(changed, undefined, this.rootWatchers);
+      watcher.onDidCreate(changed, undefined, this.rootWatchers);
+      watcher.onDidDelete(changed, undefined, this.rootWatchers);
+      this.rootWatchers.push(watcher);
+    }
   }
   private get configPath(): string {
     return `${metaFor(this.cfg.gameId).configDirName}/${CONFIG}`;
@@ -281,6 +313,7 @@ export class PatchWorkbench implements vscode.Disposable {
     await writePatchBindings(project.id, bindings, local.stamp);
     this.project = project;
     this.bindings = bindings;
+    this.watchRoots();
     this.analysis = undefined;
     this.capture = undefined;
     this.plan = undefined;
@@ -442,6 +475,7 @@ export class PatchWorkbench implements vscode.Disposable {
       throw error;
     }
     this.bindings = local;
+    this.watchRoots();
   }
   private assertWritable(): void {
     requireExperimentalFeatures();

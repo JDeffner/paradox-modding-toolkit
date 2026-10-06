@@ -1,133 +1,137 @@
-# Image guidelines (CK3 folders; the DDS formats apply to all games)
+# Image guidelines
 
-Every number below was **measured from the vanilla 1.19 game files** (most
-common size and format per folder), so match them and your art will drop into
-the game's UI without scaling artifacts. Sizes are width×height in pixels.
-Rows the measurement did not cover are filled from the community "Graphical
-DDS FAQ" (thanks to Sparc).
+For new CK3 artwork, the community **CK3 Graphical DDS FAQ**, credited to **Sparc**, gives useful starting sizes. For a replacement, match the specific texture in your installed game or parent mod, including its format and stored mip levels. A folder's most common size is not an engine requirement, and matching dimensions alone does not guarantee the same crop or layout.
 
-Convert PNG/JPEG/WebP to DDS with **Paradox: Convert Image to DDS** (also in the
-right-click menu on image files and the Project view). Preview any `.dds` by
-just clicking it.
+The references below separate the supplied FAQ from DDS headers inspected in **CK3 1.20.0.3 (Crozier), 4 October 2026**. The FAQ's game version is unspecified. Dimensions are **width × height in pixels**. **No mipmaps** means one stored level, the base image. Where the FAQ says **mipmaps**, it does not specify a level count.
 
-## Which DDS format?
+The asset folders and examples are CK3-specific. The toolkit's conversion and preview instructions also apply to its other supported games; do not use CK3 sizes as their asset requirements.
 
-| Format | When | Notes |
-|---|---|---|
-| **BC1 / DXT1** | Photos/illustrations without transparency | 6:1 compression; what vanilla uses for event scenes and loading screens |
-| **BC3 / DXT5** | Anything with smooth transparency (emblems, decorated icons) | 4:1 compression |
-| **Uncompressed (A8R8G8B8)** | Small GUI icons with crisp edges | What vanilla uses for most icons ≤ ~150px; zero artifacts, larger file |
-| Auto (converter default) | Ordinary images | BC3 if alpha is present, else BC1; uncompressed if either dimension is not divisible by 4 |
+## Coats of arms
 
-Rule of thumb from the vanilla data: **small icons are uncompressed, big illustrations are BC1, anything with alpha gradients is BC3.** BC1 and BC3 output requires width and height to be multiples of four. Auto uses uncompressed output for other sizes and keeps the original dimensions. An explicit BC1 or BC3 choice reports incompatible dimensions as a failure.
+Folders are under `gfx/coat_of_arms/`.
 
-For replacements, choose **Match reference DDS...** and select the original vanilla or parent-mod texture. The converter copies its compression format and exact mip count, including partial chains. Source dimensions must match; a mismatch is reported as a failure without resizing or writing the output. The reference file stays read-only. Reference matching supports DXT1, DXT5 and A8R8G8B8 single 2D textures. Other formats, including BC7 and DX10 headers, are reported as unsupported rather than substituted.
+- **Colored emblems:** FAQ **512×512, BC3/DXT5, mipmaps**. Folder: `colored_emblems`. Current vanilla includes 97 emblems at 512×512 with 10 levels, 903 at 256×256 with 9 levels, and 543 at 128×128 with 8 levels, all DXT5. The FAQ's 512×512 guidance is supported by shipped examples; the more common 256×256 size is not a limit.
+- **Patterns:** FAQ **256×256, BC1/DXT1, mipmaps**. Folder: `patterns`. Current files include 256×256 DXT1 with 9 levels and 128×128 DXT1 with 8 levels. DXT5 and base-only exceptions also exist; match the reference pattern when replacing it.
 
-When choosing a format manually, the converter offers **No mipmaps**, **Generate full mip chain**, and **Custom mip level count...**. The count includes the base image: **1** writes only the base, and **2** writes the base plus one smaller mip (for example, 200×200 and 100×100). A full chain continues down to 1×1. A custom count applies to every image in a batch; images too small for that count fail without replacing existing output. Reference matching uses the original count without a separate prompt. Some vanilla UI textures also have mipmaps, so check the original instead of assuming interface art needs none. Smaller levels use a box filter on each RGBA channel independently. Filtering does not apply gamma correction, multiply RGB by alpha, or renormalize normal maps. Use a specialized texture tool when those operations are needed.
+Coat-of-arms textures carry recoloring masks. Follow a comparable vanilla asset's channel layout instead of treating every channel as ordinary visible color.
 
-## Texture arrays and portrait masks
+## Icons
 
-**Match the original texture's resolution, compression format and mip-level count.** Auto chooses from pixel content and dimensions; it cannot infer the format required by a texture array. Even an opaque mask may need BC3 because the other array textures use it. A mismatch can produce CK3's `in texture array has inconsistent properties` error and white textures.
+Folders in this section are relative to `gfx/interface/icons/`. **Uncompressed** means 32-bit **A8R8G8B8**, also called BGRA8 in the toolkit. Current examples describe shipped files, not a required format for every icon in that folder.
 
-For example, the vanilla `gfx/portraits/accessory_variations/textures/patterns/byzantine/byzantine_silk_trim_03_masks.dds` inspected for this fix is **512×512, BC3/DXT5, with 10 levels including the base**. To replace it, use a 512×512 PNG and **Match reference DDS...** with that installed texture. The manual equivalent is **BC3 / DXT5**, then **Generate full mip chain**. Check the original in your installed game or parent mod if its version differs.
+### FAQ icon sizes, with current differences
 
-PNG input preserves all four channels, including RGB where alpha is zero. This matters for masks and material textures, where alpha stores data rather than transparency. PNG color profiles are not applied; 16-bit inputs are reduced to 8 bits per channel. JPEG is lossy and has no alpha. Other image inputs use browser decoding and can discard RGB under transparent pixels, so use PNG for packed channel data. DDS-to-PNG conversion reads the base level only; PNG does not carry the DDS format or mip chain back into a later conversion.
+- **Religion / faith icons:** FAQ **100×100, uncompressed, no mipmaps**. Folder: `faith`. This is also the main current profile; some shipped icons have 7 levels. Check your reference before removing them.
+- **Regiment type icons:** FAQ **120×120, uncompressed, no mipmaps**. Folder: `regimenttypes`. The current 120×120 examples have **7 levels**, so do not discard their mipmaps on replacement. These icons are separate from the men-at-arms illustrations below.
+- **Lifestyle focus icons:** FAQ **140×140, uncompressed, no mipmaps**. Folder: `focuses`. Most current files match; a few have 8 levels.
+- **Faith tenet cards:** FAQ **260×400, BC3/DXT5, no mipmaps**. Folder: `faith_tenets`, not `faith_doctrines`. Most current cards match; uncompressed cards and a few files with 9 levels also exist.
+- **Faith doctrine icon banners:** FAQ **260×400, uncompressed, no mipmaps**. Current 260×400 banners are in `faith_tenets`, with DXT5 and uncompressed examples; some have 9 levels. The separate `faith_doctrines/doctrine_banner.dds` used by the faith GUI is **132×160, DXT5, 1 level**. Match the banner referenced by your target GUI.
+- **Culture innovation cards:** FAQ **90×60, uncompressed, no mipmaps**. Folder: `culture_innovations`. Current files are **180×120**, mostly **BC1/DXT1 with 8 levels**. Use the larger current reference for replacements; retain 90×60 as attributed FAQ guidance, not a measurement of Crozier.
+- **Character interaction icons:** FAQ **120×120, uncompressed, no mipmaps**. Folder: `character_interactions`. Current assets mix sizes and formats; many 120×120 files have **7 levels**. Both base-only and mipmapped examples exist.
+- **Building type icons:** FAQ **150×130, uncompressed, no mipmaps**. Folder: `building_types`. This remains the main current profile. DXT5 files, nearby dimensions and some mipmapped assets also exist. The toolkit's BC encoder cannot export 150×130; use uncompressed output or preserve the original DDS with a suitable tool.
+- **Trait icons:** FAQ **120×120, uncompressed, mipmaps**. Folder: `traits`. Current vanilla contains both base-only files and files with 7 levels. Match the individual reference rather than adding or removing mipmaps for the entire category.
+- **Lifestyle perk icons:** FAQ **120×120, uncompressed, mipmaps**. Folder: `lifestyles_perks`. Current square perk icons have 7 levels; 180×60 assets in the folder serve different layouts.
+- **Event type / theme icons:** FAQ **148×148**; the supplied FAQ does not state a format or mip policy. Folder: `event_types`. Most current files are **uncompressed with 8 levels**; a DXT5 base-only exception exists.
 
-## Inspect stored mipmaps
+### Other current icon examples
 
-Open a DDS in the viewer and use **Mip level** to inspect each stored level and its dimensions. Level 0 is the base image. Files with one level show **No smaller mipmaps**. The viewer decodes the selected level from the file; zooming alone does not select another mipmap. **Save preview PNG** exports only the displayed surface and selected level, with `.mip-N.png` suggested for levels above zero. Batch DDS-to-image conversion exports the base level of a single 2D image.
+These entries come from the installed 1.20.0.3 headers, rather than the supplied FAQ. Mixed folders need an asset-specific reference.
 
-The viewer supports mip levels in its existing DXT1/3/5, BC7 and uncompressed formats. For texture arrays and cubemaps it displays the first slice or face. Volume textures, padded uncompressed rows and malformed or truncated chains show a mip-preview warning; the base image remains visible when it can be decoded.
+- **Doctrine and doctrine-group icons:** `faith_doctrines` and `faith_doctrine_groups`; commonly **120×120, uncompressed**, with either 1 or 7 levels. They are separate from the 260×400 tenet cards.
+- **Modifier icons:** `modifiers`; commonly **60×60** or **120×120, uncompressed**, usually 6 or 7 levels respectively. Base-only exceptions exist.
+- **Casus belli icons:** `casus_bellis`; commonly **60×60** or **120×120, uncompressed**. Mip counts vary; both base-only and full chains occur.
+- **Culture tradition cards:** `culture_tradition`; commonly **545×285, uncompressed, 1 level**. Nearby sizes also occur.
+- **Culture pillar icons:** `culture_pillars`; **120×120, uncompressed, 1 level**. The same folder also contains **1200×260** banners.
+- **Council task icons:** `council_task_types`; commonly **140×140, uncompressed, 8 levels**. A base-only example exists.
+- **Court position icons:** `court_position_types`; commonly **70×70, uncompressed**, with 1 or 7 levels. Some are 120×120.
+- **Scheme icons:** `scheme_types`; commonly **120×120, uncompressed, 7 levels**. Dimensions and compression vary in some files.
+- **Government icons:** `government_types`; commonly **70×70, uncompressed**, with 1 or 7 levels.
+- **Terrain icons:** `terrain_types`; commonly **60×60, uncompressed**, with 1 or 6 levels.
+- **Message feed icons:** `message_feed`; commonly **70×70, uncompressed, 7 levels**. Other sizes and base-only files also occur.
+- **Alert banners:** `alerts`; commonly **432×144, uncompressed, 9 levels**. Some banners use different sizes or compression.
+- **Achievement icons:** `achievements`; **256×256**, with uncompressed, DXT1 and DXT5 files. Most are base-only; some uncompressed files have 9 levels.
+- **Flat / status icons:** `flat_icons`; commonly **60×60, uncompressed**, with 1 or 6 levels. The folder contains other shapes and sizes too.
 
-Batch conversion rejects cubemaps, texture arrays and volume textures before writing output. Use a DDS tool that preserves all surfaces when editing those files. To deliberately extract the visible face or slice, use **Save preview PNG** in the viewer.
+## Illustrations
 
-## Import pictures in a creator
+Folders are relative to `gfx/interface/illustrations/` unless a full path is given. The FAQ lists **no mipmaps** for every illustration below and for bookmarks. Current files often match that policy, but exceptions are called out rather than hidden.
 
-**Custom picture** uses the same DDS choices as the converter. The first choices are **Uncompressed (A8R8G8B8)** and **Generate full mip chain** to preserve icon detail and supply smaller levels. Choose **Match reference DDS...** when replacing an existing game texture. Existing DDS inputs are copied without re-encoding, preserving their format and mip levels.
+- **Loading screens:** FAQ **3840×2160, BC1/DXT1**. Current examples in `loading_screens` match, with 1 level. `activity_splash_screens` and `main_menu` also contain 3840×2160 DXT1 base-only art.
+- **Event scene backgrounds:** FAQ **1592×848, BC1/DXT1**. Folder: `event_scenes`. This remains the main current profile, with 1 level; other dimensions and some DXT5 files exist.
+- **Frontend event scenes:** FAQ **1592×828, BC1/DXT1**. Folder: `event_scenes_frontend`. Current files are **1920×1080** or **1592×848**, DXT1, 1 level. The FAQ size is not the measured current size.
+- **Decision illustrations:** FAQ **1100×440, BC1/DXT1**. Folder: `decisions`. Current files include **2200×880**, DXT5 and uncompressed alternatives. Most are base-only, but at least one has a full mip chain.
+- **Council backgrounds:** FAQ **844×844, BC1/DXT1**. Folder: `council`. Current files use **844×844** or **535×615**, DXT1, 1 level. Match the intended panel, not an average of the two.
+- **Character view backgrounds:** FAQ **1539×849, BC1/DXT1**. Folder: `character_view`. Current files instead include **1593×849**, **3185×1697** and **3184×1700**, DXT1, 1 level. Several dimensions are incompatible with this toolkit's BC export; see the converter limitation below.
+- **Holding illustrations:** FAQ **2560×1168, BC1/DXT1**. Folder: `holding_types`. Current files match, with 1 level.
+- **Terrain illustrations:** FAQ **1200×600, BC1/DXT1**. Folder: `terrain_types`. This is the main current profile, with 1 level; 1592×848 examples also exist.
+- **Men-at-arms small illustrations:** FAQ **160×160, BC1/DXT1**. Folder: `men_at_arms_small`. Current files have 1 level, with DXT5 and uncompressed alternatives.
+- **Men-at-arms large illustrations:** FAQ **680×400, BC1/DXT1**. Folder: `men_at_arms_big`. Current files have 1 level, with DXT5 and uncompressed alternatives.
+- **Lifestyle backgrounds:** FAQ **608×1546, BC3/DXT5**. Folder: `lifestyles_background`. Current files are **608×1552**, mostly **DXT1**, with 1 level; one is DXT5.
+- **Lifestyle tree backgrounds:** FAQ **347×812, BC3/DXT5**. Folder: `gfx/interface/icons/lifestyle_tree_backgrounds`. Current artwork is **348×812** or **500×812, DXT1, 1 level**; a larger uncompressed file also exists. The FAQ's 347×812 size was not found in the inspected files. Separate UI frames live under `gfx/interface/window_lifestyles`; check the tree's specific texture reference.
+- **Dynasty legacy tracks:** FAQ **4216×368, BC3/DXT5**. Folder: `legacy_tracks`. Current files use **4216×368** or **4220×368**, **DXT1**, with 1 level.
+- **Bookmark backgrounds:** FAQ **1920×1080, BC3/DXT5**. Folder: `gfx/interface/bookmarks`. This remains the main current background profile, with 1 level. The folder also contains smaller title and decoration textures; those are not background-size examples.
 
-The importer asks before replacing a picture and refuses a replacement if the destination changed while the question was open. Cancel leaves the existing file intact. Remembered destinations belong to the selected mod, and folders that link outside that mod are rejected. Importing the file already at the destination leaves it unchanged.
+Additional current examples: `activity_backgrounds` includes 1592×848 and 3840×2160 files, with both base-only and full-chain textures and both DXT1 and DXT5. Tall `activity_types` panels are commonly 460×1100 DXT1 with 1 level; some newer files use BC7 in a DX10 header, which the toolkit can preview but cannot match for export.
 
-## Icons (`gfx/interface/icons/…`)
+## Clothing pattern textures and portrait masks
 
-| What | Folder | Size | Vanilla format |
-|---|---|---|---|
-| Trait icons | `icons/traits` | **120×120** | uncompressed (mipmaps in vanilla) |
-| Modifier icons | `icons/modifiers` | 60×60 (also 120×120) | uncompressed |
-| Character interaction icons | `icons/character_interactions` | 120×120 | uncompressed |
-| Decision icons | see decision illustrations below | — | — |
-| Casus belli icons | `icons/casus_bellis` | 60×60 or 120×120 | uncompressed |
-| Faith icons | `icons/faith` | **100×100** | uncompressed |
-| Faith doctrine icons | `icons/faith_doctrines` | 260×400 (cards) or 120×120 | DXT5 / uncompressed |
-| Culture tradition cards | `icons/culture_tradition` | **545×285** | uncompressed |
-| Culture innovation cards | `icons/culture_innovations` | 180×120 | DXT1 |
-| Culture pillar icons | `icons/culture_pillars` | 120×120 | uncompressed |
-| Lifestyle focus icons | `icons/focuses` | 140×140 | uncompressed |
-| Lifestyle perk icons | `icons/lifestyles_perks` | 120×120 | uncompressed (mipmaps in vanilla) |
-| Building icons | `icons/building_types` | **150×130** | uncompressed |
-| Council task icons | `icons/council_task_types` | 140×140 | uncompressed |
-| Court position icons | `icons/court_position_types` | 70×70 | uncompressed |
-| Scheme icons | `icons/scheme_types` | 120×120 | uncompressed |
-| Men-at-arms / regiment icons | `icons/regimenttypes` | 120×120 | uncompressed |
-| Event theme icons | `icons/event_types` | **148×148** | uncompressed |
-| Government icons | `icons/government_types` | 70×70 | uncompressed |
-| Terrain icons | `icons/terrain_types` | 60×60 | uncompressed |
-| Message feed icons | `icons/message_feed` | 70×70 | uncompressed |
-| Alert banners | `icons/alerts` | 432×144 | uncompressed |
-| Achievement icons | `icons/achievements` | 256×256 | uncompressed / DXT5 |
-| Generic flat/status icons | `icons/flat_icons` | 60×60 | uncompressed |
+Inspect the matching target texture under `gfx/portraits/accessory_variations/textures/patterns/` before converting. The supplied FAQ gives **512×512, BC3/DXT5, mipmaps** for both pattern properties and pattern normals. Current 1.20.0.3 headers show:
 
-## Illustrations (`gfx/interface/illustrations/…`)
+- **Pattern properties:** 512×512 DXT5, **10 stored levels**, a full chain down to 1×1.
+- **Pattern normals:** 512×512 DXT5, **10 stored levels**. Their channels are material data; ordinary color filtering is not a substitute for a normal-map-aware tool.
+- **Pattern masks:** 512×512 DXT5, **2 stored levels**, 512×512 and 256×256. This is a partial chain. The FAQ does not specify these mask files.
 
-| What | Folder | Size | Vanilla format |
-|---|---|---|---|
-| **Event scene backgrounds** | `illustrations/event_scenes` | **1592×848** (frontend variants 1592×828) | DXT1 |
-| Decision illustrations | `illustrations/decisions` | **1100×440** (2200×880 for hi-res) | DXT1 |
-| Activity backgrounds | `illustrations/activity_backgrounds` | 1592×848 or 3840×2160 | DXT1 |
-| Activity type panels (tall) | `illustrations/activity_types` | 460×1100 | DXT1 |
-| Splash / loading screens | `illustrations/loading_screens` | **3840×2160** | DXT1 |
-| Council background | `illustrations/council` | 844×844 / 535×615 | DXT1 |
-| Character view background | `illustrations/character_view` | 1539×849 | DXT1 |
-| Holding type illustrations | `illustrations/holding_types` | 2560×1168 | DXT1 |
-| Terrain type illustrations | `illustrations/terrain_types` | 1200×600 | DXT1 |
-| Men-at-arms small | `illustrations/men_at_arms` | 160×160 | DXT1 |
-| Men-at-arms large | `illustrations/men_at_arms` | 680×400 | DXT1 |
-| Lifestyle backgrounds | `illustrations/lifestyles` | 608×1546 | DXT5 |
-| Lifestyle tree backgrounds | `illustrations/lifestyles` | 347×812 | DXT5 |
-| Dynasty legacy tracks | `illustrations/legacies` | 4216×368 | DXT5 |
-| Bookmark backgrounds | `gfx/interface/bookmarks` | 1920×1080 | DXT5 |
+For example, `byzantine/byzantine_silk_trim_03_masks.dds` under that folder has **2 levels in 1.20.0.3**. The earlier page's 10-level example does not match this version. Use a 512×512 PNG and **Match reference DDS...** with the installed mask. The manual equivalent for this current file is **BC3 / DXT5**, then **Custom mip level count...**, then **2**, not a full chain.
 
-## Coats of arms (`gfx/coat_of_arms/…`)
+CK3 can assemble individual 2D textures into texture arrays. Match the target member's resolution, compression and mip count, even when the pixels look opaque. Auto cannot infer those requirements. Inconsistent properties can cause the game's texture-array error and white textures. Other portrait and model masks can have different dimensions and counts; the 512×512 pattern example is not a rule for every mask.
 
-| What | Folder | Size | Vanilla format |
-|---|---|---|---|
-| Colored emblems | `coat_of_arms/colored_emblems` | **256×256** (128×128 for simple ones) | DXT5 |
-| Patterns | `coat_of_arms/patterns` | 256×256 | DXT1 |
+An actual multi-slice DDS array is a different resource. The toolkit's converter rejects DDS arrays, cubemaps and volumes instead of flattening them. Use a tool that preserves all surfaces for those resources.
 
-Emblems are masks: the game recolors them, so author them in the
-red/green/blue mask convention (see vanilla examples in the same folder).
-Both emblems and patterns ship **with mipmaps** in vanilla (they scale on the
-map). Community sources also report 512×512 emblems working; the measured
-vanilla majority is 256×256.
+## Convert an image or replace an existing texture
 
-## Clothing & portrait textures (`gfx/portraits/…`)
+Run **PX: Convert Image to DDS** from the Command Palette, image context menu or Project view. For a replacement, choose **Match reference DDS...** and select the original game or parent-mod DDS. It stays read-only. The source image must already have the same dimensions; a mismatch fails without resizing or writing the output.
 
-| What | Size | Format |
-|---|---|---|
-| Clothing pattern properties | 512×512 | DXT5, **mipmaps** |
-| Clothing pattern normals | 512×512 | DXT5, **mipmaps** |
+Reference matching copies the reference's compression format and exact mip count, including partial chains. It generates the new mip pixels from your source image; it does not copy the reference's artwork. Supported reference formats are classic **DXT1, DXT5 and A8R8G8B8 single 2D textures**. BC7, DX10 headers and other formats are reported as unsupported, even when the viewer can display them.
 
-These are 3D-mapped textures. Match the original dimensions and format, and select **Generate full mip chain** when the original has a full chain. For texture arrays, all entries must have matching properties.
+### Choose a format manually
 
-## Gotchas
+- **BC1 / DXT1:** compressed color for opaque artwork. It stores 4 bits per pixel before headers and mip levels. This toolkit does not export BC1 transparency.
+- **BC3 / DXT5:** compressed color plus alpha, 8 bits per pixel. Use the reference format for packed masks; apparent transparency alone does not determine their required format.
+- **Uncompressed A8R8G8B8 / BGRA8:** 32 bits per pixel, with no block-compression loss. Useful for crisp icons and dimensions the toolkit's BC encoder cannot export.
+- **Auto:** selects BC3 if any pixel has alpha below 255, otherwise BC1. If either dimension is not divisible by four, it selects uncompressed output and keeps the source dimensions.
 
-- The game finds textures by **exact path**: your mod mirrors
-  `gfx/interface/icons/traits/my_trait.dds` and the trait's `icon` key (or the
-  default `<trait_name>.dds` lookup) must match. A typo means an empty icon
-  and **zero error output**.
-- GUI files reference textures with forward slashes:
-  `texture = "gfx/interface/icons/my_icon.dds"`.
-- Non-power-of-two sizes are valid for interface textures. BC1/BC3 base dimensions must still be divisible by four; use uncompressed DDS for sizes such as 545×285.
-- Keep transparency premultiplied-free (straight alpha); export PNG with
-  transparency and let the converter pick BC3.
-- Hover any `gfx/...` path in script to preview the texture inline; click a
-  `.dds` in the explorer for the full preview.
+The toolkit's **BC1/BC3 encoder requires base width and height to be multiples of four**. Explicit BC1/BC3 and reference-matched BC output fail for other dimensions. This is an export limitation, not proof that an existing CK3 DDS is invalid: shipped files include exceptions such as 535×615 and 1593×849 DXT1. Do not resize a replacement or change its format just to get past the error. Preserve the original DDS or use a suitable external texture tool, then test the result in the game.
+
+### Choose mip levels
+
+Manual conversion offers **No mipmaps**, **Generate full mip chain**, and **Custom mip level count...**. The count includes the base: **1** is base-only; **2** is the base plus one smaller image. A full chain ends at 1×1. A custom count applies to each image in a batch; a count too large for an image fails without replacing existing output. Reference matching uses the reference count without another prompt.
+
+Some interface assets have mipmaps and some 3D masks have partial chains. Follow the reference rather than applying "UI means no mipmaps" or "3D means a full chain." The toolkit filters RGBA channels independently, without gamma correction, alpha-weighted color filtering or normal-vector normalization. Use a specialized texture tool when your asset requires those operations.
+
+### Preserve mask and alpha data
+
+PNG input preserves all four channels, including RGB under zero alpha. PNG color profiles are not applied, and 16-bit input is reduced to 8 bits per channel. JPEG is lossy and has no alpha. Other image inputs use browser decoding, which can discard RGB under transparent pixels. Prefer PNG for packed channel data.
+
+For ordinary transparent artwork, use straight alpha. For masks and material textures, first check what each channel stores. DDS-to-PNG batch conversion exports only the base image; PNG does not retain the DDS compression format or mip chain for a later conversion.
+
+## Preview and inspect a DDS
+
+**DDS Preview** opens `.dds` files by default unless you changed the editor association. Use **Open With > DDS Preview** to choose it explicitly. **Mip level** selects each stored level and shows its dimensions; zooming does not change the selected mip. One-level files show **No smaller mipmaps**.
+
+**Save preview PNG** exports only the displayed surface and selected level, with `.mip-N.png` suggested above level 0. Batch DDS-to-image conversion exports the base level of a single 2D image. Neither operation preserves a complete mip chain in the PNG.
+
+The viewer supports its existing DXT1/3/5, BC7 and uncompressed formats. For DDS arrays and cubemaps it displays the first slice or face. Volume textures, padded uncompressed rows and malformed or truncated chains show a mip-preview warning; a decodable base image can remain visible.
+
+Hover a supported `.dds` path in script for an inline preview. Unresolved paths have no texture preview; unsupported formats or the preview-size limit can produce file information without an image. Mirror game-relative texture paths in the mod, and use forward slashes in GUI references, for example `texture = "gfx/interface/icons/my_icon.dds"`.
+
+## Import a creator picture
+
+**Custom picture** uses the same DDS choices. The first choices are **Uncompressed (A8R8G8B8)** and **Generate full mip chain**; these are UI defaults, not requirements for every icon. Select the reference's format and mip policy. Existing DDS inputs are copied without re-encoding, preserving their format and levels.
+
+The importer asks before replacing a picture and refuses the replacement if its destination changed while the question was open. Cancel leaves the existing file intact. Remembered destinations belong to the selected mod, linked folders outside the mod are rejected, and importing the file already at its destination leaves it unchanged.
+
+## Sources and scope
+
+- **Community reference:** the supplied "CK3 Graphical DDS FAQ", credited to **Sparc**. Its sizes and export guidance are labelled as FAQ entries above; its date and game version were not supplied.
+- **Current file evidence:** DDS headers from the installed **CK3 1.20.0.3 (Crozier)**, inspected on **4 October 2026**. A shipped file's properties establish an example, not every format or size that the engine accepts. Folder summaries do not replace inspecting the target file, and no in-game rendering test was performed for this page update.
+- **Format terminology:** [Microsoft's texture block compression reference](https://learn.microsoft.com/en-us/windows/win32/direct3d11/texture-block-compression-in-direct3d-11). BC1/DXT1 and BC3/DXT5 names refer to their compression formats; uncompressed A8R8G8B8 uses 8 bits for each of four channels.

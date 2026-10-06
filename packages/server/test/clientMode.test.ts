@@ -5,7 +5,7 @@
  * `clientCommands` boolean still resolves to all-on / all-off, and the rich
  * (VSCode) path stays byte-identical.
  */
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
@@ -20,9 +20,17 @@ import { ServerData } from "../src/serverData";
 import type { Diagnostic, TextDocumentEdit, TextEdit } from "vscode-languageserver/node";
 import { URI } from "vscode-uri";
 
+vi.mock("fs", { spy: true });
+
 /** Install the capabilities a client declaring `init` would get. */
-const asClient = (init: Partial<ParadoxInitOptions>): void =>
-  setClientCapabilities(resolveClientCapabilities(init));
+const asClient = (
+  init: Partial<ParadoxInitOptions>,
+  lsp?: Parameters<typeof resolveClientCapabilities>[1]
+): void => setClientCapabilities(resolveClientCapabilities(init, lsp));
+const localizationCapabilities = {
+  workspace: { workspaceEdit: { documentChanges: true, resourceOperations: ["create"] } },
+  textDocument: { codeAction: { disabledSupport: true } },
+};
 
 /**
  * A real OS path as a file URI. Hand-building `"file:///" + p` only works where
@@ -43,6 +51,8 @@ describe("capability resolution", () => {
     fileLinks: false,
     hoverIcons: false,
     documentChanges: false,
+    createFile: false,
+    disabledCodeActions: false,
   };
   /** What a client declares in the STANDARD LSP initialize params. */
   const withSnippets = { textDocument: { completion: { completionItem: { snippetSupport: true } } } };
@@ -57,6 +67,8 @@ describe("capability resolution", () => {
       fileLinks: true,
       hoverIcons: true,
       documentChanges: false,
+      createFile: false,
+      disabledCodeActions: false,
     });
   });
 
@@ -67,6 +79,17 @@ describe("capability resolution", () => {
       snippetSupport: true,
     });
     expect(resolveClientCapabilities({ client: {} }, { textDocument: { completion: {} } })).toEqual(allOff);
+  });
+
+  it("retains standard workspace resource and disabled-action capabilities independently", () => {
+    expect(resolveClientCapabilities({}, localizationCapabilities)).toMatchObject({
+      documentChanges: true,
+      createFile: true,
+      disabledCodeActions: true,
+    });
+    expect(
+      resolveClientCapabilities({}, { workspace: { workspaceEdit: { documentChanges: true } } })
+    ).toMatchObject({ documentChanges: true, createFile: false, disabledCodeActions: false });
   });
 
   it("honors the standard completion documentation preference independently of custom capabilities", () => {
@@ -265,7 +288,7 @@ describe("code actions per client mode", () => {
   function withMod(
     run: (root: string, write: (file: string, text: string) => string, ctx: LocEditContext) => void
   ): void {
-    asClient({ clientCommands: false });
+    asClient({ clientCommands: false }, localizationCapabilities);
     const root = fs.mkdtempSync(path.join(os.tmpdir(), "px-loc-policy-"));
     const write = (file: string, text: string) => {
       const target = path.join(root, file);
@@ -303,7 +326,7 @@ describe("code actions per client mode", () => {
   });
 
   it("plain client: create-key action carries a real WorkspaceEdit; command actions absent", () => {
-    asClient({ clientCommands: false });
+    asClient({ clientCommands: false }, localizationCapabilities);
     const modRoot = fs.mkdtempSync(path.join(os.tmpdir(), "px-locedit-"));
     try {
       const ctx: LocEditContext = {
@@ -331,7 +354,7 @@ describe("code actions per client mode", () => {
   });
 
   it("plain client uses the sibling localization file and its entry version", () => {
-    asClient({ clientCommands: false });
+    asClient({ clientCommands: false }, localizationCapabilities);
     const modRoot = fs.mkdtempSync(path.join(os.tmpdir(), "px-locedit-"));
     try {
       const locDir = path.join(modRoot, "localization", "english");
@@ -540,7 +563,7 @@ describe("code actions per client mode", () => {
   });
 
   it("a client registering only px.openLocalizationSideBySide gets that action and a WorkspaceEdit fix", () => {
-    asClient({ client: { commands: [clientCommands.openLocalizationSideBySide] } });
+    asClient({ client: { commands: [clientCommands.openLocalizationSideBySide] } }, localizationCapabilities);
     const modRoot = fs.mkdtempSync(path.join(os.tmpdir(), "px-locedit-"));
     try {
       const ctx: LocEditContext = {
@@ -559,5 +582,97 @@ describe("code actions per client mode", () => {
     } finally {
       fs.rmSync(modRoot, { recursive: true, force: true });
     }
+  });
+
+  it("omits unsupported file creation unless the client can show disabled actions", () => {
+    withMod((root, _write, ctx) => {
+      asClient({});
+      expect(missingActions(root, ctx)).toEqual([]);
+      for (const workspaceEdit of [{ documentChanges: true }, { resourceOperations: ["create"] }]) {
+        asClient(
+          {},
+          { workspace: { workspaceEdit }, textDocument: { codeAction: { disabledSupport: true } } }
+        );
+        const [action] = missingActions(root, ctx);
+        expect(action.edit).toBeUndefined();
+        expect(action.disabled?.reason).toContain("CreateFile");
+      }
+    });
+  });
+
+  it("uses plain changes for a closed existing target and preserves its content", () => {
+    withMod((root, write, ctx) => {
+      const text = '\uFEFFl_english:\n # keep\n some_decision_desc:4 "sibling"\n unrelated:2 "stay"\n';
+      const target = write("localization/english/decisions_l_english.yml", text);
+      asClient({});
+      const [action] = missingActions(root, ctx);
+      expect(action.edit?.documentChanges).toBeUndefined();
+      const edits = action.edit!.changes![fileUri(target)];
+      const updated = TextDocument.applyEdits(
+        TextDocument.create(fileUri(target), "paradox-loc", 0, text),
+        edits
+      );
+      expect(updated).toContain(' some_decision_title:4 ""\n');
+      expect(updated).toContain(' unrelated:2 "stay"\n');
+      expect(updated).toContain(" # keep\n");
+      expect(fs.readFileSync(target, "utf8")).toBe(text);
+    });
+  });
+
+  it("requires versioned edit support for open targets and gates failure actions", () => {
+    withMod((root, write, ctx) => {
+      const target = write(
+        "localization/english/decisions_l_english.yml",
+        '\uFEFFl_english:\n some_decision_desc:0 "disk"\n'
+      );
+      ctx.openDocuments = [
+        TextDocument.create(
+          fileUri(target),
+          "paradox-loc",
+          4,
+          '\uFEFFl_english:\n some_decision_desc:9 "draft"\n'
+        ),
+      ];
+      asClient({});
+      expect(missingActions(root, ctx)).toEqual([]);
+      asClient({}, { textDocument: { codeAction: { disabledSupport: true } } });
+      const [action] = missingActions(root, ctx);
+      expect(action.edit).toBeUndefined();
+      expect(action.disabled?.reason).toContain("open localization document");
+      expect(ctx.openDocuments[0].version).toBe(4);
+    });
+  });
+
+  it("reads each localization file once for a multi-key request and combines duplicate diagnostics", () => {
+    withMod((root, write, ctx) => {
+      const files = Array.from({ length: 30 }, (_, i) =>
+        write(
+          `localization/english/list_${i}_l_english.yml`,
+          `\uFEFFl_english:\n family_${i}_desc:0 "keep"\n`
+        )
+      );
+      const diagnostics = Array.from({ length: 20 }, (_, i) => ({
+        ...missingLoc,
+        data: { key: `unowned_${i}` },
+      }));
+      diagnostics.push(diagnostics[0]);
+      const read = vi.mocked(fs.readFileSync);
+      read.mockClear();
+      try {
+        const actions = provideCodeActions(
+          stubData,
+          doc(fileUri(path.join(root, "events/d.txt"))),
+          missingLoc.range,
+          diagnostics,
+          ctx
+        );
+        expect(actions).toHaveLength(20);
+        expect(actions.every((action) => action.edit?.documentChanges?.length === 2)).toBe(true);
+        expect(actions[0].diagnostics).toHaveLength(2);
+        for (const file of files) expect(read.mock.calls.filter(([name]) => name === file)).toHaveLength(1);
+      } finally {
+        read.mockClear();
+      }
+    });
   });
 });

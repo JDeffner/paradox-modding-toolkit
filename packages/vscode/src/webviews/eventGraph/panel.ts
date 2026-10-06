@@ -479,7 +479,7 @@ export class EventGraphPanel {
   private async openDocument(file: string, line?: number): Promise<void> {
     try {
       const doc = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
-      const zero = Math.max(0, (line ?? 1) - 1);
+      const zero = Math.max(0, line ?? 0);
       const position = new vscode.Position(Math.min(zero, Math.max(0, doc.lineCount - 1)), 0);
       // Open in the OTHER editor group so the graph tab stays visible; reuse an
       // existing text group when there is one.

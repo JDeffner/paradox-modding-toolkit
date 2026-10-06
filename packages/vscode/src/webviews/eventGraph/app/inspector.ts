@@ -164,7 +164,7 @@ export class Inspector {
     const head = el("div", "insHead");
     head.appendChild(el("h2", "", detail.id));
     head.appendChild(
-      iconButton("fileText", "Open the source", () => this.cb.onOpen(detail.file, detail.line + 1), "icon-xs")
+      iconButton("fileText", "Open the source", () => this.cb.onOpen(detail.file, detail.line), "icon-xs")
     );
     this.root.appendChild(head);
     const chips = el("div", "badges");
@@ -514,7 +514,7 @@ export class Inspector {
         `+${totalLines - lines.length} more lines — open the source`
       );
       more.dataset.variant = "link";
-      more.addEventListener("click", () => this.cb.onOpen(detail.file, blockLine + 1));
+      more.addEventListener("click", () => this.cb.onOpen(detail.file, blockLine));
       wrap.appendChild(more);
     }
     into.appendChild(wrap);
@@ -581,7 +581,7 @@ export class Inspector {
       iconButton(
         "cornerDownRight",
         `Open line ${line.line + 1}`,
-        () => this.cb.onOpen(detail.file, line.line + 1),
+        () => this.cb.onOpen(detail.file, line.line),
         "icon-xs"
       )
     );
@@ -658,7 +658,7 @@ export class Inspector {
       iconButton(
         "cornerDownRight",
         `Open line ${line + 1}`,
-        () => this.cb.onOpen(detail.file, line + 1),
+        () => this.cb.onOpen(detail.file, line),
         "icon-xs"
       )
     );
@@ -768,7 +768,7 @@ export class Inspector {
       iconButton(
         "cornerDownRight",
         `Open line ${line + 1}`,
-        () => this.cb.onOpen(detail.file, line + 1),
+        () => this.cb.onOpen(detail.file, line),
         "icon-xs"
       )
     );

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertLocalizationHeader,
   generatedLocalizationSource,
   parseLocalizationDefaults,
   suggestLocalizationTarget,
@@ -21,6 +22,18 @@ const suggest = (documents: LocalizationDocument[], options: Partial<Localizatio
     subject: "example",
     ...options,
   });
+
+describe("localization header boundary", () => {
+  it("accepts a matching header after comments with BOM and CRLF", () => {
+    expect(() =>
+      assertLocalizationHeader('\uFEFF# comment\r\n l_german: # language\r\n key: "Value"', "german")
+    ).not.toThrow();
+  });
+  it.each(["", "# only a comment\n", "l_french:\n", "l_german:\nl_german:\n", "l_german:\nl_french:\n"])(
+    "rejects missing, mismatched and duplicate headers in %j",
+    (text) => expect(() => assertLocalizationHeader(text, "german")).toThrow("single l_german: header")
+  );
+});
 
 describe("localization defaults", () => {
   it("accepts automatic choices and supported templates", () => {

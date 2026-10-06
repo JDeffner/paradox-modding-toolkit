@@ -26,12 +26,12 @@ import { resolveConfigPath } from "@px-lsp/protocol/configDir";
 import {
   generatedLocalizationSource,
   parseLocalizationDefaults,
-  suggestLocalizationTarget,
+  prepareLocalizationTarget,
   upsertLocalizationText,
 } from "@px-lsp/protocol/localizationPolicy";
 import { getLineText } from "../documents";
 import { activeProfile } from "../games/active";
-import { canRunCommand } from "../clientMode";
+import { canRunCommand, clientCapabilities } from "../clientMode";
 
 export function locKeyRefAt(lineText: string, character: number): LocKeyRef | null {
   const refs = findLocKeyRefs(lineText);
@@ -83,19 +83,23 @@ function assertModTarget(root: string, target: string): void {
   }
 }
 
-/** Missing-key edits use mod conventions and version the current target buffer. */
-export function locCreateEdit(
-  key: string,
+/** One request shares the current mod snapshot and parsed target policy across missing keys. */
+function prepareLocCreateEdits(
   docFsPath: string,
   ctx: LocEditContext,
   relatedKeys: string[] = []
-): WorkspaceEdit | null {
+): (key: string) => WorkspaceEdit | null {
   const modRoot = ctx.modRootOf(docFsPath);
-  if (!modRoot) return null;
+  if (!modRoot) return () => null;
   const normalize = (file: string) => (process.platform === "win32" ? file.toLowerCase() : file);
   const open = new Map((ctx.openDocuments ?? []).map((doc) => [normalize(URI.parse(doc.uri).fsPath), doc]));
   const current = (file: string) => open.get(normalize(file));
-  const readCurrent = (file: string) => current(file)?.getText() ?? readOptional(file);
+  const contents = new Map<string, string | undefined>();
+  const readCurrent = (file: string) => {
+    const normalized = normalize(file);
+    if (!contents.has(normalized)) contents.set(normalized, current(file)?.getText() ?? readOptional(file));
+    return contents.get(normalized);
+  };
   const configFile = resolveConfigPath(modRoot, activeProfile(), "localization.json");
   const config = readCurrent(configFile);
   const defaults = parseLocalizationDefaults(
@@ -141,8 +145,7 @@ export function locCreateEdit(
       texts.set(relative, doc.getText());
     }
   }
-  const suggestion = suggestLocalizationTarget({
-    key,
+  const suggest = prepareLocalizationTarget({
     language: lang,
     locRoots: ctx.locRoots,
     documents: [...texts].map(([file, text]) => ({ path: file, text })),
@@ -151,52 +154,69 @@ export function locCreateEdit(
     relatedKeys,
     subject: path.basename(modRoot),
   });
-  if (suggestion.reason === "existing key") return null;
-  if (!suggestion.path) {
-    throw new Error(
-      `Choose a localization file or set localization.json newKeyFile: ${suggestion.candidates?.join(", ")}`
-    );
-  }
-  const target = path.join(modRoot, suggestion.path);
-  assertModTarget(modRoot, target);
-  const uri = URI.file(target).toString();
-  const content = readCurrent(target);
-  if (content !== undefined && generatedLocalizationSource(content)) {
-    throw new Error(`Localization target is generated: ${suggestion.path}`);
-  }
-  let updated = upsertLocalizationText(content ?? "", lang, key, "", defaults.entryVersion);
-  if (!updated.startsWith("\uFEFF")) updated = "\uFEFF" + updated;
-  if (content === undefined) {
+  return (key) => {
+    const suggestion = suggest(key);
+    if (suggestion.reason === "existing key") return null;
+    if (!suggestion.path) {
+      throw new Error(
+        `Choose a localization file or set localization.json newKeyFile: ${suggestion.candidates?.join(", ")}`
+      );
+    }
+    const target = path.join(modRoot, suggestion.path);
+    assertModTarget(modRoot, target);
+    const uri = URI.file(target).toString();
+    const content = readCurrent(target);
+    if (content !== undefined && generatedLocalizationSource(content)) {
+      throw new Error(`Localization target is generated: ${suggestion.path}`);
+    }
+    let updated = upsertLocalizationText(content ?? "", lang, key, "", defaults.entryVersion);
+    if (!updated.startsWith("\uFEFF")) updated = "\uFEFF" + updated;
+    if (content === undefined) {
+      if (!clientCapabilities().documentChanges || !clientCapabilities().createFile) {
+        throw new Error(
+          "The client must support documentChanges and CreateFile to create a localization file"
+        );
+      }
+      return {
+        documentChanges: [
+          CreateFile.create(uri),
+          TextDocumentEdit.create({ uri, version: null }, [
+            {
+              range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
+              newText: updated,
+            },
+          ]),
+        ],
+      };
+    }
+    const targetDoc = current(target) ?? TextDocument.create(uri, "paradox-localization", 0, content);
+    let start = 0;
+    while (start < content.length && start < updated.length && content[start] === updated[start]) start++;
+    let end = content.length;
+    let updatedEnd = updated.length;
+    while (end > start && updatedEnd > start && content[end - 1] === updated[updatedEnd - 1]) {
+      end--;
+      updatedEnd--;
+    }
+    const edits = [
+      {
+        range: { start: targetDoc.positionAt(start), end: targetDoc.positionAt(end) },
+        newText: updated.slice(start, updatedEnd),
+      },
+    ];
+    if (!clientCapabilities().documentChanges) {
+      if (current(target)) {
+        throw new Error(
+          "The client must support documentChanges to safely edit an open localization document"
+        );
+      }
+      return { changes: { [uri]: edits } };
+    }
     return {
       documentChanges: [
-        CreateFile.create(uri),
-        TextDocumentEdit.create({ uri, version: null }, [
-          {
-            range: { start: { line: 0, character: 0 }, end: { line: 0, character: 0 } },
-            newText: updated,
-          },
-        ]),
+        TextDocumentEdit.create({ uri: targetDoc.uri, version: current(target)?.version ?? null }, edits),
       ],
     };
-  }
-  const targetDoc = current(target) ?? TextDocument.create(uri, "paradox-localization", 0, content);
-  let start = 0;
-  while (start < content.length && start < updated.length && content[start] === updated[start]) start++;
-  let end = content.length;
-  let updatedEnd = updated.length;
-  while (end > start && updatedEnd > start && content[end - 1] === updated[updatedEnd - 1]) {
-    end--;
-    updatedEnd--;
-  }
-  return {
-    documentChanges: [
-      TextDocumentEdit.create({ uri: targetDoc.uri, version: current(target)?.version ?? null }, [
-        {
-          range: { start: targetDoc.positionAt(start), end: targetDoc.positionAt(end) },
-          newText: updated.slice(start, updatedEnd),
-        },
-      ]),
-    ],
   };
 }
 export function provideCodeActions(
@@ -209,35 +229,52 @@ export function provideCodeActions(
   const actions: CodeAction[] = [];
   const canEditLoc = canRunCommand(clientCommands.editLocalization);
   const canOpenSideBySide = canRunCommand(clientCommands.openLocalizationSideBySide);
+  let createEdit: ((key: string) => WorkspaceEdit | null) | undefined;
+  const missing = new Map<string, Diagnostic[]>();
+  for (const diagnostic of diagnostics) {
+    if (diagnostic.code !== "missing-required-loc") continue;
+    const key = (diagnostic.data as { key?: string } | undefined)?.key;
+    if (typeof key !== "string" || !key) continue;
+    const group = missing.get(key) ?? [];
+    group.push(diagnostic);
+    missing.set(key, group);
+  }
 
   // Quick fix on missing-required-loc diagnostics: create the key in place.
-  for (const d of diagnostics) {
-    if (d.code !== "missing-required-loc") continue;
-    const key = (d.data as { key?: string } | undefined)?.key;
-    if (!key) continue;
+  for (const [key, keyDiagnostics] of missing) {
     const title = `${activeProfile().shortName}: Create localization key "${key}"`;
     if (canEditLoc) {
       actions.push({
         title,
         kind: CodeActionKind.QuickFix,
-        diagnostics: [d],
+        diagnostics: keyDiagnostics,
         command: { command: clientCommands.editLocalization, title: "Create localization", arguments: [key] },
       });
     } else if (locEditContext) {
       try {
-        const relatedKeys = document
-          .getText()
-          .split(/\r?\n/)
-          .flatMap((line) => findLocKeyRefs(line).map((ref) => ref.key));
-        const edit = locCreateEdit(key, URI.parse(document.uri).fsPath, locEditContext, relatedKeys);
-        if (edit) actions.push({ title, kind: CodeActionKind.QuickFix, diagnostics: [d], edit });
+        if (!createEdit) {
+          const relatedKeys = document
+            .getText()
+            .split(/\r?\n/)
+            .flatMap((line) => findLocKeyRefs(line).map((ref) => ref.key));
+          try {
+            createEdit = prepareLocCreateEdits(URI.parse(document.uri).fsPath, locEditContext, relatedKeys);
+          } catch (error) {
+            createEdit = () => {
+              throw error;
+            };
+          }
+        }
+        const edit = createEdit(key);
+        if (edit) actions.push({ title, kind: CodeActionKind.QuickFix, diagnostics: keyDiagnostics, edit });
       } catch (error) {
-        actions.push({
-          title,
-          kind: CodeActionKind.QuickFix,
-          diagnostics: [d],
-          disabled: { reason: error instanceof Error ? error.message : String(error) },
-        });
+        if (clientCapabilities().disabledCodeActions)
+          actions.push({
+            title,
+            kind: CodeActionKind.QuickFix,
+            diagnostics: keyDiagnostics,
+            disabled: { reason: error instanceof Error ? error.message : String(error) },
+          });
       }
     }
   }

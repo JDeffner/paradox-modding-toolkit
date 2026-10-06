@@ -82,6 +82,37 @@ function boot() {
   };
 }
 
+it.each([
+  [{ lastEdited: "2026-09-24T23:15:00+02:00", uncommitted: false }, "Last edited: 2026-09-24"],
+  [
+    { lastEdited: "2026-09-24T23:15:00+02:00", uncommitted: true },
+    "Last committed edit: 2026-09-24 · Uncommitted changes",
+  ],
+  [{ uncommitted: false }, "Edit date unavailable"],
+  [{ uncommitted: true }, "Edit date unavailable · Uncommitted changes"],
+] as const)("shows article source history without inventing dates: %j", (revision, expected) => {
+  const t = boot();
+  t.post({
+    type: "content",
+    hub: [],
+    articles: [
+      { id: "article", title: "Article", section: "About", markdown: "# Article\n\nBody", revision },
+      ...launch("-fixture_current"),
+    ],
+    games: [{ id: "ck3", name: "CK3" }],
+    game: "ck3",
+    select: "article",
+  });
+  const metadata = t.content.querySelector(".article-revision")!;
+  expect(metadata.textContent).toBe(expected);
+  expect(metadata.previousElementSibling?.tagName).toBe("H1");
+  expect(metadata.querySelector("time")?.getAttribute("datetime")).toBe(
+    "lastEdited" in revision ? revision.lastEdited : undefined
+  );
+  t.post({ type: "select", id: "launch-options" });
+  expect(t.content.querySelector(".article-revision")).toBeNull();
+});
+
 it("refreshes launch content and search without losing page, game, query or scroll", () => {
   const t = boot();
   expect(t.messages[0]).toEqual({ type: "ready" });
@@ -118,4 +149,63 @@ it("shows the selected game's unsupported reference and keeps that game after up
   expect(t.content.textContent).toContain("No installed launch-options reference");
   t.query("fixture_new");
   expect(t.document.getElementById("navEmpty")).not.toBeNull();
+});
+
+it("routes Examples Wiki to the selected game and updates its labels in cards and search", () => {
+  const t = boot();
+  t.post({
+    type: "content",
+    hub: [
+      {
+        label: "Examples Wiki",
+        icon: "bookOpen",
+        tip: "Game reference",
+        selectedGame: true,
+        target: { command: "px.showExamplesWiki" },
+      },
+    ],
+    articles: launch("-fixture_old"),
+    games: [
+      { id: "ck3", name: "CK3" },
+      { id: "vic3", name: "Victoria 3" },
+      { id: "eu5", name: "EU5" },
+    ],
+    game: "ck3",
+    select: null,
+  });
+  [...t.document.querySelectorAll<HTMLElement>('#nav [role="button"]')]
+    .find((node) => node.textContent === "Home")!
+    .click();
+  for (const [id, name] of [
+    ["vic3", "Victoria 3"],
+    ["eu5", "EU5"],
+    ["ck3", "CK3"],
+  ]) {
+    t.document.getElementById("game")!.click();
+    [...t.document.querySelectorAll<HTMLElement>('[role="option"]')]
+      .find((node) => node.textContent === name)!
+      .click();
+    const card = t.document.querySelector<HTMLButtonElement>("#content .card")!;
+    expect(card.textContent).toContain(`${name} Examples Wiki`);
+    card.click();
+    expect(t.messages.at(-1)).toEqual({ type: "run", command: "px.showExamplesWiki", game: id });
+    t.query(name);
+    const row = t.document.querySelector<HTMLElement>('#nav [role="button"]')!;
+    expect(row.textContent).toBe(`${name} Examples Wiki`);
+    expect(row.getAttribute("data-tip")).toContain(name);
+    t.query("");
+  }
+  t.post({
+    type: "hub",
+    hub: [
+      {
+        label: "Vic3 Mod Report (workspace)",
+        icon: "activity",
+        tip: "Workspace report",
+        target: { page: "mod-report" },
+      },
+    ],
+  });
+  expect(t.document.getElementById("game")?.textContent).toContain("CK3");
+  expect(t.content.textContent).toContain("Vic3 Mod Report (workspace)");
 });

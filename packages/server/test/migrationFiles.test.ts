@@ -5,6 +5,7 @@ import type { MigrationManifest } from "@px-lsp/protocol/migration";
 import type { PreparedMigration, PreparedMigrationFile } from "../src/migrations/sdk";
 import { hashPlan, hashSnapshot } from "../src/migrations/engine";
 import {
+  applyFileChanges,
   applyMigration,
   assertMigrationFresh,
   captureMigration,
@@ -60,12 +61,13 @@ describe("migration filesystem adapter", () => {
   });
   async function plan(
     files: PreparedMigrationFile[],
-    documents: MigrationDocument[] = []
+    documents: MigrationDocument[] = [],
+    entry: MigrationManifest = manifest
   ): Promise<PreparedMigration> {
     const unsigned: Omit<PreparedMigration, "hash"> = {
       version: 1,
       recipe: { id: "test", revision: "1", codeHash: "test" },
-      snapshotHash: await hashSnapshot(await captureMigration({ mod, source }, manifest, "ck3", documents)),
+      snapshotHash: await hashSnapshot(await captureMigration({ mod, source }, entry, "ck3", documents)),
       answers: {},
       selectedGroups: [],
       files,
@@ -243,6 +245,59 @@ describe("migration filesystem adapter", () => {
     expect(read).not.toHaveBeenCalled();
   });
 
+  it.each(["failure", "cancellation"])("drains bounded metadata work before reporting %s", async (reason) => {
+    for (let n = 0; n < 25; n++)
+      await fs.writeFile(path.join(mod, `events/batch_${String(n).padStart(2, "0")}.txt`), "input");
+    const entry = { ...manifest, inputs: [{ root: "mod" as const, path: "events" }] };
+    const inputDirectory = path.join(await fs.realpath(mod), "events") + path.sep;
+    const controller = new AbortController();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let entered!: () => void;
+    const batch = new Promise<void>((resolve) => (entered = resolve));
+    let active = 0;
+    let maximum = 0;
+    const original = fs.lstat.bind(fs);
+    vi.spyOn(fs, "lstat").mockImplementation((async (filename: Parameters<typeof fs.lstat>[0]) => {
+      if (!String(filename).startsWith(inputDirectory) || !String(filename).endsWith(".txt"))
+        return original(filename);
+      active++;
+      maximum = Math.max(maximum, active);
+      if (active === 16) entered();
+      try {
+        await gate;
+        if (reason === "failure" && String(filename).endsWith("batch_00.txt"))
+          throw new Error("Metadata read failed");
+        return await original(filename);
+      } finally {
+        active--;
+      }
+    }) as typeof fs.lstat);
+    const read = vi.spyOn(fs, "readFile");
+    let settled = false;
+    const captured = captureMigration({ mod }, entry, "ck3", [], { signal: controller.signal }).then(
+      () => {
+        settled = true;
+        return undefined;
+      },
+      (error: unknown) => {
+        settled = true;
+        return error;
+      }
+    );
+    await batch;
+    if (reason === "cancellation") controller.abort();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    release();
+    expect(await captured).toMatchObject({
+      message: reason === "failure" ? "Metadata read failed" : "Migration cancelled.",
+    });
+    expect(maximum).toBe(16);
+    expect(active).toBe(0);
+    expect(read).not.toHaveBeenCalled();
+  });
+
   it("rejects case collisions and junctions in recursively enumerated input directories", async () => {
     const entry: MigrationManifest = {
       ...manifest,
@@ -341,6 +396,188 @@ describe("migration filesystem adapter", () => {
     await expect(fs.stat(path.join(mod, "events/new.txt"))).rejects.toMatchObject({ code: "ENOENT" });
     expect(await fs.readFile(path.join(mod, "events/remove.txt"), "utf8")).toBe("remove");
   });
+
+  it.each(["replace", "create"] as const)(
+    "preserves a concurrent destination edit while staging an apply %s",
+    async (operation) => {
+      const file = operation === "replace" ? change() : { path: "events/new.txt", after: bytes("new") };
+      const prepared = await plan([file]);
+      const destination = path.join(await fs.realpath(mod), file.path);
+      const concurrent = bytes("\uFEFFnew user work during staging\n");
+      const write = fs.writeFile.bind(fs);
+      let injected = false;
+      vi.spyOn(fs, "writeFile").mockImplementation(async (name, ...args) => {
+        await write(name, ...args);
+        if (
+          String(name).includes(`.${path.basename(destination)}.`) &&
+          String(name).endsWith(".migration-tmp")
+        ) {
+          injected = true;
+          await write(destination, concurrent);
+        }
+      });
+      expect(await applyMigration(prepared, options())).toMatchObject({ status: "failed", completed: [] });
+      expect(injected).toBe(true);
+      expect(await fs.readFile(destination)).toEqual(concurrent);
+      expect(
+        (await fs.readdir(path.dirname(destination))).some((name) => name.endsWith(".migration-tmp"))
+      ).toBe(false);
+      expect(await restoreMigration(journalPath)).toMatchObject({
+        status: "conflict",
+        conflicts: [file.path],
+      });
+      expect(await fs.readFile(destination)).toEqual(concurrent);
+    }
+  );
+
+  it("rejects a changed source before publishing caller-frozen staged output", async () => {
+    const sourceFile = path.join(source, "events/base.txt");
+    const write = fs.writeFile.bind(fs);
+    vi.spyOn(fs, "writeFile").mockImplementation(async (name, ...args) => {
+      await write(name, ...args);
+      if (String(name).includes(".a.txt.") && String(name).endsWith(".migration-tmp"))
+        await write(sourceFile, "changed source during staging");
+    });
+    const result = await applyFileChanges([change()], {
+      root: mod,
+      protectedRoots: [source],
+      journalPath,
+      assertFresh: async () => {
+        if ((await fs.readFile(sourceFile, "utf8")) !== "base") throw new Error("Source changed");
+      },
+    });
+    expect(result).toMatchObject({ status: "failed", completed: [], error: "Source changed" });
+    expect(await fs.readFile(path.join(mod, change().path))).toEqual(change().before);
+    expect(await restoreMigration(journalPath)).toMatchObject({ status: "restored" });
+  });
+
+  it.each(["source", "mod-input", "other-temporary-file"] as const)(
+    "rejects %s changes during staging with full-root migration capture",
+    async (input) => {
+      const entry = {
+        ...manifest,
+        inputs: [{ root: "mod" as const, path: "" }, ...manifest.inputs.slice(1)],
+      };
+      const prepared = await plan([change()], [], entry);
+      const inputFile =
+        input === "source"
+          ? path.join(source, "events/base.txt")
+          : path.join(mod, input === "mod-input" ? "events/read-input.txt" : ".other.migration-tmp");
+      const write = fs.writeFile.bind(fs);
+      vi.spyOn(fs, "writeFile").mockImplementation(async (name, ...args) => {
+        await write(name, ...args);
+        if (String(name).includes(".a.txt.") && String(name).endsWith(".migration-tmp"))
+          await write(inputFile, "external input during staging");
+      });
+      expect(await applyMigration(prepared, { ...options(), manifest: entry })).toMatchObject({
+        status: "failed",
+        completed: [],
+        error: "Migration inputs changed during apply",
+      });
+      expect(await fs.readFile(path.join(mod, change().path))).toEqual(change().before);
+      expect(await fs.readFile(inputFile, "utf8")).toBe("external input during staging");
+      expect(
+        (await fs.readdir(mod)).filter((name) => name.includes(".a.txt.") && name.endsWith(".migration-tmp"))
+      ).toEqual([]);
+    }
+  );
+
+  it("excludes only its owned staged file from full-root capture when creating nested output", async () => {
+    const entry = { ...manifest, inputs: [{ root: "mod" as const, path: "" }, ...manifest.inputs.slice(1)] };
+    const files = [change(), { path: "new-parent/nested/new.txt", after: bytes("new output") }];
+    expect(
+      await applyMigration(await plan(files, [], entry), { ...options(), manifest: entry })
+    ).toMatchObject({
+      status: "applied",
+      completed: files.map((file) => file.path),
+    });
+    expect((await fs.readdir(mod)).some((name) => name.endsWith(".migration-tmp"))).toBe(false);
+    expect(await fs.readFile(path.join(mod, files[1].path))).toEqual(files[1].after);
+    expect(await restoreMigration(journalPath)).toMatchObject({ status: "restored" });
+    expect(await fs.readFile(path.join(mod, change().path))).toEqual(change().before);
+  });
+
+  it("preserves a dirty buffer opened while staging an apply", async () => {
+    const prepared = await plan([change()]);
+    let current: MigrationDocument | undefined;
+    const host: MigrationDocumentHost = { read: async () => current, write: vi.fn() };
+    const write = fs.writeFile.bind(fs);
+    vi.spyOn(fs, "writeFile").mockImplementation(async (name, ...args) => {
+      await write(name, ...args);
+      if (String(name).includes(".a.txt.") && String(name).endsWith(".migration-tmp"))
+        current = { path: change().path, text: "unsaved concurrent user work", version: 1, dirty: true };
+    });
+    expect(await applyMigration(prepared, options([], host))).toMatchObject({
+      status: "failed",
+      completed: [],
+      error: expect.stringContaining("Editor changed during apply"),
+    });
+    expect(current?.text).toBe("unsaved concurrent user work");
+    expect(await fs.readFile(path.join(mod, change().path))).toEqual(change().before);
+    expect(host.write).not.toHaveBeenCalled();
+  });
+
+  it("creates absent destinations exclusively after the final check", async () => {
+    const prepared = await plan([{ path: "events/new.txt", after: bytes("reviewed output") }]);
+    const destination = path.join(await fs.realpath(mod), "events/new.txt");
+    const concurrent = bytes("user work created before publication");
+    const link = fs.link.bind(fs);
+    vi.spyOn(fs, "link").mockImplementation(async (from, to) => {
+      if (to === destination) await fs.writeFile(destination, concurrent, { flag: "wx" });
+      return link(from, to);
+    });
+    expect(await applyMigration(prepared, options())).toMatchObject({ status: "failed", completed: [] });
+    expect(await fs.readFile(destination)).toEqual(concurrent);
+  });
+
+  it.each(["replace", "recreate"] as const)(
+    "preserves a concurrent destination edit while staging a restore %s",
+    async (operation) => {
+      const file = operation === "replace" ? change() : { ...change(), after: undefined };
+      expect(await applyMigration(await plan([file]), options())).toMatchObject({ status: "applied" });
+      const destination = path.join(await fs.realpath(mod), file.path);
+      const concurrent = bytes("\uFEFFuser work during restore staging\n");
+      const write = fs.writeFile.bind(fs);
+      let injected = false;
+      vi.spyOn(fs, "writeFile").mockImplementation(async (name, ...args) => {
+        await write(name, ...args);
+        if (String(name).includes(".a.txt.") && String(name).endsWith(".migration-tmp")) {
+          injected = true;
+          await write(destination, concurrent);
+        }
+      });
+      expect(await restoreMigration(journalPath)).toMatchObject({
+        status: "conflict",
+        completed: [],
+        conflicts: [file.path],
+      });
+      expect(injected).toBe(true);
+      expect(await fs.readFile(destination)).toEqual(concurrent);
+      expect(
+        (await fs.readdir(path.dirname(destination))).some((name) => name.endsWith(".migration-tmp"))
+      ).toBe(false);
+    }
+  );
+
+  it("preserves a dirty buffer opened while staging a restore", async () => {
+    expect(await applyMigration(await plan([change()]), options())).toMatchObject({ status: "applied" });
+    let current: MigrationDocument | undefined;
+    const host: MigrationDocumentHost = { read: async () => current, write: vi.fn() };
+    const write = fs.writeFile.bind(fs);
+    vi.spyOn(fs, "writeFile").mockImplementation(async (name, ...args) => {
+      await write(name, ...args);
+      if (String(name).includes(".a.txt.") && String(name).endsWith(".migration-tmp"))
+        current = { path: change().path, text: "unsaved concurrent restore work", version: 1, dirty: true };
+    });
+    expect(await restoreMigration(journalPath, { documentHost: host })).toMatchObject({
+      status: "conflict",
+      completed: [],
+      conflicts: [change().path],
+    });
+    expect(current?.text).toBe("unsaved concurrent restore work");
+    expect(await fs.readFile(path.join(mod, change().path))).toEqual(change().after);
+    expect(host.write).not.toHaveBeenCalled();
+  });
   it("rejects changed inputs and new files, including absent prefixes", async () => {
     const prepared = await plan([change()]);
     await fs.writeFile(path.join(mod, "events/added.txt"), "new");
@@ -397,6 +634,37 @@ describe("migration filesystem adapter", () => {
     });
     expect(host.write).not.toHaveBeenCalled();
   });
+  it("freezes the restored editor state before staging exact disk recovery", async () => {
+    const original = { path: change().path, text: "namespace = dirty\n", version: 5, dirty: true };
+    let current = { ...original };
+    const host: MigrationDocumentHost = {
+      read: async () => current,
+      write: async (_file, text, version) => {
+        current = { ...current, text, version: version + 1, dirty: false };
+        await fs.writeFile(path.join(mod, current.path), bytes("\uFEFF" + text));
+        return current;
+      },
+      restore: async (_file, document, version) => (current = { ...document, version: version + 1 }),
+    };
+    const prepared = await plan([{ ...change(), before: bytes("\uFEFF" + original.text) }], [original]);
+    expect(await applyMigration(prepared, options([original], host))).toMatchObject({ status: "applied" });
+    const write = fs.writeFile.bind(fs);
+    vi.spyOn(fs, "writeFile").mockImplementation(async (name, ...args) => {
+      await write(name, ...args);
+      if (String(name).includes(".a.txt.") && String(name).endsWith(".migration-tmp")) {
+        current.text = "new user work after buffer restoration";
+        current.version++;
+      }
+    });
+    expect(await restoreMigration(journalPath, { documentHost: host })).toMatchObject({
+      status: "conflict",
+      completed: [],
+      conflicts: [original.path],
+    });
+    expect(current.text).toBe("new user work after buffer restoration");
+    expect(await fs.readFile(path.join(mod, original.path))).toEqual(change().after);
+  });
+
   it("restores dirty buffers separately from original disk bytes and reports save failures", async () => {
     const original = { path: "events/a.txt", text: "namespace = dirty\n", version: 3, dirty: true };
     let current = { ...original };
@@ -466,12 +734,12 @@ describe("migration filesystem adapter", () => {
   });
   it("stops on locked writes and retains a recovery journal and completed paths", async () => {
     const prepared = await plan([change(), { path: "events/b.txt", after: bytes("new") }]);
-    const rename = fs.rename.bind(fs);
+    const link = fs.link.bind(fs);
     const canonicalMod = await fs.realpath(mod);
-    vi.spyOn(fs, "rename").mockImplementation(async (from, to) => {
+    vi.spyOn(fs, "link").mockImplementation(async (from, to) => {
       if (to === path.join(canonicalMod, "events/b.txt"))
         throw Object.assign(new Error("locked file"), { code: "EACCES" });
-      return rename(from, to);
+      return link(from, to);
     });
     expect(await applyMigration(prepared, options())).toMatchObject({
       status: "failed",

@@ -19,7 +19,9 @@ import { encodeDds } from "../src/dds";
 import type {
   CodeAction,
   CompletionList,
+  Hover,
   Location,
+  SignatureHelp,
   TextDocumentEdit,
   TextEdit,
   WorkspaceEdit,
@@ -1442,6 +1444,57 @@ describe.skipIf(!hasServer)("LSP smoke over node IPC (the client's transport)", 
     expect(index.sources.join(" ")).toContain("Set the game folder");
   });
 
+  it("paradox/exampleWiki browses request-local game references without changing workspace data", async () => {
+    const base = path.resolve(".local/testing");
+    fs.mkdirSync(base, { recursive: true });
+    const referenceRoot = fs.mkdtempSync(path.join(base, "wiki-switch-smoke-"));
+    try {
+      const current = (await conn.sendRequest(exampleWikiRequest, null)) as ExampleWikiIndex;
+      expect(current.entries.some((entry) => entry.name === "smoke_toll")).toBe(true);
+      for (const gameId of ["vic3", "eu5"]) {
+        const gamePath = path.join(referenceRoot, gameId, "game");
+        const logsPath = path.join(referenceRoot, gameId, "logs");
+        fs.mkdirSync(path.join(gamePath, "common/scripted_effects"), { recursive: true });
+        fs.mkdirSync(logsPath, { recursive: true });
+        const name = `wiki_switch_${gameId}_effect`;
+        const doc = `Request-local ${gameId} reference sentinel.`;
+        fs.writeFileSync(
+          path.join(logsPath, "effects.log"),
+          `## ${name}\n${doc}\n\n**Supported Scopes**: country\n`
+        );
+        const source = path.join(gamePath, "common/scripted_effects/reference.txt");
+        fs.writeFileSync(source, `reference = { ${name} = yes }\n`);
+        const context = { gameId, gamePath, logsPath };
+        const index = (await conn.sendRequest(exampleWikiRequest, {
+          context,
+          refresh: true,
+        })) as ExampleWikiIndex;
+        expect(index.entries.some((entry) => entry.name === name && entry.kind === "effect")).toBe(true);
+        expect(index.gameId).toBe(gameId);
+        expect(index.entries.some((entry) => entry.name === "add_gold" || entry.name === "smoke_toll")).toBe(
+          false
+        );
+        const detail = (await conn.sendRequest(exampleWikiEntryRequest, {
+          name,
+          kind: "effect",
+          context,
+        })) as ExampleWikiDetail;
+        expect(detail.doc).toContain(doc);
+        expect(detail.examples.some((site) => site.file === source)).toBe(true);
+        expect(
+          await conn.sendRequest(exampleWikiEntryRequest, { name: "smoke_toll", kind: "variable", context })
+        ).toBeNull();
+        expect((await conn.sendRequest(exampleWikiRequest, null)) as ExampleWikiIndex).toEqual(current);
+      }
+      await expect(
+        conn.sendRequest(exampleWikiRequest, { context: { gameId: "missing-game" } })
+      ).rejects.toThrow("not supported");
+      expect((await conn.sendRequest(exampleWikiRequest, null)) as ExampleWikiIndex).toEqual(current);
+    } finally {
+      fs.rmSync(referenceRoot, { recursive: true, force: true });
+    }
+  });
+
   it("paradox/exampleWikiEntry round-trips one catalog row and refuses an unknown name", async () => {
     const index = (await conn.sendRequest(exampleWikiRequest, null)) as ExampleWikiIndex;
     const row = index.entries.find((e) => e.kind === "effect");
@@ -2069,7 +2122,11 @@ describe.skipIf(!hasServer)("LSP smoke: client capability object", () => {
       rootUri: toUri(modDir),
       workspaceFolders: [{ uri: toUri(modDir), name: "caps" }],
       capabilities: {
-        textDocument: { completion: { completionItem: { documentationFormat: ["plaintext"] } } },
+        workspace: { workspaceEdit: { documentChanges: true, resourceOperations: ["create"] } },
+        textDocument: {
+          completion: { completionItem: { documentationFormat: ["plaintext"] } },
+          codeAction: { disabledSupport: true },
+        },
       },
       initializationOptions: {
         storageDir: fs.mkdtempSync(path.join(os.tmpdir(), "ck3-smoke-caps-storage-")),
@@ -2163,6 +2220,38 @@ describe.skipIf(!hasServer)("LSP smoke: client capability object", () => {
         entry.variants.every((variant) => variant.preview.startsWith("**Insertion preview**"))
       )
     ).toBe(true);
+  });
+
+  it("multiline GUI completion, hover and signature help retain later-line expression context over the wire", async () => {
+    const uri = toUri(path.join(modDir, "gui", "multiline.gui"));
+    const text = 'widget = { text = "[ObjectsEqual(\n Character.GetName,\n GetPlayer()\n)]" }';
+    await conn.sendNotification("textDocument/didOpen", {
+      textDocument: { uri, languageId: "paradox-gui", version: 1, text },
+    });
+    try {
+      const hover = await conn.sendRequest<Hover>("textDocument/hover", {
+        textDocument: { uri },
+        position: { line: 1, character: 14 },
+      });
+      expect((hover.contents as { value: string }).value).toContain("Character.GetName");
+      expect(hover.range).toEqual({ start: { line: 1, character: 11 }, end: { line: 1, character: 18 } });
+      const result = await conn.sendRequest<CompletionList>("textDocument/completion", {
+        textDocument: { uri },
+        position: { line: 1, character: 12 },
+      });
+      expect(result.items.find((item) => item.label === "GetName")?.textEdit).toMatchObject({
+        range: { start: { line: 1, character: 11 }, end: { line: 1, character: 12 } },
+        newText: "GetName",
+      });
+      const help = await conn.sendRequest<SignatureHelp>("textDocument/signatureHelp", {
+        textDocument: { uri },
+        position: { line: 2, character: 1 },
+      });
+      expect(help.signatures[0].label).toContain("ObjectsEqual(");
+      expect(help.activeParameter).toBe(1);
+    } finally {
+      await conn.sendNotification("textDocument/didClose", { textDocument: { uri } });
+    }
   });
 
   it("bare localization actions use current buffers, per-mod defaults and versioned edits over the wire", async () => {

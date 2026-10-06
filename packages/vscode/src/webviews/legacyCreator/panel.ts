@@ -25,6 +25,7 @@ import type {
 } from "@px-lsp/protocol/protocol";
 import type { GameMeta } from "@px-lsp/server/games/profile";
 import type { PxConfig } from "../../config";
+import { writableRoot } from "../../commandTargets";
 import type { LocLookup } from "../../locCommands";
 import { scaffoldPrefix } from "../../scaffold/command";
 import {
@@ -505,7 +506,10 @@ export class LegacyCreatorPanel {
       text,
       ops,
     });
-    const outcome = await applyDefinitionEdits(abs, text, result.edits);
+    const modPath = writableRoot(vscode.Uri.file(abs), this.options.cfg);
+    const outcome = await applyDefinitionEdits(abs, text, result.edits, {
+      cfg: { ...this.options.cfg, modPath: modPath ?? null },
+    });
     if (outcome === "stale") return ["the file changed while it was open"];
     if (outcome === "failed") return ["the definition could not be saved"];
     return result.ops.map((verdict) => verdict.refused).filter((r): r is string => r !== undefined);

@@ -29,6 +29,25 @@ const encoded = { mime: "image/jpeg" as const, data: small.toString("base64") };
 const prepare = (encode = async () => encoded) =>
   preparePreviewImages(readPreviews(listing)!.images, path.join(root, "staging"), listing, encode, () => {});
 
+it("resizes duplicate order entries once while preserving the existing gallery image and original", async () => {
+  put("same.png");
+  const jpeg = put("same.jpg", Buffer.from("unchanged image"));
+  put("order.txt", Buffer.from("same.png\nsame.jpg\nsame.png\nsame.jpg\n"));
+  const encode = vi.fn(async () => encoded);
+  const prepared = await prepare(encode);
+  expect(encode).toHaveBeenCalledOnce();
+  expect(prepared.map((file) => path.basename(file))).toEqual(["same-1.jpg", "same.jpg"]);
+  expect(prepared.map((file) => fs.readFileSync(file))).toEqual([small, Buffer.from("unchanged image")]);
+  expect(readPreviews(listing)!.images).toEqual([path.join(listing, "previews/same-1.jpg"), jpeg]);
+  expect(fs.readFileSync(jpeg, "utf8")).toBe("unchanged image");
+  const archiveRoot = path.join(listing, "preview-originals");
+  const archives = fs.readdirSync(archiveRoot);
+  expect(archives).toHaveLength(1);
+  const archive = path.join(archiveRoot, archives[0]);
+  expect(fs.readdirSync(archive)).toEqual(["same.png"]);
+  expect(fs.readFileSync(path.join(archive, "same.png"))).toEqual(large);
+});
+
 it("keeps project-folder originals beside the ready gallery, preserving order, videos and name collisions", async () => {
   put("same.png");
   const jpeg = put("same.jpg", Buffer.from("unchanged image"));

@@ -104,11 +104,15 @@ export async function connect(
     eval: (expression: string) => evaluate(expression, active.session, active.context),
     evalWorkbench: (expression: string) => evaluate(expression, workbench),
     sendWorkbench: (method: string, params: Record<string, unknown>) => send(method, params, workbench),
-    screenshot: async (file: string) => {
+    screenshot: async (file: string, fromSurface = false) => {
       await vscode.commands.executeCommand("notifications.clearAll");
       await send("Page.bringToFront", {}, workbench);
       await pause(250);
-      const shot = await send("Page.captureScreenshot", { format: "png" }, workbench);
+      await evaluate(
+        "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))",
+        workbench
+      );
+      const shot = await send("Page.captureScreenshot", { format: "png", fromSurface }, workbench);
       await fs.writeFile(file, Buffer.from(shot.data as string, "base64"));
     },
     close: () => socket.close(),

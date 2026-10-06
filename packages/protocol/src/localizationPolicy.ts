@@ -185,12 +185,38 @@ function validateTarget(path: string, language: string, override: boolean, roots
   return path;
 }
 
+interface PreparedLocalizationDocument extends LocalizationDocument {
+  language?: string;
+  keys: string[];
+  generated?: string;
+}
+
+/** A request can suggest several keys without reparsing its unchanged localization snapshot. */
+export function prepareLocalizationTarget(
+  input: Omit<LocalizationTargetInput, "key">
+): (key: string) => LocalizationTarget {
+  const documents = input.documents.map((document): PreparedLocalizationDocument => ({
+    ...document,
+    language: documentLanguage(document),
+    keys: entries(document.text).map((entry) => entry[2]),
+    generated: generatedLocalizationSource(document.text),
+  }));
+  return (key) => suggestPreparedLocalizationTarget({ ...input, key }, documents);
+}
+
 export function suggestLocalizationTarget(input: LocalizationTargetInput): LocalizationTarget {
+  return prepareLocalizationTarget(input)(input.key);
+}
+
+function suggestPreparedLocalizationTarget(
+  input: LocalizationTargetInput,
+  prepared: PreparedLocalizationDocument[]
+): LocalizationTarget {
   validateKey(input.key);
   validateLanguage(input.language);
   const defaults = parseLocalizationDefaults(input.defaults);
   const roots = (input.locRoots.length ? input.locRoots : ["localization"]).map((root) => relativePath(root));
-  const documents = input.documents.filter((document) => {
+  const documents = prepared.filter((document) => {
     relativePath(document.path);
     return roots.some((root) => document.path.startsWith(`${root}/`));
   });
@@ -201,9 +227,7 @@ export function suggestLocalizationTarget(input: LocalizationTargetInput): Local
     automaticRoots.some((root) => document.path.startsWith(`${root}/`))
   );
   const owned = automaticDocuments.filter(
-    (document) =>
-      documentLanguage(document) === input.language &&
-      entries(document.text).some((entry) => entry[2] === input.key)
+    (document) => document.language === input.language && document.keys.includes(input.key)
   );
   if (owned.length)
     return choose(
@@ -224,24 +248,19 @@ export function suggestLocalizationTarget(input: LocalizationTargetInput): Local
       return values[name];
     });
     const path = validateTarget(expanded, input.language, override, roots);
-    const generated = documents.find(
-      (document) => document.path === path && generatedLocalizationSource(document.text)
-    );
+    const generated = documents.find((document) => document.path === path && document.generated);
     if (generated) throw new Error(`Localization target is generated: ${path}`);
     return { path, reason: "configured default" };
   }
 
   const eligible = automaticDocuments.filter(
-    (document) =>
-      (!override || replacePath(document.path)) &&
-      !generatedLocalizationSource(document.text) &&
-      documentLanguage(document)
+    (document) => (!override || replacePath(document.path)) && !document.generated && document.language
   );
   const related = new Set(input.relatedKeys ?? []);
   const source = input.sourcePath ? stem(input.sourcePath) : undefined;
   const ranked = eligible.flatMap((document) => {
-    const keys = entries(document.text).map((entry) => entry[2]);
-    const language = documentLanguage(document)!;
+    const keys = document.keys;
+    const language = document.language!;
     const sibling = keys.some((key) => related.has(key));
     const family = keys.reduce((best, key) => Math.max(best, familyScore(input.key, key)), 0);
     const sameSource = source !== undefined && stem(document.path) === source;
@@ -251,7 +270,7 @@ export function suggestLocalizationTarget(input: LocalizationTargetInput): Local
     const path =
       language === input.language ? document.path : counterpart(document.path, language, input.language);
     // Never infer a generated counterpart as a writable destination.
-    if (documents.some((other) => other.path === path && generatedLocalizationSource(other.text))) return [];
+    if (documents.some((other) => other.path === path && other.generated)) return [];
     return [
       {
         path,
@@ -282,12 +301,12 @@ export function suggestLocalizationTarget(input: LocalizationTargetInput): Local
     input.fallbackPath ??
     `${root}/${override ? "replace/" : ""}${input.language}/${name}_l_${input.language}.yml`;
   validateTarget(fallback, input.language, override, automaticRoots);
-  const languageFiles = eligible.filter((document) => documentLanguage(document) === input.language);
+  const languageFiles = eligible.filter((document) => document.language === input.language);
   const layoutFiles = languageFiles.length ? languageFiles : eligible;
   const directories = [
     ...new Set(
       layoutFiles.map((document) => {
-        const path = counterpart(document.path, documentLanguage(document)!, input.language);
+        const path = counterpart(document.path, document.language!, input.language);
         return path.slice(0, path.lastIndexOf("/"));
       })
     ),
@@ -312,7 +331,7 @@ export function suggestLocalizationTarget(input: LocalizationTargetInput): Local
       ? fallback
       : `${observedDirectory}/${fallback.split("/").pop()}`;
   validateTarget(path, input.language, override, automaticRoots);
-  if (documents.some((document) => document.path === path && generatedLocalizationSource(document.text))) {
+  if (documents.some((document) => document.path === path && document.generated)) {
     throw new Error(`Localization fallback is generated: ${path}`);
   }
   return {
@@ -324,6 +343,19 @@ export function suggestLocalizationTarget(input: LocalizationTargetInput): Local
 interface TextLine {
   text: string;
   eol: string;
+}
+
+/** Existing localization documents require one header matching their target language. */
+export function assertLocalizationHeader(text: string, language: string): void {
+  validateLanguage(language);
+  const lines = text.replace(/^\uFEFF/, "").split(/\r\n|\r|\n/);
+  const header = lines.findIndex((line) => line.trim() && !line.trimStart().startsWith("#"));
+  if (
+    header < 0 ||
+    !new RegExp(`^[ \\t]*l_${language}:[ \\t]*(?:#.*)?$`).test(lines[header]) ||
+    lines.some((line, index) => index !== header && /^[ \t]*l_[a-z_]+:/.test(line))
+  )
+    throw new Error(`Localization file needs a single l_${language}: header`);
 }
 
 /** Changes only the value of an existing entry; insertion follows nearby style. */
@@ -344,15 +376,8 @@ export function upsertLocalizationText(
   const lines: TextLine[] = [...body.matchAll(/([^\r\n]*)(\r\n|\r|\n|$)/g)]
     .filter((match) => match[0] !== "")
     .map((match) => ({ text: match[1], eol: match[2] }));
-  const header = lines.findIndex((line) => line.text.trim() && !line.text.trimStart().startsWith("#"));
   if (body.length === 0) lines.push({ text: `l_${language}:`, eol });
-  else if (
-    header < 0 ||
-    !new RegExp(`^[ \\t]*l_${language}:[ \\t]*(?:#.*)?$`).test(lines[header].text) ||
-    lines.some((line, index) => index !== header && /^[ \t]*l_[a-z_]+:/.test(line.text))
-  ) {
-    throw new Error(`Localization file needs a single l_${language}: header`);
-  }
+  else assertLocalizationHeader(text, language);
   const escaped = value
     .replace(/\r\n|\r|\n/g, "\\n")
     .replace(/\\"/g, '"')

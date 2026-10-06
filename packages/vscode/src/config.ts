@@ -146,6 +146,28 @@ export function gameDocsSubdir(meta: GameMeta, subdir: string): string | null {
   return candidates.find((c) => fs.existsSync(c)) ?? candidates[0] ?? null;
 }
 
+/** Reference browsing may use another game's personal paths, never legacy workspace paths. */
+export function referenceGamePaths(
+  meta: GameMeta,
+  workspace: Pick<PxConfig, "gameId" | "gamePath" | "logsPath">
+): { gamePath: string | null; logsPath: string | null } {
+  if (meta.id === workspace.gameId) return { gamePath: workspace.gamePath, logsPath: workspace.logsPath };
+  const personal = (key: "gamePath" | "logsPath"): string | null => {
+    for (const scope of ["folder", "workspace", "default"] as const) {
+      const setting = inspectMachineSetting<string>(key, meta.id, scope);
+      if (setting.error) throw new Error(setting.error);
+      if (setting.ownValue !== undefined) return setting.ownValue.trim() || null;
+    }
+    return null;
+  };
+  const install = personal("gamePath") ?? findGameFolder(meta.name);
+  return {
+    gamePath: install ? (gameDataDir(install) ?? install) : null,
+    logsPath:
+      personal("logsPath") ?? defaultLogsPath(meta.docsFolderName, meta.steamAppId, meta.scriptDocsSubdir),
+  };
+}
+
 /**
  * Where the Coat of Arms Designer keeps its library, whether or not it exists
  * yet (the first export creates it): `px.coaLibraryDir` when set, else

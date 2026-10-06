@@ -123,7 +123,7 @@ export class SimWindow {
       iconButton(
         "fileText",
         "Open the event's source",
-        () => this.cb.onOpen(detail.file, detail.line + 1),
+        () => this.cb.onOpen(detail.file, detail.line),
         "icon-xs"
       )
     );

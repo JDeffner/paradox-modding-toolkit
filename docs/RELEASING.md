@@ -33,6 +33,8 @@ Extension ID: `JDeffner.px-toolkit`. Stable Marketplace publishing is the defaul
    (`git log v<prev>..HEAD` is the checklist), and
    `docs/release/<version>.md` (it becomes the GitHub Release body and
    the Discord post). Missing or empty notes fail preparation.
+
+   A preview may keep its product changes under an upcoming version heading. For the 0.5.5 prerelease, use `0.6.0 (upcoming; preview 0.5.5)` in the extension changelog while the root and extension manifests, tag and release-note filename remain 0.5.5. Label the server and protocol sections with their independent versions and the corresponding upcoming toolkit version. Do not present an unpublished draft section as release history.
 2. Regenerate bundled data if the game patched (see below), and check
    `THIRD-PARTY-NOTICES.md` still matches what actually ships: every imported
    or derived third-party source needs its entry, and the pinned commits in
@@ -271,14 +273,18 @@ page and CHANGELOG.md the changelog tab.
 
 **Mark as pre-release** applies to both the Marketplace artifact and the final GitHub release. During preparation, the GitHub prerelease badge only indicates that manual publishing is pending. It does not publish anything to the Marketplace. Choose a version higher than the current Marketplace version when publishing a new build. See the [VS Code publishing guide](https://code.visualstudio.com/api/working-with-extensions/publishing-extension#prerelease-extensions) for channel versioning.
 
+Discord announcements use the manual workflow's **Mark as pre-release** input. Stable releases mention only the stable Toolkit role. Prereleases use the dedicated role configured in the repository's `DISCORD_PRERELEASE_ROLE_ID` Actions variable and say they are ready to test. The payload permits that one role and disables automatic user, `@everyone` and other role mentions, including mentions embedded in release notes. If the selected role is missing or invalid, the workflow warns and skips the announcement; a prerelease never falls back to the stable role. A missing webhook skips notification, and a failed Discord post warns without undoing a published release.
+
 ## Publishing the npm packages (M3b)
+
+Keep `docs/release/<version>.md` brief and link the detailed package changelogs under `### Full changelog`. GitHub retains those links. Discord uses the same brief notes and adds its own release and Toolkit changelog links instead of repeating that footer.
 
 `@px-lsp/protocol` and `@px-lsp/server` are publishable. They version
 independently of the extension, starting at 0.1.0 (`packages/*/package.json`
 carry `files`, `publishConfig.access: public`, and the server's `px-lsp` bin;
 each package has its own `CHANGELOG.md`).
 
-**The manual Release workflow publishes npm packages after Marketplace publishing and notification.** Preparation does not publish them. The npm step checks whether each exact version exists and publishes only missing versions, protocol before server. The step needs the `NPM_TOKEN` repository secret with publish rights on the `px-lsp` scope. A missing secret warns and skips npm publishing.
+**The manual Release workflow publishes npm packages after Marketplace publishing and notification.** Preparation does not publish them. The npm step checks whether each exact version exists and publishes only missing versions, protocol before server. **Mark as pre-release** publishes new versions with npm's `next` tag; stable releases use `latest`. Existing versions are skipped, so promoting an already-published preview version to `latest` remains a separate, deliberate dist-tag operation when that package is ready for stable use. The step needs the `NPM_TOKEN` repository secret with publish rights on the `px-lsp` scope. A missing secret warns and skips npm publishing.
 
 The manual procedure below stays as the fallback (first-time scope setup, or
 publishing outside a release). Publish a package only when its version bumped

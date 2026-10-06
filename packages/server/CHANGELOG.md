@@ -6,65 +6,52 @@ changes. Before the split it moved inside the extension's version (up to
 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
-## Unreleased
+## 0.3.8 (upcoming)
 
-- Use schema field markers to distinguish Crozier's standalone laws from older nested law groups. Keep extraction, declaration resolution, typed references and semantic colors consistent across both layouts.
+Prepared for Toolkit 0.6.0, first available in the 0.5.5 prerelease. This section includes the unpublished 0.3.7 draft; the server keeps its independent version.
 
-- Register an explicit CK3 1.19.0.6 to 1.20.0.3 route for the existing source-checked faith/rite and mask recipes, retaining the 1.20.0.2 route.
+### Game knowledge and editor features
 
-- Include an optional source fingerprint in event detail so editors can reject stale coordinate-based writes. Keep the helper available to browser consumers.
+- Refresh bundled CK3 `script_docs` and `DumpDataTypes` from Crozier 1.20.0.2, generated with no mods enabled. Read standalone faiths, rites, tenets, laws and law groups alongside legacy nested definitions, with consistent extraction, navigation, typed references and semantic colors.
+- Classify symbols by field and call context. Distinguish declarations, runtime names, definition references and scope chains; use standard LSP token types with optional role modifiers for script, GUI and localization expressions.
+- Share datafunction expression context across semantic colors, completion, hover and signature help, including multiline GUI bindings. Correct weighted field colors and normalize declaration roles consistently.
+- Read another game's Examples Wiki through an explicit reference context without changing the active profile or workspace indexes. Reuse its documentation and usage loaders, identify the reference game and keep workspace variables out of foreign-game results.
+- Expose the installed launch-options documentation path in game metadata. CK3 supplies `_commandline_options.info`; other profiles declare no verified source. Expose harvested Workshop tag groups, including CK3 compatibility versions.
+- Include an optional event source fingerprint so clients can reject stale coordinate-based writes. Keep the helper available to browser consumers.
+- Invalidate saved-scope, variable-type and call-site inference when its model, index or root-scope context changes. Reuse syntax parses and refresh annotations for unchanged documents.
+- Index older nested CK3 faiths and laws with their parent and current unsaved definitions. Keep rename unavailable where indirect reference coverage is incomplete. Wait for index completion in release asset checks.
 
-- Share the unchanged profile scaffold renderer with standalone CLI preparation commands.
+### Localization and storage
 
-- Expose the existing game metadata through a shared registry for the editor and standalone `pxtk` client. The CLI bundles this server and uses its existing stdio requests; it does not add an LSP method.
+- Use mod localization conventions and portable author defaults for missing-key edits. Respect document-version, file-creation and disabled-action capabilities, preserve current buffers, reject new-file collisions and explain ambiguous or invalid destinations.
+- Reuse one localization snapshot across all missing keys in a request. Read diagnostic ignore rules from each editable mod's `project.json`, reload changed declarations and report invalid rules before using client defaults.
+- Resolve schema, playset, calendar and localization artifacts independently across current and same-game legacy storage.
+- Scan directory aliases once while preserving configured links and schema-bearing paths. Use the same path choice for definitions and references.
 
-- Explain when file-transaction recovery requires an unchanged generated file to be closed before removal. Keep changed editor buffers protected.
+### DDS and character data
 
-- Classify script symbols by their field and call context, distinguish declarations, runtime names, definition references and scope-chain segments, and add data-type-aware semantic tokens for GUI and localization expressions. Keep standard LSP token types with optional role modifiers.
+- Read declared DDS mip counts independently of pixel decoding and allocation limits. Expose each level's dimensions, offsets and byte lengths, and decode selected stored levels.
+- Encode full or explicit partial mip chains with independent RGBA filtering. Reject invalid dimensions and block-compressed base sizes the consumer cannot load, and preserve distinct colors with equal luminance in BC1/BC3 output.
+- Return the optional death reason from character history in `paradox/dynastyTree`, preserving raw names and localization keys.
 
-- Expose the installed launch-options documentation path in game metadata for clients. CK3 supplies `_commandline_options.info`; other profiles declare no verified source.
+### Experimental migration and patch engines
 
-- Use mod localization conventions and portable author defaults for bare-LSP missing-key edits. Preserve current target buffers with versioned edits, reject new-file collisions, and explain ambiguous or invalid destinations with disabled actions.
+- Provide compiled migration SDK, engine, route planner and fixture-testing exports. Keep the SDK a work in progress pending testing by outside authors. Add folder recipe and fixture-builder examples with finding IDs, source paths and failed checks in author errors.
+- Group contributions per exact-build transition, order dependencies and report alternative or missing routes. Load data-only JSON notes separately from trusted JavaScript recipes and prepare exact, hashed per-step plans.
+- Extend SDK 2 with bounded listing and header capture, exact discovery, file sizes, selective capture and continuation batches. Retain SDK 1 contributions and freeze selected inputs for review, apply and recovery.
+- Include CK3 1.19.0.6 to 1.20.0.2 and 1.20.0.3 faith/rite and portrait/clothing-mask recipes, with explicit choices, consumer evidence and unsupported-case blockers. Victoria 3 and EU5 have no built-in recipes.
+- Derive missing female religious-head localization from an unambiguous captured target mapping, preserving explicit values. Capture source-vanilla icons required by custom tenets and remove obsolete core-tenet groups only after validating their members and settings.
+- Recheck destination bytes, paths and editor state after staging. Preserve intervening edits during Apply and Restore and never replace a file that appeared after preview. Explain when recovery requires an unchanged generated file to be closed before removal.
+- Support cancellation during capture and freshness checks while retaining selected-file path guards. Do not cancel a journaled write transaction halfway through recovery.
+- Run filesystem surveys in bounded parallel batches with at most 16 metadata operations, retaining all fresh-input, link and path checks. On one retained real mask fixture, Node API Scan improved from 80.9 to 28.0 seconds and Prepare from 84.2 to 53.0 seconds; captured data, plans and output stayed identical. These timings exclude editor bookkeeping.
+- Add a profile-gated compatibility patch engine with ordered shadowing, definition contributions, saved decisions and complete-file preservation. CK3 supports a bounded semantic set; unsupported loading rules require manual work. Share frozen-file apply and recovery with read-only source roots.
+- Expose Compatch identity support through profiles: CK3 supports event and localization matching; Victoria 3 and EU5 use file comparisons. Mod-to-mod runtime acceptance remains deferred for this preview.
 
-- Expose harvested Steam Workshop tag groups in each game profile, including CK3 compatibility versions, for upload interfaces.
+The bounded faith and mask workflow has user-confirmed acceptance in the Lantern CK3 1.20.0.3 fixture. Clothing-gene integration was separate manual work; arbitrary whole-mod and save conversion are not established.
 
-- Refresh the bundled CK3 `script_docs` and `DumpDataTypes` snapshots from version 1.20.0.2 (Crozier), generated with no mods enabled.
+### Shared consumers
 
-- Expose each game profile's Compatch identity support for the experimental VS Code workflow. CK3 supports event and localization identity matching; Victoria 3 and EU5 use file comparisons.
-
-## 0.3.7
-
-Ships with the toolkit's 0.5.2 release.
-
-- Add a pure, profile-gated compatibility patch engine with ordered file shadowing, definition contributions, conditional saved decisions and complete-file output preservation. CK3 supports a bounded semantic set; unsupported loading rules require manual work. Share the migration writer's frozen-file apply and recovery implementation with maintained patches, including arbitrary read-only source roots.
-
-- Read diagnostic ignore rules from each editable mod's `project.json`, reload them on config-file changes, and report invalid declarations before using client defaults. Resolve schema, playset, calendar and localization artifacts independently across current and same-game legacy storage.
-
-- Add a folder recipe example, a text-or-byte fixture builder and a runnable author test. Report unreadable example inputs and include finding IDs, paths and failed checks in author errors.
-- Publish compiled migration SDK, engine, route planner and fixture-testing exports. Group all contributions per exact-build transition, order entry dependencies and report alternatives or missing routes. Load data-only JSON advisories separately from trusted JavaScript recipes and prepare exact, hashed per-step plans.
-- Add CK3 faith/rite conversion and portrait/clothing mask mip recipes for 1.19.0.6 to 1.20.0.2, with explicit human choices, consumer evidence, unsupported-case blockers and byte-preserving recovery. Target gameplay remains unverified; Victoria 3 and EU5 have no built-ins.
-- Extend migration SDK 2 with bounded listing and header capture, exact discovery, file sizes and continuation batches. Retain SDK 1 contributions; freeze selected inputs for review, apply and recovery.
-- Check migration directories once per traversal instead of repeating ancestor checks for every unrelated file. Keep selected-file boundary guards and support cancellation during capture and freshness checks.
-- Read Crozier's standalone faith, rite and tenet definitions, documented references and structure fields while keeping legacy nested faiths. Refresh bundled game documentation snapshots.
-- Use mod localization conventions and portable author defaults for bare-LSP missing-key edits. Preserve current target buffers with versioned edits, reject new-file collisions, and explain ambiguous or invalid destinations with disabled actions.
-
-- Expose each game profile's Compatch identity support for the experimental VS Code workflow. CK3 supports event and localization identity matching; Victoria 3 and EU5 use file comparisons.
-
-- Report declared DDS mip-level counts from valid headers independently of pixel decoding and allocation limits.
-- Classify saved-scope reference prefixes as semantic keywords independently of index state, preserving comments, strings and reference names.
-
-- Return the optional death reason from character history in `paradox/dynastyTree`, preserving raw character names and localization keys.
-
-- Index CK3 faiths inside religions and laws inside law groups through profile schema rules. Include them in completion, hover, navigation and typed references, preserve their parent in the disk cache, and refresh them from unsaved documents. Reject rename for nested kinds whose indirect reference forms are not fully indexed.
-
-- Expose DDS mip-level dimensions, offsets and byte lengths, decode selected stored levels, and support explicit partial mip counts when encoding.
-
-- Add optional full mip chains to the DDS encoder with independent RGBA channel filtering. Reject invalid dimensions and block-compressed base sizes that Direct3D cannot load. Preserve distinct colors with equal luminance during BC1/BC3 compression.
-
-- Invalidate inferred saved scopes, variable types and call-site scopes when their model, index or root-scope context changes. Keep syntax parses reusable and refresh hover, completion and scope annotations for unchanged documents.
-- Scan directory aliases once while preserving schema-bearing paths, such as an events folder linked to sources elsewhere in a mod. Apply the same path choice to definition and reference scans.
-
-- Make release smoke tests wait for the current index rebuild before checking asset references and symbols.
+- Retain profile scaffold rendering, the game metadata registry and shared Tiger handling for the separate `paradox-toolkit-cli` project. The external CLI bundles the server and uses existing stdio requests; these helpers add no LSP method.
 
 ## 0.3.6
 

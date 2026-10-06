@@ -5,10 +5,14 @@ import { access, mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/pr
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 
-const [executable, sourceArgument, targetArgument, targetVersionArgument] = process.argv.slice(2);
+const arguments_ = process.argv.slice(2);
+const faithOnly = arguments_.includes("--faith-only");
+const [executable, sourceArgument, targetArgument, targetVersionArgument] = arguments_.filter(
+  (argument) => argument !== "--faith-only"
+);
 if (!executable || !sourceArgument || !targetArgument)
   throw new Error(
-    "Usage: node scripts/test-builtin-migrations-vscode.mjs <Code executable> <source game-data folder> <target game-data folder> [exact archived target version]"
+    "Usage: node scripts/test-builtin-migrations-vscode.mjs <Code executable> <source game-data folder> <target game-data folder> [exact archived target version] [--faith-only]"
   );
 const root = resolve(import.meta.dirname, "..");
 const source = resolve(sourceArgument),
@@ -99,8 +103,37 @@ if (!fixture)
   throw new Error(
     `No matching real full-mip source mask and reduced-mip target consumer found. ${discoveryErrors.join("\n")}`
   );
-const faith =
-  "\uFEFF# preserve this religion comment\r\ncustom_religion = { family = rf_pagan doctrine = doctrine_pluralism_pluralistic traits = { virtues = { brave } } faiths = { parent = { color = { 0.2 0.3 0.4 } doctrine = tenet_ritual_celebrations holy_site = rome } child = { color = { 0.4 0.3 0.2 } doctrine = tenet_ritual_celebrations } } }\r\n# preserve this unrelated tail\r\n";
+const buddhismPath = "common/religion/religion_types/00_buddhism.txt";
+const oldBuddhism = await readFile(join(source, buddhismPath), "utf8");
+const targetBuddhism = await readFile(join(target, buddhismPath), "utf8");
+if (
+  !/\bReligiousHeadName\s*=\s*buddhism_religious_head_title\b/.test(oldBuddhism) ||
+  /\bReligiousHeadNameFemale\s*=/.test(oldBuddhism) ||
+  !/\bReligiousHeadNameFemale\s*=\s*buddhism_religious_head_title\b/.test(targetBuddhism)
+)
+  throw new Error(
+    "The real Buddhism references do not match the old male-only and target female-title regression."
+  );
+const faith = [
+  "\uFEFF# preserve this religion comment",
+  "custom_religion = {",
+  " family = rf_pagan doctrine = doctrine_pluralism_pluralistic traits = { virtues = { brave } }",
+  " localization = {",
+  "  ReligiousHeadName = buddhism_religious_head_title # preserve religion title comment",
+  " }",
+  " faiths = {",
+  "  parent = {",
+  "   color = { 0.2 0.3 0.4 } doctrine = tenet_ritual_celebrations holy_site = rome",
+  "   localization = {",
+  "    ReligiousHeadName = buddhism_religious_head_title # preserve parent title comment",
+  "   }",
+  "  }",
+  "  child = { color = { 0.4 0.3 0.2 } doctrine = tenet_ritual_celebrations }",
+  " }",
+  "}",
+  "# preserve this unrelated tail",
+  "",
+].join("\r\n");
 await writeFile(join(scratch, "Mod/common/religion/religion_types/custom.txt"), faith);
 await writeFile(join(scratch, "original-faith.txt"), faith);
 await writeFile(
@@ -197,6 +230,7 @@ await build({
   outfile: suite,
 });
 console.log(`Built-in migration editor checks: ${scratch}`);
+console.log(`Mode: ${faithOnly ? "faith-only" : "full suite"}`);
 console.log(`DDS fixture: ${fixture.texture} (${fixture.source})`);
 console.log(
   `Target game build: ${targetVersion} (${detectedTargetVersion ? "launcher metadata" : "explicit archive label, executable unverified"})`
@@ -211,6 +245,7 @@ await runTests({
     PX_BUILTIN_MIGRATION_SOURCE: source,
     PX_BUILTIN_MIGRATION_TARGET: target,
     PX_BUILTIN_MIGRATION_TARGET_VERSION: targetVersion,
+    PX_BUILTIN_MIGRATION_MODE: faithOnly ? "faith-only" : "full",
   },
   launchArgs: [
     workspace,

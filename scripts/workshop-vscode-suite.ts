@@ -39,11 +39,23 @@ export async function run() {
   const checks: string[] = [];
   try {
     await waitFor("document.getElementById('title').value === 'Workshop fixture'");
+    await waitFor("document.querySelectorAll('#gallery .tile[data-name]').length === 2");
+    assert.deepEqual(
+      await ui.eval("[...document.querySelectorAll('#gallery .tile[data-name]')].map(el => el.dataset.name)"),
+      ["b.png", "a.png"]
+    );
+    assert.equal(
+      await fs.readFile(path.join(listing, "previews/order.txt"), "utf8"),
+      "b.png\na.png\nb.png\na.png\n"
+    );
+    checks.push(
+      "duplicate gallery order entries render each local image once in first-occurrence order without changing the order file"
+    );
     assert.equal(await ui.eval("document.getElementById('mod').nextElementSibling.id"), "openPage");
     assert.equal(await ui.eval("document.getElementById('versionControls').nextElementSibling.id"), "upload");
     assert.equal(await ui.eval("document.querySelectorAll('select').length"), 0);
     assert.equal(await ui.eval("document.getElementById('listing').hidden"), true);
-    await ui.screenshot(path.join(scratch, "workshop-live-dark.png"));
+    await ui.screenshot(path.join(scratch, "workshop-live-dark.png"), true);
     await click("createLegacy");
     await waitFor("document.activeElement.id === 'legacy-game-version'");
     await ui.eval(
@@ -59,7 +71,7 @@ export async function run() {
       "toolbar remains reachable while the form is open"
     );
     await ui.eval("document.getElementById('legacy-game-version').focus()");
-    await ui.screenshot(path.join(scratch, "workshop-create-dialog.png"));
+    await ui.screenshot(path.join(scratch, "workshop-create-dialog.png"), true);
     await inputVersion("../../invalid");
     assert.match(
       String(await ui.eval("document.getElementById('legacy-version-error').textContent")),
@@ -102,7 +114,7 @@ export async function run() {
       String(await ui.eval("document.querySelector('.px-dialog-actions button:last-child').textContent")),
       /legacy version/
     );
-    await ui.screenshot(path.join(scratch, "workshop-legacy-confirm.png"));
+    await ui.screenshot(path.join(scratch, "workshop-legacy-confirm.png"), true);
     await ui.eval("document.querySelector('.px-dialog-actions button:first-child').click()");
     assert.equal(JSON.parse(await fs.readFile(first, "utf8")).legacy.content, "new");
     checks.push(
@@ -126,9 +138,9 @@ export async function run() {
       const legacyBackground = await ui.eval(
         "getComputedStyle(document.getElementById('app')).backgroundColor"
       );
-      await ui.screenshot(path.join(scratch, `workshop-legacy-${name}.png`));
+      await ui.screenshot(path.join(scratch, `workshop-legacy-${name}.png`), true);
       await click("listing");
-      await ui.screenshot(path.join(scratch, `workshop-menu-${name}.png`));
+      await ui.screenshot(path.join(scratch, `workshop-menu-${name}.png`), true);
       await pick("Live version");
       await waitFor("!document.getElementById('app').hasAttribute('data-legacy')");
       assert.notEqual(
@@ -178,7 +190,7 @@ export async function run() {
       await click("legacy-choose-zip");
       await waitWorkbench(`Boolean(document.querySelector(${JSON.stringify(pickerInput)}))`);
       await waitWorkbench(
-        `document.querySelector(${JSON.stringify(pickerInput)}).value.includes(${JSON.stringify(scratch)}) && document.querySelector('.quick-input-widget').innerText.includes('.px-toolkit')`
+        `document.querySelector(${JSON.stringify(pickerInput)}).value.toLowerCase().includes(${JSON.stringify(scratch.toLowerCase())}) && document.querySelector('.quick-input-widget').innerText.includes('.px-toolkit')`
       );
       if (filename) {
         await ui.sendWorkbench("Page.bringToFront", {});
@@ -192,7 +204,7 @@ export async function run() {
         await waitWorkbench(
           `document.querySelector('.quick-input-widget').innerText.includes(${JSON.stringify(filename)})`
         );
-        await ui.screenshot(path.join(scratch, `picker-${filename}.png`));
+        await ui.screenshot(path.join(scratch, `picker-${filename}.png`), true);
       }
       const key = filename ? "Enter" : "Escape";
       await ui.sendWorkbench("Input.dispatchKeyEvent", {
@@ -231,7 +243,7 @@ export async function run() {
     await click("legacy-source-zip");
     await pickZip("old-release.zip");
     assert.equal(await ui.eval("document.getElementById('legacy-zip-name').textContent"), "old-release.zip");
-    await ui.screenshot(path.join(scratch, "workshop-zip-dialog.png"));
+    await ui.screenshot(path.join(scratch, "workshop-zip-dialog.png"), true);
     await inputVersion("1.17");
     await waitFor("document.getElementById('listing').textContent.includes('Legacy 1.17.*')");
     const archived = path.join(listing, "legacy_version/1.17");
@@ -254,7 +266,7 @@ export async function run() {
       String(await ui.eval("document.querySelector('.px-confirmation').textContent")),
       /saved files from old-release.zip/
     );
-    await ui.screenshot(path.join(scratch, "workshop-zip-confirm.png"));
+    await ui.screenshot(path.join(scratch, "workshop-zip-confirm.png"), true);
     await ui.eval("document.querySelector('.px-dialog-actions button:first-child').click()");
     assert.deepEqual(await fs.readFile(path.join(mod, "descriptor.mod")), descriptor);
     assert.deepEqual(await fs.readFile(path.join(listing, "description.bbcode")), description);
@@ -270,7 +282,7 @@ export async function run() {
       for (let i = 0; i < 100 && !vscode.workspace.getConfiguration("px").get("experimentalFeatures"); i++)
         await pause(100);
       assert.equal(vscode.workspace.getConfiguration("px").get("experimentalFeatures"), true);
-      await settings.screenshot(path.join(scratch, "experimental-features-enabled.png"));
+      await settings.screenshot(path.join(scratch, "experimental-features-enabled.png"), true);
       await vscode.commands.executeCommand("px.openCompatch");
       await vscode.commands.executeCommand("px.openSettings", "experimentalFeatures");
       await settings.eval("document.getElementById('setting-experimentalFeatures').click()");

@@ -24,6 +24,8 @@ full contract below including `serverInfo` in the `initialize` result, the
 
 ## pxtk CLI and MCP
 
+The `pxtk` command and local MCP implementation are maintained in the separate `paradox-toolkit-cli` project. This section documents their shared `@px-lsp/protocol/agentTools` contract.
+
 Preparation operations extend the core queries with init, create, loc, logs, format and image. All are available through the CLI and matching pxtk_* MCP tools. CLI --to maps to the image request's format field. Common write arguments are write (default false) and expect (a preview token).
 
 | Operation | Input | Data |
@@ -329,7 +331,7 @@ The compiled SDK, snapshots and prepared-plan types are in `@px-lsp/server/migra
 | `paradox/eventValueOptions` | request | `EventValueOptionsParams` → `EventValueOptionsResult \| null` — the value set one VALUE belongs to, resolved through the definition index (`secret_cultivator` is a `secret`, so the answer is every indexed secret, mod entries first); null when the value resolves to nothing enumerable |
 | `paradox/eventBanner` | request | `{ theme }` → `EventBannerResult` — the illustration an event theme puts behind its window, as a mod-relative texture path, or a `reason` when it resolves to nothing |
 | `paradox/dynastyTree` | request | `DynastyTreeParams` → `DynastyTreeResult` — without `dynasty`, every dynasty the index knows as a picker list (mod entries first, each with its member and house counts); with `dynasty`, that dynasty's houses and members read out of `history/characters`, plus the parents and spouses they name from other dynasties, marked `external` |
-| `paradox/exampleWiki` | request | `null` → `ExampleWikiIndex` — one compact row (`name`, `kind`, `shortDoc`, `count`) per trigger, effect, event target, modifier, datafunction, data type, keyword, scope word, and indexed variable or list the server knows, most used first, plus the sentences naming where the rows came from |
+| `paradox/exampleWiki` | request | `null` or `ExampleWikiParams` → `ExampleWikiIndex` — one compact row (`name`, `kind`, `shortDoc`, `count`) per trigger, effect, event target, modifier, datafunction, data type, keyword, scope word, and indexed variable or list the server knows, most used first, plus the sentences naming where the rows came from |
 | `paradox/exampleWikiEntry` | request | `ExampleWikiEntryParams` → `ExampleWikiDetail \| null` — everything known about one row: documentation, scopes, the `usage:` block, datafunction signature, observed literal arguments, members and producers, a variable's `valueType` and `containers`, the triggers, effects and targets usable from each scope the token outputs (`fromScope`), and example sites as absolute paths with inline context; null when the name is not in the catalog |
 | `paradox/dependencies` | request | `DependenciesParams` → `DependenciesResult` — dependents/dependencies of a definition (by cursor or name), plus the `.gui` paths reaching it when `guiUses` is set |
 | `paradox/scopeAt` | request | `ScopeAtParams` → `ScopeAtResult \| null` — inferred scope chain (outermost first) and visible saved scopes at a position; null when the document is not an open script document |
@@ -410,6 +412,8 @@ asked for, and come back as absolute paths with 1-based lines, so a client
 opens them without resolving anything. Every capped list carries its own total
 (`literalsTotal`, `membersTotal`, `producersTotal`, `containersTotal`), and an
 example list that is short for a reason carries `examplesNote` saying why.
+
+Both requests accept an optional `context` with a required `gameId` and optional `gamePath`, `logsPath` and `locLanguage`. Omit the context, or select the active game's ID, for the current workspace catalog, including its indexed variables and lists; that path uses the workspace configuration. A foreign-game context reads that game's own documentation, bundled reference tables and installed examples; it does not change the active profile, settings or workspace indexes and does not include the workspace's mod variables. Foreign-game reference paths must be absolute when supplied; unknown game IDs and invalid foreign-game paths are rejected. Missing reference sources remain explicit in the catalog's source information and never fall back to another game's data. Send `refresh: true` with the catalog request to reload its foreign-game reference snapshot. Use the same context for the catalog and its detail requests. `ExampleWikiIndex.gameId` and `gameName` identify the selected reference; these fields are optional for compatibility with older servers. Clients must discard responses from an earlier selection when users switch games while a request is pending.
 
 An engine token whose scopes declare one or more `output: <scope>` entries
 (event targets, mostly) also carries `fromScope`, one `ExampleWikiFromScope`
@@ -953,7 +957,7 @@ capability at a time. A client declaring nothing (every field off) gets:
   span *content* is always self-sufficient plain text ("■ trigger", a scope
   name), so the cards read the same either way;
 - **`px.editLocalization` not listed** — the "create localization key" quick
-  fix carries a real `WorkspaceEdit` using mod conventions and `localization.json` defaults. New files include a BOM and language header. Open targets use their current document version; closed targets use standard LSP `version: null`. File creation fails on a collision. Ambiguous, generated or invalid targets produce a disabled action with a reason. The "edit localization" command action is omitted;
+  fix carries a real `WorkspaceEdit` using mod conventions and `localization.json` defaults. Creation requires `workspace.workspaceEdit.documentChanges` and the `create` resource operation; new files include a BOM and language header, and creation fails on a collision. Open existing targets require versioned edits. Closed targets use `version: null` with `documentChanges`, or plain `changes` when the client lacks that capability. Unsupported, ambiguous, generated or invalid targets produce a disabled action only when `textDocument.codeAction.disabledSupport` is declared; otherwise the action is omitted. The "edit localization" command action is omitted;
 - **`px.openLocalizationSideBySide` not listed** — that action is omitted;
 - **`px.showReferences` not listed** — the hover reference line is dropped
   entirely. A count the user cannot click answers no question, so the card
