@@ -1,4 +1,4 @@
-﻿# An ivory field guide
+# An ivory field guide
 
 Paradox Modding Toolkit is presented as a practical guide to making mods. Ivory reading surfaces surround real editor views. The homepage leads with script completion, gives the Coat of Arms Designer the largest visual feature, and then presents Steam Workshop publishing. The primary action installs the VS Code extension; documentation, recordings, game support, credits and standalone LSP information remain first-class routes.
 
@@ -11,6 +11,10 @@ The September 29 refinement removes the homepage side index and repeated product
 Joël places completion ahead of the graph and GUI editor. The coat of arms editor is the strongest visual example; Steam Workshop upload deserves a dedicated section. Show those three in that order. Event Graph and GUI Editor belong together as smaller supporting features below them. Their recordings remain on the demos page.
 
 The website lives in this repository on `main` and builds independently of extension releases. The homepage and release presentation describe the published 0.5.2 preview revision in `sources.json`. The shared handbook comes from the published wiki at build time; `gollum` triggers updates. Published 0.5.0 and preview additions are identified separately. The intended domain is `paradoxtoolkit.jdeffner.com`.
+
+## Shared-link preview
+
+The shared-link image follows the toolkit's GitHub social card: charcoal ground, ivory text, gold labels, feature summaries beside real editor captures. It reuses that card's completion, Workshop and coat-of-arms screenshots with the website's local Archivo and Source Sans fonts. The 1200 x 630 composition includes supported games, the free/open-source label and the website address. This treatment applies to the shared-link image; the website retains its ivory reading surfaces.
 
 ## Research and transposition
 

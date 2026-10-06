@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile, cp, rm } from "node:fs/promises";
 import { join, resolve, basename } from "node:path";
 import { Marked } from "marked";
+import { createHash } from "node:crypto";
 import { groupsFor, slug, titleFor, descriptionFor, routeFor } from "./catalog.mjs";
 import { homepage, releasesPage, identityPage, demosPage } from "./pages.mjs";
 
@@ -20,6 +21,13 @@ if (!base.startsWith("/") || !base.endsWith("/") || base.includes(".."))
   throw new Error("SITE_BASE must be an absolute pathname with a trailing slash.");
 const origin = process.env.SITE_ORIGIN ?? "https://paradoxtoolkit.jdeffner.com";
 const url = (path = "") => `${base}${path}`;
+const socialImageHash = createHash("sha256")
+  .update(await readFile(join(root, "public/assets/social-preview.png")))
+  .digest("hex")
+  .slice(0, 12);
+const socialImage = `${origin}${url("assets/social-preview.png")}?v=${socialImageHash}`;
+const socialImageAlt =
+  "Paradox Modding Toolkit: script completion, Steam Workshop publishing and visual editors for Crusader Kings III, Victoria 3 and Europa Universalis V. Free and open source for VS Code.";
 export const escape = (value) =>
   String(value).replace(
     /[&<>"']/g,
@@ -77,7 +85,7 @@ async function page(
   await writeFile(
     join(out, file),
     `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${escape(title)} | Paradox Modding Toolkit</title><meta name="description" content="${escape(description)}">${noindex ? '<meta name="robots" content="noindex">' : ""}<link rel="canonical" href="${origin}${url(path)}"><meta property="og:type" content="website"><meta property="og:title" content="${escape(title)}"><meta property="og:description" content="${escape(description)}"><meta property="og:image" content="${origin}${url("assets/social-preview.png")}"><meta property="og:url" content="${origin}${url(path)}"><meta name="twitter:card" content="summary_large_image"><meta name="theme-color" content="#f2ede3"><link rel="icon" href="${url("assets/logo.svg")}" type="image/svg+xml"><link rel="preload" href="${url("assets/fonts/source-sans.woff2")}" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="${url("assets/site.css")}"><script type="module" src="${url("assets/site.mjs")}"></script></head><body class="${className}" data-base="${base}"><a href="#main" class="skip-link">Skip to content</a><header class="site-header"><a class="brand" href="${url()}"><img src="${url("assets/logo.svg")}" width="44" height="44" alt=""><span>Paradox<span>Modding Toolkit</span></span></a><button class="menu-toggle" aria-expanded="false" aria-controls="main-nav">Menu <span aria-hidden="true">+</span></button>${nav(active)}</header>${content}${footer}</body></html>`
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${escape(title)} | Paradox Modding Toolkit</title><meta name="description" content="${escape(description)}">${noindex ? '<meta name="robots" content="noindex">' : ""}<link rel="canonical" href="${origin}${url(path)}"><meta property="og:type" content="website"><meta property="og:title" content="${escape(title)}"><meta property="og:description" content="${escape(description)}"><meta property="og:image" content="${socialImage}"><meta property="og:image:type" content="image/png"><meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="${socialImageAlt}"><meta property="og:url" content="${origin}${url(path)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${socialImage}"><meta name="twitter:image:alt" content="${socialImageAlt}"><meta name="theme-color" content="#f2ede3"><link rel="icon" href="${url("assets/logo.svg")}" type="image/svg+xml"><link rel="preload" href="${url("assets/fonts/source-sans.woff2")}" as="font" type="font/woff2" crossorigin><link rel="stylesheet" href="${url("assets/site.css")}"><script type="module" src="${url("assets/site.mjs")}"></script></head><body class="${className}" data-base="${base}"><a href="#main" class="skip-link">Skip to content</a><header class="site-header"><a class="brand" href="${url()}"><img src="${url("assets/logo.svg")}" width="44" height="44" alt=""><span>Paradox<span>Modding Toolkit</span></span></a><button class="menu-toggle" aria-expanded="false" aria-controls="main-nav">Menu <span aria-hidden="true">+</span></button>${nav(active)}</header>${content}${footer}</body></html>`
   );
   if (!noindex) routes.push(path);
 }
