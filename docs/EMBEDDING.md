@@ -181,7 +181,7 @@ concrete:
   `paradox/configChanged` triggers a full reload.
 - **`gamePath`** is the game's `game/` folder, the source of vanilla
   definitions, asset paths and override detection. Without it the index knows
-  only the mod.
+  only the mod. CK3 building labels and missing-key checks read the supported key format from the installed English building localization file.
 - **`logsPath`** is the folder holding the user's `script_docs` dumps. CK3 and
   Vic3 ship bundled fallbacks (wiki tables, dump snapshots), so there it is an
   exact-version upgrade; EU5 ships only a data-type snapshot so far, so for
@@ -193,7 +193,7 @@ concrete:
   When CK3 uses the bundled Florin snapshot, wiki entries enrich the
   documented tokens without adding older names to the categories covered by
   the dump. The packaged datatype dump supplies the baseline for data-function
-  completion. The compact wiki tables serve clients without those files.
+  completion. The compact wiki tables serve clients without usable bundled dump entries. Generated dumps supply their own return types for the functions they document, including unregistered returns.
 - **`modPath`** is the mod root. A nonempty value and any `workspaceMods` take precedence over the workspace fallback. When both are empty, the server uses the first initialization workspace folder, or `rootUri` when no folder is supplied. The fallback survives later settings updates. Sending `modPath: null` with `workspaceMods: []` restores it. Without any root, features that require a known mod stay silent.
 - **`workspaceMods`** are the roots being *edited*. Listing a root here is what
   upgrades it from a plain definition scan to reference indexing plus reference

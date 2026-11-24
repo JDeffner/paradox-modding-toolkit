@@ -519,6 +519,27 @@ describe("dynasty legacy creator app", () => {
     expect(app.save().perks[0].block).toContain("faith_character_modifier = {");
   });
 
+  it("preserves both modifier spellings when a loaded perk contains both", () => {
+    const app = boot({ ...INIT, installedDoctrineModifierKey: "faith_character_modifier" });
+    const loaded = {
+      ...THREE_DOCTRINES,
+      text: THREE_DOCTRINES.text.replace("doctrine_character_modifier", "faith_character_modifier"),
+    };
+    app.post({ type: "loaded", track: LEGACY_FORM, perks: [loaded], loc: {} });
+    app.cards()[0].click();
+    const editor = app.window.document.getElementById("perkEditor") as HTMLElement;
+    buttonWith(editor, "Add a doctrine modifier").click();
+    buttonWith(editor.querySelectorAll(".doctrineblock")[1], "not set").click();
+    app.pick("doctrine_spiritual_head");
+    const written = app.save().perks[0];
+    expect(written.changed).toBeUndefined();
+    expect(written.block.match(/faith_character_modifier = \{/g)).toHaveLength(2);
+    expect(written.block).toContain(
+      "\tdoctrine_character_modifier = {\n\t\tname = erudition_legacy_4_modifier_name"
+    );
+    expect(written.block).toContain("\t\treligious_head_opinion = 15");
+  });
+
   it("takes an empty script area back to its builder", () => {
     const app = boot();
     const document = app.window.document;

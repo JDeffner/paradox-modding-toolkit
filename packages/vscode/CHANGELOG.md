@@ -7,7 +7,8 @@ This release includes changes since 0.5.0. Most were first available in the 0.5.
 ### Game references and script editing
 
 - Update CK3 completions, hovers, navigation and generated snippets for 1.21.0 Florin (Silk & Silver), including trade goods, districts, roads and prosperity. Add the Florin Workshop compatibility tag. For deep validation, select any Tiger-compatible executable in Toolkit Settings under Validation. Accurate Florin reports require a validator that supports CK3 1.21.
-- Use the installed game's dynasty perk modifier key for new perks. Leave the spelling in existing perks intact when editing them.
+- Use the installed game's dynasty perk modifier key for new perks. Preserve both spellings in existing perks. Fall back to the bundled form when the installed perk documentation is unavailable.
+- Resolve building labels and missing-localization checks using the installed game's key format, including older CK3 builds.
 - Group Wiki references by topic, open search matches at their section or card, and carry queries into Examples Wiki for the selected reference game. Add Back and Forward, saved reading positions and filters, page contents, and content-submission links. Keep article edit dates and discard outdated Mod Report replies.
 - Refresh bundled CK3 script documentation and GUI data types for Crozier 1.20.0.2, generated with no mods enabled. Index standalone faiths, rites, tenets, laws and law groups while retaining older nested definitions.
 - Distinguish definitions, variables, scope chains, conditions and actions with bold declarations and built-in theme colors. Preserve user color overrides and identify data objects and functions inside GUI and localization expressions.

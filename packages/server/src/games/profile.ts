@@ -243,6 +243,8 @@ export interface GameProfile extends GameMeta {
   migrations: readonly MigrationEntry[];
   /** Folder→definition-kind table (see schema/types.ts). */
   schema: SchemaEntry[];
+  /** Adjust schema rules whose spelling can be verified from the installed game. */
+  installedSchema?: (read: (relativePath: string) => string) => SchemaEntry[];
   /** Assignment keys whose values reference other definitions. */
   refFields: RefField[];
   /** Scalar-value prefixes that reference definitions (`culture:czech`). */

@@ -11,6 +11,7 @@ changes. Before the split it moved inside the extension's version (up to
 Ships with Toolkit 0.6.0.
 
 - Refresh CK3 language data for 1.21.0 Florin. Index trade, district and road definitions, resolve their script references, and expand the new trade and district modifier templates. Local script documentation takes priority over the Florin snapshot. Wiki entries enrich the active snapshot without restoring removed names. The packaged data-type dump supplies the baseline for GUI and localization functions.
+- Use the installed game's building localization keys for definition labels and missing-key checks. Respect return types in local data-type dumps, including unregistered returns.
 
 ## 0.3.8
 

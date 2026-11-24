@@ -1221,7 +1221,11 @@ async function buildIndex(): Promise<void> {
   clearPathCaches();
   calendarByRoot.clear();
   refreshProjectPolicies();
-  schema = loadSchema([...(settings.modPath ? [settings.modPath] : []), ...workspaceModRoots()], log);
+  schema = loadSchema(
+    [...(settings.modPath ? [settings.modPath] : []), ...workspaceModRoots()],
+    log,
+    settings.gamePath
+  );
   indexSchema =
     settings.indexAssets === false
       ? { ...schema, entries: schema.entries.filter((e) => e.ext?.toLowerCase() !== ".asset") }

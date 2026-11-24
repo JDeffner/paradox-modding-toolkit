@@ -10,8 +10,10 @@ import * as os from "os";
 import * as path from "path";
 import { pathToFileURL } from "url";
 import { computeDefinitionForm } from "../src/creators/definitionForm";
+import { computeRequiredLocDiagnostics } from "../src/features/diagnostics";
 import { loadSchema, type SchemaData } from "../src/schema/loader";
 import { ServerData } from "../src/serverData";
+import type { Definition } from "@px-lsp/protocol/types";
 
 const TRAITS_TXT = `# A mod trait.
 px_stoic = {
@@ -135,6 +137,29 @@ afterAll(() => {
 });
 
 describe("computeDefinitionForm", () => {
+  it.each(["", "building_"])("uses the installed building localization prefix %j", (prefix) => {
+    const install = path.join(dir, prefix || "florin");
+    const english = path.join(install, "localization", "english");
+    fs.mkdirSync(english, { recursive: true });
+    fs.writeFileSync(
+      path.join(english, "buildings_l_english.yml"),
+      `l_english:\n ${prefix}castle_02:1 "Keep"\n`
+    );
+    const installed = loadSchema(null, undefined, install);
+    const buildings = new ServerData();
+    const def: Definition = { name: "castle_02", kind: "building", file: "test.txt", line: 0, source: "mod" };
+    const entry = installed.entries.find((item) => item.kind === "building")!;
+    buildings.index.addAll([def]);
+    expect(computeRequiredLocDiagnostics([def], entry, buildings)[0]?.data?.key).toBe(`${prefix}castle_02`);
+    buildings.index.addAll([
+      { name: `${prefix}castle_02`, kind: "loc_key", file: "loc.yml", line: 0, source: "mod", value: "Keep" },
+    ]);
+    expect(computeRequiredLocDiagnostics([def], entry, buildings)).toEqual([]);
+    const form = computeDefinitionForm(buildings, installed, { kind: "building" });
+    expect(form?.locPatterns).toEqual([`${prefix}$`, `${prefix}$_desc`]);
+    expect(form?.existing[0]?.label).toBe("Keep");
+  });
+
   it("loads the requested duplicate source even outside the focused mod, with no fallback", () => {
     const other = path.join(dir, "other traits.txt");
     fs.writeFileSync(other, TRAITS_TXT.replace("martial = 2", "martial = 3"));
