@@ -190,6 +190,10 @@ concrete:
   definitions. Vic3/EU5 write script_docs to `Documents/.../docs`; the
   data-type dump lands under `logs/` and the server probes the sibling
   `logs/` folder of a docs-style `logsPath` automatically.
+  When CK3 uses the bundled Florin snapshot, wiki entries enrich the
+  documented tokens without adding older names to the categories covered by
+  the dump. The packaged datatype dump supplies the baseline for data-function
+  completion. The compact wiki tables serve clients without those files.
 - **`modPath`** is the mod root. A nonempty value and any `workspaceMods` take precedence over the workspace fallback. When both are empty, the server uses the first initialization workspace folder, or `rootUri` when no folder is supplied. The fallback survives later settings updates. Sending `modPath: null` with `workspaceMods: []` restores it. Without any root, features that require a known mod stay silent.
 - **`workspaceMods`** are the roots being *edited*. Listing a root here is what
   upgrades it from a plain definition scan to reference indexing plus reference
@@ -788,7 +792,7 @@ The compiled `@px-lsp/server/migrations` export provides `defineMigration`, `def
 
 SDK 2 adds listing and fixed-prefix captures, file-size metadata, extension filters, reference selectors that match mod paths, and an optional discovery phase that requests exact full files. The host freezes the capture in plans and completion records. Apply does not rerun discovery. Continuation batches leave the entry open; partial group selection cannot mark the whole recipe complete. SDK 1 remains supported. See the author guide for capture limits and host responsibilities.
 
-The migration SDK remains work in progress in the 0.5.5 preview. An outside-author contribution trial is deferred. Built-in recipe tests do not establish that an independent author can complete the full workflow.
+The migration SDK remains work in progress in Toolkit 0.6.0. An outside-author contribution trial is deferred. Built-in recipe tests do not establish that an independent author can complete the full workflow.
 
 CK3 offers faith/rite and portrait/clothing mask recipes from `1.19.0.6` to the explicit targets `1.20.0.2` and `1.20.0.3`. The 1.20.0.3 route uses audited installed schemas and target texture requirements; it does not imply support for other patch versions. Faith conversion requests representation, parent, holy-site and reference decisions, preserves supported inheritance and blocks unresolved cases. It captures and copies exact old vanilla tenet icons when the target lacks them, while keeping mod-owned icons first. It removes an obsolete three-pick core-tenet group only when its captured members and settings have a known target meaning. Unknown members, extra behavior and existing target groups require review. Revision 4 also fills missing `ReligiousHeadNameFemale` localization in converted religions and independent-faith overrides by matching their `ReligiousHeadName` key to one unambiguous captured target-game mapping. Explicit female values remain unchanged; missing, conflicting or nonliteral mappings block preparation and require an explicit author value. Mask conversion identifies actual consumers, compares compatible target requirements, or asks for an explicit policy. Binary review includes DDS dimensions, format and stored levels. These recipes do not merge clothes-gene databases; mods that override that database need a separate target-version merge and accessory-registration check. Source evidence includes an archived folder label; target structure comes from installed documentation. No Crozier-compatible Tiger validator is available; target-game acceptance remains required. Victoria 3 and EU5 have empty built-in libraries. Dependency load-order composition remains unavailable. Synthetic tests establish host mechanics, not whole-mod game compatibility.
 

@@ -56,6 +56,7 @@ describe("data-type source reporting", () => {
       const baseline = loadDataTypes([bundled, local], bundled);
       expect(baseline.source).toBe("bundled dump");
       expect(baseline.globals.get("SourceProbe")?.src).toBe("bundled");
+      expect(baseline.types.has("Character")).toBe(false);
       fs.writeFileSync(path.join(local, "data_types.log"), "not a usable dump");
       expect(loadDataTypes([bundled, local], bundled).source).toBe("bundled dump");
       fs.writeFileSync(path.join(local, "data_types.log"), dump);

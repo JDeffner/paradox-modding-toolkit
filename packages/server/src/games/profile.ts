@@ -307,6 +307,8 @@ export interface GameProfile extends GameMeta {
   saveSchema?: SaveSchema;
   /** Trailing provenance note on bundled-wiki token hovers. */
   wikiNote: string;
+  /** Wiki names must exist in the bundled snapshot for each kind the snapshot covers. */
+  authoritativeScriptDocsSnapshot?: boolean;
   /** LSP diagnostic `source` label ("ck3-script"). */
   diagnosticSource: string;
 }

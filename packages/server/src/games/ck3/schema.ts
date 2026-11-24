@@ -149,8 +149,41 @@ const CK3_SCHEMA_BASE: SchemaEntry[] = [
     extraction: "nested-title",
     rootScopes: ["character"],
   },
-  { path: "common/buildings", kind: "building", requiredLoc: ["building_$"], rootScopes: ["province"] },
+  {
+    path: "common/buildings",
+    kind: "building",
+    // Florin buildings_l_english.yml uses bare names. Older patches use building_$.
+    locPatterns: ["$", "$_desc"],
+    rootScopes: ["province"],
+  },
   { path: "common/holdings", kind: "holding_type" },
+  // Florin: top-level database IDs in the installed files and their .info docs.
+  { path: "common/districts", kind: "district", rootScopes: ["province"] },
+  { path: "common/roads/road_types", kind: "road" },
+  { path: "common/roads/road_modifiers", kind: "road_modifier" },
+  { path: "common/title_types", kind: "title_type" },
+  { path: "common/trade/trade_good_types", kind: "trade_good", locPatterns: ["$", "$_desc"] },
+  { path: "common/trade/trade_good_categories", kind: "trade_good_category" },
+  { path: "common/trade/trade_market_toll_levels", kind: "trade_market_toll_level" },
+  { path: "common/trade_tasks", kind: "trade_task" },
+  // These keys configure existing goods or graphics, rather than declaring script objects.
+  {
+    path: "common/trade/county_potential_trade_goods",
+    kind: "county_potential_trade_good",
+    completable: false,
+  },
+  { path: "common/trade_goods_graphics", kind: "trade_good_graphics", completable: false },
+  { path: "common/holding_sprawl_graphics", kind: "holding_sprawl_graphics", completable: false },
+  { path: "common/holding_sprawl_patterns", kind: "holding_sprawl_pattern", completable: false },
+  { path: "common/holy_orders", kind: "holy_order" },
+  { path: "common/puppets/actions", kind: "puppet_action", rootScopes: ["character"] },
+  { path: "common/puppets/types", kind: "puppet_type", rootScopes: ["character"] },
+  { path: "common/religion/doctrine_category_types", kind: "doctrine_category_type" },
+  { path: "common/religion/rite_icons", kind: "rite_icon", rootScopes: ["rite"] },
+  { path: "common/religion/rite_names", kind: "rite_name", rootScopes: ["rite"] },
+  { path: "common/confederation_aspirations", kind: "confederation_aspiration", rootScopes: ["character"] },
+  { path: "common/morpheme_strip_rules", kind: "morpheme_strip_rule", completable: false },
+  { path: "common/spiritual_fulfillment", kind: "spiritual_fulfillment" },
   { path: "common/great_projects/types", kind: "great_project", rootScopes: ["character", "great_project"] },
   { path: "common/terrain_types", kind: "terrain_type" },
   { path: "common/subject_contracts/contracts", kind: "subject_contract", rootScopes: ["character"] },
@@ -528,6 +561,30 @@ export const REF_FIELDS: RefField[] = [
   // Buildings / holdings
   { key: "has_building", kinds: ["building"] },
   { key: "has_building_or_higher", kinds: ["building"] },
+  // Florin _holdings.info, _districts.info, history and script_docs.
+  { key: "primary_building", kinds: ["building"] },
+  { key: "next_building", kinds: ["building"] },
+  { key: "buildings", kinds: ["building"], form: "list" },
+  { key: "add_building", kinds: ["building"] },
+  { key: "primary_district", kinds: ["district"] },
+  { key: "districts", kinds: ["district"], form: "list" },
+  { key: "special_district_slot", kinds: ["district"] },
+  { key: "entrepot_district_slot", kinds: ["district"] },
+  { key: "add_entrepot_district", kinds: ["district"] },
+  { key: "add_regular_district", kinds: ["district"] },
+  { key: "add_special_district", kinds: ["district"] },
+  { key: "add_special_district_slot", kinds: ["district"] },
+  // Florin road modifier effects and trigger in script_docs.
+  { key: "add_road_modifier", kinds: ["road_modifier"] },
+  { key: "remove_road_modifier", kinds: ["road_modifier"] },
+  { key: "remove_all_road_modifier_instances", kinds: ["road_modifier"] },
+  { key: "has_road_modifier", kinds: ["road_modifier"] },
+  // Florin trade and title .info schemas.
+  { key: "trade_good", kinds: ["trade_good"] },
+  { key: "trade_good_type", kinds: ["trade_good"] },
+  { key: "trade_goods", kinds: ["trade_good"], form: "list" },
+  { key: "trade_good_category", kinds: ["trade_good_category"] },
+  { key: "domicile_type", kinds: ["domicile_type"] },
 
   // Governments / laws
   { key: "government", kinds: ["government"] },
@@ -583,6 +640,7 @@ export const REF_FIELDS: RefField[] = [
  */
 export const BLOCK_REF_FIELDS: Record<string, Record<string, string[]>> = {
   trigger_event: { id: ["event"] },
+  district: { type: ["district"] },
   override_background: { reference: ["event_background"] },
   override_transition: { reference: ["event_transition"] },
   override_effect_2d: { reference: ["event_2d_effect"] },
@@ -600,4 +658,12 @@ export const PREFIX_REFS: Record<string, string[]> = {
   character: ["character"],
   dynasty: ["dynasty"],
   house: ["dynasty_house"],
+  // Florin event_targets.log global links with required data.
+  building_type: ["building"],
+  holding_type: ["holding_type"],
+  district_type: ["district"],
+  trade_good_type: ["trade_good"],
+  trade_good_category: ["trade_good_category"],
+  toll_level: ["trade_market_toll_level"],
+  title_type: ["title_type"],
 };

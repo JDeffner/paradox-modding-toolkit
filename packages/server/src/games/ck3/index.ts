@@ -41,6 +41,14 @@ export const ck3Profile: GameProfile = {
     Custom: "customizable_localization",
     Custom2: "customizable_localization",
     Custom2_Title: "customizable_localization",
+    // Florin DumpDataTypes: global lookups taking a database key.
+    GetBuildingType: "building",
+    GetDistrictType: "district",
+    GetTitleType: "title_type",
+    GetTollLevel: "trade_market_toll_level",
+    GetTradeGoodCategory: "trade_good_category",
+    GetTradeGoodType: "trade_good",
+    GetTradeTaskType: "trade_task",
   },
   structureSources: STRUCTURE_SOURCES,
   // Events declare `scope = character|landed_title|…` and default to character
@@ -69,5 +77,7 @@ export const ck3Profile: GameProfile = {
   skeletons: (SKELETONS as unknown as SkeletonData).kinds,
   saveSchema: CK3_SAVE_SCHEMA,
   wikiNote: "Source: CK3 wiki (may lag behind the current game version)",
+  // The Florin dumps supersede names from pre-Florin wiki tables.
+  authoritativeScriptDocsSnapshot: true,
   diagnosticSource: "ck3-script",
 };

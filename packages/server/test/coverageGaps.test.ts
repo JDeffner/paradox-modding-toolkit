@@ -212,6 +212,6 @@ describe("structure additions from the audit", () => {
     );
     const category = schema.structures.keysByKindBlock.get("scheme_type")?.get("")?.get("category");
     expect(category?.values).toBe("enum:personal|contract|hostile");
-    expect(category?.freq).toBe(71); // harvested metadata preserved
+    expect(category?.freq).toBe(128); // Florin harvest metadata preserved
   });
 });

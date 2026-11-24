@@ -36,7 +36,8 @@ const kb = (n: number): string => (n / 1024).toFixed(0).padStart(5) + " KB";
 function bake(gameId: string): boolean {
   // The parsers read the ACTIVE profile for their token vocabulary, so this has
   // to move with the game rather than being set once at startup.
-  setActiveProfile(resolveProfile(gameId));
+  const profile = resolveProfile(gameId);
+  setActiveProfile(profile);
 
   const data = path.join(SERVER, "data", gameId);
   const scriptDocs = path.join(data, "script_docs");
@@ -50,7 +51,9 @@ function bake(gameId: string): boolean {
   // Same merge order as server.ts: script_docs first, the wiki mirror filling
   // the gaps. Baking the merged result means the browser never does either.
   const wiki = loadWikiTokens(path.join(data, "wikidocs"));
-  const tokens: TokenData[] = mergeWikiTokens(loaded.tokens, wiki).tokens;
+  const tokens: TokenData[] = mergeWikiTokens(loaded.tokens, wiki, {
+    dropUnknownNames: profile.authoritativeScriptDocsSnapshot,
+  }).tokens;
 
   const hot: BakedToken[] = [];
   const prose: Array<[string, string]> = [];

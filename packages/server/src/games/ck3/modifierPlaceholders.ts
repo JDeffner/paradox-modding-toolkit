@@ -37,6 +37,7 @@ const MAA_BASE_TYPES = [
 
 export const CK3_MODIFIER_PLACEHOLDERS: Record<string, PlaceholderSpec> = {
   CULTURE: { kind: "culture", label: "culture" }, // akan_opinion
+  DISTRICT_TYPE: { kind: "district", label: "district type" },
   FAITH: { kind: "faith", label: "faith" }, // mutazila_opinion
   GOVERNMENT_TYPE: { kind: "government", label: "government" }, // feudal_government_opinion
   HOLDING_TYPE: { kind: "holding_type", label: "holding type" }, // castle_holding_build_speed
@@ -55,5 +56,8 @@ export const CK3_MODIFIER_PLACEHOLDERS: Record<string, PlaceholderSpec> = {
   SITUATION_TYPE: { kind: "situation", label: "situation" }, // the_great_steppe_supply_limit_add
   TAX_SLOT_TYPE: { kind: "tax_slot_type", label: "tax slot type" }, // clan_tax_slot_add
   TERRAIN_TYPE: { kind: "terrain_type", label: "terrain type" }, // plains_advantage
+  // Florin modifiers.log templates and 00_gdp_definitions.txt expansions.
+  TRADE_GOOD_CATEGORY: { kind: "trade_good_category", label: "trade good category" },
+  TRADE_GOOD_TYPE: { kind: "trade_good", label: "trade good type" },
   VASSAL_STANCE: { kind: "vassal_stance", label: "vassal stance" }, // courtly_opinion
 };

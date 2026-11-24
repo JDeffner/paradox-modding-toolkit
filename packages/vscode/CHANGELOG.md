@@ -1,20 +1,14 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
-- Group Wiki references by topic, open search matches at their section or card, and carry queries into Examples Wiki for the selected reference game. Add Back and Forward, saved reading positions and filters, page contents, and content-submission links. Keep article edit dates and discard outdated Mod Report replies.
-- Shorten GitHub issue forms, make version details optional, and allow feature requests with only a title. Add a Wiki-content form with page and game context.
-
-## Unreleased
-
-- Replace the website's shared-link preview with a charcoal-and-gold feature card showing real editor captures, supported games and product details.
-
-## 0.6.0 (upcoming; preview 0.5.5)
-
-Toolkit 0.5.5 is the opt-in prerelease of the upcoming 0.6.0 update. These changes cover all work since the published 0.5.0 release, including the unpublished 0.5.2 draft. Compatch features remain experimental and off by default.
+This release includes changes since 0.5.0. Most were first available in the 0.5.5 preview. Compatch remains experimental and off by default.
 
 ### Game references and script editing
 
+- Update CK3 completions, hovers, navigation and generated snippets for 1.21.0 Florin (Silk & Silver), including trade goods, districts, roads and prosperity. Add the Florin Workshop compatibility tag. For deep validation, select any Tiger-compatible executable in Toolkit Settings under Validation. Accurate Florin reports require a validator that supports CK3 1.21.
+- Use the installed game's dynasty perk modifier key for new perks. Leave the spelling in existing perks intact when editing them.
+- Group Wiki references by topic, open search matches at their section or card, and carry queries into Examples Wiki for the selected reference game. Add Back and Forward, saved reading positions and filters, page contents, and content-submission links. Keep article edit dates and discard outdated Mod Report replies.
 - Refresh bundled CK3 script documentation and GUI data types for Crozier 1.20.0.2, generated with no mods enabled. Index standalone faiths, rites, tenets, laws and law groups while retaining older nested definitions.
 - Distinguish definitions, variables, scope chains, conditions and actions with bold declarations and built-in theme colors. Preserve user color overrides and identify data objects and functions inside GUI and localization expressions.
 - Provide completion, hover and signature help across multiline GUI bindings. Correct weighted reference colors, EU5 entry-mode declaration colors and saved-scope prefix colors during indexing.
@@ -80,14 +74,18 @@ The bounded Lantern faith and mask workflow has user-confirmed acceptance agains
 
 - Add Compatibility Patch for ordered mod sets. Save contribution, field and manual decisions with the patch, reopen affected choices after source changes and keep local folders in User settings.
 - Review complete generated files, preserve independent output edits with three-way updates and restore journaled writes. Invalidate previews when linked workspace paths or output files change. Unsupported loading rules require manual work.
-- Keep mod-to-mod runtime acceptance deferred for this release. Victoria 3 and EU5 gameplay and Workshop publication are outside this release's acceptance coverage. Province Painter and Artifact Creator are not part of this preview.
+- Mod-to-mod gameplay acceptance, Victoria 3 and EU5 gameplay testing, and live Workshop publishing checks remain deferred. Province Painter and the Artifact Creator remain in development.
 
 ### Packages and release preparation
 
 - Move the `pxtk` executable, local MCP tools and portable skill/plugin into the separate `paradox-toolkit-cli` project. Retain shared scaffold rendering, game discovery, Tiger handling and the external CLI contract in the server and protocol packages.
 - Report malformed Tiger output and process failures as validation failures. Bound validation time and output, and stop when a declared dependency descriptor is missing.
-- Prepare Toolkit 0.5.5 as a prerelease of this upcoming 0.6.0 update. Keep server 0.3.8 and protocol 0.2.8 independently versioned. New prerelease npm versions use `next`, stable versions use `latest`. Discord prereleases mention only the dedicated prerelease role; stable announcements retain the stable role.
+- Update the language server to 0.3.9 and ship protocol 0.2.8. Stable npm packages use the `latest` channel and preview builds use `next`.
 
+### Website and feedback
+
+- Shorten GitHub issue forms, make version details optional, and allow feature requests with only a title. Add a Wiki-content form with page and game context.
+- Replace the website's shared-link preview with a charcoal-and-gold feature card showing real editor captures, supported games and product details.
 - Lead the website with completion, the Coat of Arms Designer and Steam Workshop publishing. Add a larger wordmark, scroll-responsive navigation, image overlays and wiki page update dates with revision-history links. Reserve link arrows for external destinations.
 
 - Add an independently deployable toolkit website with a product tour, searchable handbook, release notes, visual identity, credits and recorded workflows. Keep published and preview features clearly labelled.

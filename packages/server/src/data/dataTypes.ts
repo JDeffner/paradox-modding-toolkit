@@ -230,9 +230,9 @@ function dumpFilesIn(dir: string): string[] {
 }
 
 /**
- * Bundled baseline upgraded by dumps. `dirs` are searched in order and later
- * directories win on conflicts, so callers list them lowest priority first
- * (bundled dump, then the user's folders). A single string is accepted for
+ * The bundled dump supplies the baseline when present. The compact wiki
+ * tables are a fallback for clients without the dump files. Local `dirs`
+ * are searched from lowest to highest priority. A single string is accepted for
  * convenience. Games whose script_docs live outside logs/ (newer Jomini
  * titles) dump data types to logs/ anyway, so callers pass both folders.
  */
@@ -241,10 +241,8 @@ export function loadDataTypes(
   bundledDir?: string,
   profile: Pick<GameProfile, "bundledDataTypes"> = activeProfile()
 ): DataTypesData {
-  const data = loadBundledDataTypes(profile);
   const list = (Array.isArray(dirs) ? dirs : [dirs]).filter((d): d is string => d !== null);
-  for (const dir of list) {
-    const source = dir === bundledDir ? "bundled dump" : "data_types.log";
+  function readDump(dir: string, data: DataTypesData, source: "bundled dump" | "data_types.log"): void {
     for (const file of dumpFilesIn(dir)) {
       try {
         parseDataTypesDump(fs.readFileSync(file, "utf8"), data, source);
@@ -252,6 +250,12 @@ export function loadDataTypes(
         /* unreadable dump: keep what we have */
       }
     }
+  }
+  let data = emptyDataTypes();
+  if (bundledDir && list.includes(bundledDir)) readDump(bundledDir, data, "bundled dump");
+  if (data.count === 0) data = loadBundledDataTypes(profile);
+  for (const dir of list) {
+    if (dir !== bundledDir) readDump(dir, data, "data_types.log");
   }
   return data;
 }

@@ -227,12 +227,23 @@ export class LegacyCreatorPanel {
     }
     this.legacyForm = legacy;
     this.perkForm = perk;
+    const installedPerkDocs = cfg.gamePath && path.join(cfg.gamePath, perk.folder, "_dynasty_perks.info");
+    const installedDoctrineModifierKey =
+      installedPerkDocs && fs.existsSync(installedPerkDocs)
+        ? fs
+            .readFileSync(installedPerkDocs, "utf8")
+            .match(/^\s*(faith_character_modifier|doctrine_character_modifier)\s*=/m)?.[1]
+        : undefined;
     const icons = this.resolveIcons(legacy.iconFolder, this.iconFiles);
     this.post({
       type: "init",
       init: {
         legacy,
         perk,
+        ...(installedDoctrineModifierKey === "faith_character_modifier" ||
+        installedDoctrineModifierKey === "doctrine_character_modifier"
+          ? { installedDoctrineModifierKey }
+          : {}),
         formats: formats?.formats ?? null,
         refIconFolders: await this.refIconFolders(perk, modRoot),
         locLanguage: cfg.locLanguage,

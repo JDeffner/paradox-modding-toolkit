@@ -148,7 +148,7 @@ node dist/build-freqs.cjs --game vic3    # vic3
 | Completion frequencies | `build-freqs.ts [--game <id>]` | `packages/server/data/<id>/freqs.json` |
 | Definition skeletons | `build-skeletons.ts [--game <id>]` | `packages/server/data/<id>/skeletons.json` |
 | Asset vocabulary | `build-asset-vocabulary.ts [--game <id>]` | `packages/server/data/<id>/assetVocabulary.json` |
-| CK3 bundled datatypes | `build-data-types-json.ts` | `packages/server/data/ck3/dataTypes.json`, from bundled `wikidocs/Data_types.md`, not live dumps |
+| CK3 compact datatype fallback | `build-data-types-json.ts` | `packages/server/data/ck3/dataTypes.json`, from bundled `wikidocs/Data_types.md`; packaged servers also read the current `data_types/` dump |
 | Schema coverage audit | `audit-schema-coverage.ts [--game <id>]` | stdout; gaps should be 0 or documented |
 | EU5 schema table | `import-cwt-types.ts <path-to-cwtools-eu5-config-clone>` | `packages/server/src/games/eu5/schema.generated.ts` |
 

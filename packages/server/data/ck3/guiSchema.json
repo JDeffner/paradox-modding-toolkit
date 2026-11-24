@@ -1,449 +1,457 @@
 {
  "meta": {
-  "generated": "2026-07-14",
-  "files": 373
+  "generated": "2026-11-18",
+  "files": 441
  },
  "types": {
   "hbox": {
-   "count": 3860,
+   "count": 4885,
    "props": {
-    "layoutpolicy_horizontal": 2422,
-    "text_single": 1502,
-    "expand": 1423,
-    "spacing": 1173,
-    "vbox": 796,
-    "hbox": 672,
-    "margin": 648,
-    "background": 583,
-    "icon": 566,
-    "datacontext": 560,
-    "visible": 557,
-    "name": 481,
-    "widget": 431,
-    "layoutpolicy_vertical": 373,
-    "margin_left": 296,
-    "button_standard": 264,
-    "margin_right": 253,
-    "margin_bottom": 253,
-    "margin_top": 247,
-    "tooltip": 186,
-    "text_multi": 168,
-    "using": 146,
-    "button_tab": 142,
-    "button_round": 129,
-    "datamodel": 112,
-    "item": 112,
-    "divider_light": 106,
-    "spacer": 103,
-    "allow_outside": 76,
-    "button_primary": 74,
-    "minimumsize": 74,
-    "button_checkbox_label": 71,
-    "fixedgridbox": 62,
-    "tooltipwidget": 62,
-    "text_label_left": 60,
-    "portrait_head_small": 53,
-    "text_label_center": 49,
-    "dockable_button": 42,
-    "portrait_head": 41,
-    "progressbar_standard": 40,
-    "button": 40,
-    "layoutstretchfactor_horizontal": 40,
-    "state": 38,
-    "maximumsize": 38,
-    "size": 31,
-    "highlight_icon": 31,
-    "alwaystransparent": 29,
-    "min_width": 29,
-    "warning_icon": 26,
-    "container": 26,
-    "dropdown_menu_standard": 26,
+    "layoutpolicy_horizontal": 3048,
+    "text_single": 1931,
+    "expand": 1827,
+    "spacing": 1567,
+    "vbox": 1001,
+    "hbox": 918,
+    "margin": 870,
+    "background": 822,
+    "datacontext": 786,
+    "visible": 775,
+    "icon": 714,
+    "name": 523,
+    "widget": 519,
+    "layoutpolicy_vertical": 476,
+    "margin_left": 375,
+    "margin_right": 324,
+    "margin_top": 311,
+    "button_standard": 308,
+    "margin_bottom": 296,
+    "tooltip": 217,
+    "text_multi": 205,
+    "using": 203,
+    "button_tab": 173,
+    "spacer": 162,
+    "item": 162,
+    "datamodel": 161,
+    "button_round": 158,
+    "divider_light": 152,
+    "tooltipwidget": 105,
+    "allow_outside": 104,
+    "button_primary": 97,
+    "minimumsize": 95,
+    "button_checkbox_label": 77,
+    "fixedgridbox": 70,
+    "portrait_head_small": 66,
+    "text_label_left": 66,
+    "text_label_center": 64,
+    "ignoreinvisible": 57,
+    "alwaystransparent": 53,
+    "layoutstretchfactor_horizontal": 53,
+    "progressbar_standard": 46,
+    "state": 45,
+    "dockable_button": 45,
+    "portrait_head": 44,
+    "maximumsize": 43,
+    "button": 43,
+    "flowcontainer": 42,
+    "min_width": 40,
+    "highlight_icon": 39,
+    "container": 33,
+    "parentanchor": 31,
+    "icon_doctrine": 30,
+    "size": 30,
+    "dropdown_menu_standard": 29,
+    "warning_icon": 28,
+    "icon_flat_standard": 28,
+    "divider": 26,
+    "min_height": 26,
     "watch_textbox": 25,
-    "flowcontainer": 25,
-    "button_icon": 23,
-    "ignoreinvisible": 21,
-    "parentanchor": 20,
-    "textbox": 20,
-    "max_width": 20,
-    "set_parent_size_to_minimum": 19,
-    "button_group": 19,
+    "button_rite_icon": 23,
+    "textbox": 22,
+    "button_icon": 22,
+    "max_width": 22,
+    "set_parent_size_to_minimum": 21,
+    "situationinfo": 21,
+    "button_group": 20,
+    "scrollbox": 19,
     "editbox_standard": 19,
-    "divider": 18,
-    "icon_doctrine": 18,
+    "button_primary_big": 18,
     "editor_toolbar_button": 18,
-    "scrollbox": 17,
-    "button_tertiary": 16,
-    "widget_councillor_item": 16,
-    "portrait_shoulders": 15,
-    "button_primary_big": 15,
-    "hbox_soldiers_and_quality_small": 15,
+    "button_tertiary": 17,
+    "portrait_shoulders": 16,
+    "hbox_soldiers_and_quality_small": 16,
+    "button_select_arrow": 16,
+    "text_ledger": 16,
+    "button_standard_hover": 15,
+    "widget_councillor_item": 15,
+    "button_expand": 14,
     "icon_trait": 14,
     "editor_button": 14,
-    "situationinfo": 14,
+    "alpha": 14,
     "button_copy": 14,
-    "text_ledger": 14,
-    "icon_flat_standard": 13,
     "raw_tooltip": 13,
-    "button_radio": 13,
+    "coa_title_tiny_crown": 13,
     "button_standard_clean": 13,
     "icon_flat_standard_black": 13,
+    "tooltip_visible": 12,
+    "button_standard_back": 12,
     "achievements_disabled_icon": 12,
+    "button_radio": 12,
+    "coa_title_tiny": 12,
+    "button_edit_text": 12,
     "vbox_character_row_item": 12,
+    "widget_domicile_artifact_slot": 12,
     "icon_flat_standard_gold": 12,
-    "button_standard_back": 11,
-    "button_standard_hover": 11,
+    "position": 11,
     "coa_house_medium": 11,
     "button_standard_list": 10,
-    "min_height": 10,
-    "coa_title_tiny_crown": 10,
-    "button_edit_text": 10,
-    "button_select_arrow": 10,
-    "button_expand": 9,
-    "editor_textbox": 9,
-    "scrollarea": 9,
-    "button_normal": 9,
-    "coa_title_medium": 9,
-    "coa_title_tiny": 9,
-    "button_checkbox": 9,
-    "icon_culture_pillar": 9,
-    "vbox_character_row_relationship_item": 9
+    "button_change": 10,
+    "container_tenet_item_small": 10
    }
   },
   "vbox": {
-   "count": 3282,
+   "count": 4215,
    "props": {
-    "layoutpolicy_horizontal": 1966,
-    "hbox": 1865,
-    "vbox": 1103,
-    "layoutpolicy_vertical": 1027,
-    "spacing": 934,
-    "text_single": 913,
-    "expand": 750,
-    "name": 742,
-    "visible": 658,
-    "margin": 588,
-    "datacontext": 435,
-    "background": 397,
-    "margin_top": 345,
-    "margin_bottom": 324,
-    "text_multi": 316,
-    "item": 278,
-    "using": 268,
-    "datamodel": 260,
-    "text_label_center": 243,
-    "scrollbox": 233,
-    "spacer": 177,
-    "widget": 174,
-    "header_pattern": 162,
-    "state": 147,
-    "margin_left": 131,
-    "fixedgridbox": 105,
-    "margin_right": 103,
-    "cooltip_paragraph": 94,
-    "button_standard": 90,
-    "divider_light": 83,
-    "set_parent_size_to_minimum": 77,
+    "layoutpolicy_horizontal": 2574,
+    "hbox": 2265,
+    "vbox": 1365,
+    "layoutpolicy_vertical": 1326,
+    "spacing": 1268,
+    "text_single": 1113,
+    "expand": 889,
+    "visible": 888,
+    "name": 852,
+    "margin": 724,
+    "datacontext": 618,
+    "background": 471,
+    "margin_top": 427,
+    "item": 420,
+    "margin_bottom": 403,
+    "datamodel": 394,
+    "text_multi": 394,
+    "scrollbox": 313,
+    "using": 308,
+    "text_label_center": 285,
+    "spacer": 239,
+    "widget": 231,
+    "header_pattern": 202,
+    "margin_left": 164,
+    "state": 155,
+    "cooltip_paragraph": 151,
+    "fixedgridbox": 122,
+    "margin_right": 119,
+    "button_standard": 111,
+    "ignoreinvisible": 111,
+    "divider_light": 110,
+    "text_label_left": 94,
+    "allow_outside": 91,
+    "set_parent_size_to_minimum": 90,
+    "minimumsize": 86,
     "vbox_component_entry": 76,
-    "minimumsize": 75,
-    "text_label_left": 72,
-    "allow_outside": 53,
-    "alwaystransparent": 52,
-    "ignoreinvisible": 49,
-    "button_primary": 48,
-    "ledger_filter_item": 46,
+    "icon": 60,
+    "oncreate": 57,
+    "alwaystransparent": 55,
+    "ledger_filter_item": 51,
+    "button_primary": 47,
+    "flowcontainer": 46,
+    "vbox_character_list": 46,
     "property_scrollbar_hbox": 43,
-    "icon": 41,
+    "min_width": 41,
     "dockable_button": 40,
-    "tooltip": 39,
-    "vbox_character_list": 37,
-    "textbox": 34,
-    "oncreate": 33,
-    "maximumsize": 31,
-    "button_round": 28,
-    "min_width": 27,
-    "button_expandable_toggle_field": 27,
+    "tooltip": 38,
+    "textbox": 37,
+    "maximumsize": 36,
+    "button_expandable_toggle_field": 36,
+    "portrait_head_small": 35,
+    "button_round": 34,
+    "layoutstretchfactor_vertical": 26,
+    "widgetid": 25,
     "divider": 22,
+    "tooltipwidget": 22,
     "button": 22,
     "editbox_standard_with_label": 21,
-    "widgetid": 20,
-    "portrait_head_small": 19,
-    "flowcontainer": 18,
+    "max_width": 21,
+    "widget_hud_main_tab": 19,
+    "size": 19,
+    "vbox_ledger": 19,
+    "container": 18,
     "button_frontend": 18,
-    "max_width": 18,
-    "vbox_ledger": 18,
-    "container": 17,
-    "dynamicgridbox": 16,
-    "parentanchor": 16,
+    "restrictparent_min": 17,
+    "portrait_head": 17,
     "scrollarea": 16,
+    "progressbar_standard": 16,
     "game_map_mode_button": 16,
-    "restrictparent_min": 15,
-    "portrait_head": 15,
-    "progressbar_standard": 15,
+    "parentanchor": 15,
+    "dynamicgridbox": 14,
+    "header_pattern_interaction": 14,
+    "button_decision_entry": 14,
+    "button_decree_entry": 14,
     "button_rd_environment": 14,
-    "header_pattern_interaction": 13,
-    "tooltipwidget": 12,
+    "button_tertiary": 12,
     "hbox_text_entry": 12,
-    "widget_hud_main_tab": 12,
-    "size": 12,
-    "hbox_character_interaction_acceptance": 11,
-    "button_dynastic_cycle_decision": 11,
+    "hbox_character_interaction_acceptance": 12,
+    "margin_widget": 11,
+    "layoutstretchfactor_horizontal": 11,
+    "alpha": 10,
+    "button_checkbox_label": 10,
     "filter_mouse": 10,
-    "margin_widget": 10,
+    "text_multi_on_decline_summary": 10,
+    "vbox_interaction_options": 10,
     "name_entry_big": 10,
     "button_primary_big": 9,
-    "text_multi_on_decline_summary": 9,
-    "vbox_interaction_options": 9,
-    "button_checkbox_label": 9,
-    "layoutstretchfactor_horizontal": 9,
-    "button_tertiary": 8,
-    "alpha": 8,
+    "visible_at_creation": 9,
+    "portrait_opinion": 9,
+    "min_height": 9,
     "coa_house_small": 8,
+    "header_standard": 8,
+    "button_standard_clean": 8,
     "vbox_character_interaction_effects": 8,
+    "resizeparent": 8,
     "vbox_coa_designer_color_selection": 8,
     "hbox_realm_stats_row": 8,
+    "vbox_character_interaction_effects_simple": 7,
     "colorpicker_simple": 7,
-    "icon_artifact": 7,
-    "button_generic_selection": 7,
-    "widget_coronation_character_item": 6,
-    "widget_coronation_character_item_empty": 6,
-    "position": 6,
-    "visible_at_creation": 6,
-    "coa_house_big": 6,
-    "header_standard": 6,
-    "event_widget_name_child_option": 6,
-    "widget_header_with_picture": 6
+    "icon_artifact": 7
    }
   },
   "textbox": {
-   "count": 3154,
+   "count": 4119,
    "props": {
-    "text": 2759,
-    "align": 1630,
-    "layoutpolicy_horizontal": 1144,
-    "default_format": 1088,
-    "max_width": 968,
-    "visible": 806,
-    "using": 720,
-    "name": 707,
-    "autoresize": 607,
-    "parentanchor": 306,
-    "fonttintcolor": 294,
-    "margin": 242,
-    "raw_text": 223,
-    "position": 190,
-    "tooltip": 184,
-    "alwaystransparent": 173,
-    "datacontext": 173,
-    "size": 160,
-    "min_width": 156,
-    "tooltipwidget": 135,
-    "fontsize": 133,
-    "margin_bottom": 132,
-    "background": 116,
-    "margin_top": 114,
-    "margin_left": 110,
-    "multiline": 104,
-    "fontsize_min": 98,
+    "text": 3639,
+    "align": 2232,
+    "layoutpolicy_horizontal": 1499,
+    "default_format": 1415,
+    "max_width": 1239,
+    "visible": 1130,
+    "autoresize": 921,
+    "using": 903,
+    "name": 757,
+    "parentanchor": 362,
+    "fonttintcolor": 340,
+    "margin": 284,
+    "raw_text": 247,
+    "datacontext": 242,
+    "tooltip": 233,
+    "alwaystransparent": 231,
+    "size": 217,
+    "position": 215,
+    "min_width": 204,
+    "tooltipwidget": 177,
+    "margin_bottom": 161,
+    "background": 149,
+    "margin_top": 144,
+    "fontsize": 128,
+    "margin_left": 128,
+    "margin_right": 110,
+    "multiline": 108,
+    "fontsize_min": 101,
+    "layoutpolicy_vertical": 98,
     "maximumsize": 86,
-    "layoutpolicy_vertical": 84,
-    "margin_right": 84,
-    "minimumsize": 69,
-    "tooltip_visible": 41,
-    "alpha": 23,
-    "state": 16,
-    "elide": 15,
+    "minimumsize": 70,
+    "tooltip_visible": 54,
+    "alpha": 31,
+    "state": 22,
+    "format_override": 19,
+    "elide": 17,
+    "min_height": 17,
     "widgetanchor": 14,
-    "format_override": 14,
-    "min_height": 10,
-    "font": 9,
-    "max_height": 6,
+    "max_height": 11,
+    "font": 10,
     "fontcolor": 4,
+    "expand": 4,
     "raw_tooltip": 3,
-    "expand": 3,
     "button_normal": 2,
-    "text_single": 2,
-    "allow_outside": 2
+    "text_single": 2
    }
   },
   "widget": {
-   "count": 3067,
+   "count": 3835,
    "props": {
-    "size": 2068,
-    "visible": 682,
-    "name": 667,
-    "parentanchor": 618,
-    "datacontext": 572,
-    "widget": 519,
-    "icon": 514,
-    "background": 460,
-    "position": 400,
-    "state": 385,
-    "layoutpolicy_horizontal": 378,
-    "vbox": 324,
-    "allow_outside": 317,
-    "using": 290,
-    "hbox": 235,
-    "alwaystransparent": 181,
-    "text_single": 145,
-    "layoutpolicy_vertical": 141,
-    "flowcontainer": 120,
-    "tooltip": 108,
-    "highlight_icon": 72,
-    "button": 70,
-    "scissor": 68,
-    "widgetanchor": 65,
-    "tooltipwidget": 63,
+    "size": 2580,
+    "visible": 833,
+    "datacontext": 766,
+    "parentanchor": 712,
+    "name": 709,
+    "icon": 666,
+    "widget": 603,
+    "background": 546,
+    "position": 472,
+    "layoutpolicy_horizontal": 470,
+    "state": 447,
+    "allow_outside": 412,
+    "vbox": 395,
+    "using": 350,
+    "hbox": 290,
+    "alwaystransparent": 227,
+    "text_single": 175,
+    "layoutpolicy_vertical": 159,
+    "flowcontainer": 131,
+    "tooltip": 117,
+    "highlight_icon": 95,
+    "tooltipwidget": 95,
+    "button": 85,
+    "scissor": 71,
+    "widgetanchor": 70,
+    "button_normal": 52,
+    "button_round": 46,
+    "portrait_button": 46,
+    "scale": 45,
+    "layoutstretchfactor_horizontal": 44,
     "alpha": 44,
-    "button_normal": 44,
-    "scale": 41,
-    "layoutstretchfactor_horizontal": 40,
-    "portrait_button": 40,
-    "text_label_center": 38,
-    "widgetid": 37,
-    "button_round": 35,
-    "container": 34,
-    "coat_of_arms_icon": 29,
-    "visible_at_creation": 25,
-    "minimumsize": 24,
-    "icon_flat_standard": 24,
-    "button_standard": 23,
+    "text_label_center": 40,
+    "widgetid": 39,
+    "button_standard": 39,
+    "visible_at_creation": 37,
+    "coat_of_arms_icon": 34,
+    "container": 32,
+    "icon_flat_standard": 26,
+    "icon_flat_standard_gold": 26,
+    "minimumsize": 25,
+    "proportional_icon": 23,
+    "button_standard_clean": 21,
     "layer": 19,
-    "icon_flat_standard_gold": 18,
-    "proportional_icon": 18,
+    "margin_widget": 19,
+    "progressbar_standard": 19,
     "watch_textbox": 17,
-    "margin_widget": 17,
-    "button_standard_clean": 17,
     "portrait_event": 16,
     "filter_mouse": 16,
+    "coa_title_tiny_crown": 16,
+    "coa_realm_tiny": 15,
     "portrait_body": 15,
+    "progresspie": 15,
+    "divider": 15,
     "scrollarea": 14,
+    "scrollbox": 14,
+    "portrait_torso": 14,
     "hbox_complex_bar_progress_next": 13,
-    "coa_realm_tiny": 13,
-    "scrollbox": 13,
-    "coa_title_tiny_crown": 13,
+    "hbox_complex_bar_levels": 13,
+    "coa_house_small": 13,
+    "datamodel": 13,
+    "coa_realm_shadow": 13,
+    "button_icon": 13,
+    "tooltip_offset": 13,
+    "blockoverride": 13,
+    "coa_title_tiny": 12,
     "text_multi": 12,
-    "coa_realm_shadow": 12,
-    "button_icon": 12,
-    "tooltip_offset": 12,
     "buttons_window_control": 12,
-    "hbox_complex_bar_levels": 11,
-    "progressbar_standard": 11,
+    "warning_icon": 12,
+    "button_standard_hover": 12,
+    "coa_realm_tiny_crown": 11,
+    "coa_realm_small_crown": 11,
     "dynamicgridbox": 11,
+    "progressbar": 10,
     "coa_realm_medium": 10,
-    "coa_house_small": 10,
-    "warning_icon": 10,
-    "portrait_torso": 10,
+    "item": 10,
+    "portrait_head_small": 10,
     "button_generic_selection": 10,
     "dominance_pip": 10,
     "dominance_pip_on": 10,
-    "blockoverride": 10,
-    "progressbar": 9,
-    "coa_realm_medium_crown": 9,
-    "progresspie": 9,
-    "coa_realm_small_crown": 9,
+    "divider_light": 9,
+    "drop_target": 9,
     "widget_inventory_slot": 9,
     "portrait_event_small": 8,
-    "datamodel": 8,
-    "item": 8,
+    "coa_realm_medium_crown": 8,
     "progressbar_hud_stress": 8,
     "portrait_shoulders": 8,
+    "button_group": 8,
     "editor_editbox": 8,
-    "button_standard_hover": 8,
     "maximumsize": 8,
     "struggle_phase_based_widget": 8,
     "activity_locale_vfx": 7,
     "expand": 7,
-    "button_group": 7,
     "checkbutton": 7,
-    "portrait_head_small": 7,
-    "divider_light": 6,
+    "icon_holding_district_art": 7,
+    "button_close": 6,
     "button_standard_list": 6,
     "progressbar_hud_stress_glow": 6,
-    "coa_title_tiny": 6,
     "coa_title_small_crown": 6,
-    "header_text": 6,
-    "fixedgridbox": 6,
-    "enabled": 6,
-    "progressbar_lifestyle_xp": 6,
-    "icon_lifestyle_unspent_points": 6,
-    "button_checkbox_label": 6,
-    "tooltip_visible": 5
+    "button_artifact": 6,
+    "header_text": 6
    }
   },
   "icon": {
-   "count": 2782,
+   "count": 3532,
    "props": {
-    "size": 2373,
-    "texture": 2272,
-    "name": 1057,
-    "visible": 1056,
-    "parentanchor": 888,
-    "state": 626,
-    "modify_texture": 478,
-    "tooltip": 477,
-    "position": 477,
-    "using": 317,
-    "framesize": 235,
-    "frame": 234,
-    "alpha": 191,
-    "alwaystransparent": 168,
-    "datacontext": 134,
-    "spritetype": 119,
-    "layoutpolicy_horizontal": 99,
-    "spriteborder": 94,
-    "color": 90,
-    "icon": 88,
-    "tooltipwidget": 88,
-    "layoutpolicy_vertical": 86,
-    "mirror": 62,
-    "texture_density": 57,
-    "glow": 49,
-    "coat_of_arms": 49,
-    "coat_of_arms_slot": 49,
-    "coat_of_arms_mask": 48,
-    "coat_of_arms_offset": 45,
-    "coat_of_arms_scale": 45,
-    "widgetanchor": 42,
-    "shaderfile": 33,
-    "background": 32,
-    "tintcolor": 28,
-    "scale": 23,
-    "enabled": 22,
-    "raw_tooltip": 20,
-    "allow_outside": 19,
-    "effectname": 19,
-    "gfxtype": 15,
+    "size": 3049,
+    "texture": 2853,
+    "visible": 1362,
+    "name": 1207,
+    "parentanchor": 1188,
+    "state": 646,
+    "position": 601,
+    "tooltip": 558,
+    "modify_texture": 557,
+    "using": 399,
+    "alpha": 261,
+    "framesize": 259,
+    "frame": 255,
+    "alwaystransparent": 251,
+    "datacontext": 204,
+    "spritetype": 134,
+    "color": 127,
+    "layoutpolicy_horizontal": 124,
+    "tooltipwidget": 121,
+    "layoutpolicy_vertical": 115,
+    "icon": 107,
+    "spriteborder": 102,
+    "glow": 77,
+    "mirror": 71,
+    "widgetanchor": 67,
+    "texture_density": 62,
+    "coat_of_arms": 55,
+    "coat_of_arms_slot": 55,
+    "shaderfile": 54,
+    "coat_of_arms_mask": 54,
+    "background": 52,
+    "coat_of_arms_offset": 49,
+    "coat_of_arms_scale": 49,
+    "allow_outside": 40,
+    "effectname": 38,
+    "gfxtype": 36,
+    "tintcolor": 31,
+    "mipmaplodbias": 30,
+    "enabled": 30,
+    "scale": 25,
+    "raw_tooltip": 22,
+    "coa_realm_overlay": 17,
+    "coa_realm_topframe": 17,
     "visible_at_creation": 15,
-    "coa_realm_overlay": 13,
-    "coa_realm_topframe": 13,
-    "mipmaplodbias": 11,
+    "text_single": 15,
     "spriteborder_right": 10,
-    "widget": 8,
-    "text_single": 6,
+    "widget": 9,
+    "tooltip_visible": 7,
+    "video": 7,
+    "loop": 7,
+    "highlight_icon": 6,
     "coa_title_frame": 6,
     "coa_confederation_frame": 6,
+    "icon_doctrine": 6,
     "datacontext_from_model": 6,
+    "icon_flat_standard": 5,
+    "vbox": 5,
     "flowcontainer": 5,
-    "video": 5,
-    "loop": 5,
-    "icon_flat_standard": 4,
+    "restart_on_show": 5,
     "activity_locale_vfx": 4,
-    "vbox": 4,
     "coa_realm_bookmark": 4,
-    "tooltip_offset": 4,
     "hbox": 4,
     "value": 4,
-    "highlight_icon": 4,
     "coa_title_frame_no_holder": 4,
     "layoutstretchfactor_horizontal": 4,
+    "drop_target": 3,
+    "draggable_object": 3,
+    "tooltip_offset": 3,
+    "alert_icon": 3,
     "block": 3,
-    "tooltip_visible": 3,
-    "restart_on_show": 3,
+    "widget_cardinal_stained_glass": 3,
+    "draggable_behavior": 2,
     "flowcontainer_bookmark_subheading_info": 2,
     "coa_admin_nodlc_bookmark": 2,
     "coa_clan_bookmark": 2,
     "coa_adventurer_bookmark": 2,
+    "coa_merchant_bookmark": 2,
+    "minimumsize": 2,
     "warning_icon": 2,
+    "progresspie": 2,
     "textbox": 2,
     "button_primary_big": 2,
     "max_width": 2,
@@ -451,157 +459,169 @@
    }
   },
   "state": {
-   "count": 2428,
+   "count": 2720,
    "props": {
-    "name": 2386,
-    "using": 1571,
-    "duration": 1276,
-    "next": 821,
-    "alpha": 657,
-    "modify_texture": 538,
-    "on_start": 417,
-    "trigger_on_create": 288,
-    "delay": 216,
-    "size": 152,
-    "trigger_when": 137,
-    "position": 134,
-    "on_finish": 133,
-    "bezier": 128,
-    "position_x": 123,
+    "name": 2678,
+    "using": 1813,
+    "duration": 1367,
+    "next": 852,
+    "alpha": 695,
+    "modify_texture": 548,
+    "on_start": 506,
+    "trigger_on_create": 310,
+    "delay": 227,
+    "trigger_when": 201,
+    "size": 185,
+    "position": 159,
+    "on_finish": 158,
+    "position_x": 137,
+    "bezier": 132,
     "position_y": 109,
+    "scale": 107,
+    "start_sound": 107,
     "frame": 105,
-    "start_sound": 100,
-    "scale": 93,
     "animation": 37,
-    "glow_alpha": 23
+    "glow_alpha": 31
    }
   },
   "background": {
-   "count": 2099,
+   "count": 2671,
    "props": {
-    "using": 1693,
-    "texture": 793,
-    "modify_texture": 707,
-    "margin": 686,
-    "alpha": 644,
-    "visible": 355,
-    "spritetype": 307,
-    "margin_bottom": 264,
-    "spriteborder": 232,
-    "margin_top": 224,
-    "margin_left": 197,
-    "margin_right": 185,
-    "fittype": 164,
-    "texture_density": 152,
-    "name": 131,
-    "color": 103,
-    "tintcolor": 71,
-    "mirror": 58,
-    "framesize": 54,
-    "frame": 43,
+    "using": 2162,
+    "texture": 957,
+    "modify_texture": 935,
+    "margin": 879,
+    "alpha": 864,
+    "visible": 472,
+    "spritetype": 368,
+    "margin_bottom": 338,
+    "margin_top": 308,
+    "spriteborder": 285,
+    "margin_left": 244,
+    "margin_right": 230,
+    "fittype": 203,
+    "texture_density": 201,
+    "color": 157,
+    "name": 135,
+    "tintcolor": 75,
+    "mirror": 67,
+    "framesize": 56,
+    "frame": 44,
+    "size": 25,
     "shaderfile": 21,
-    "size": 16,
-    "spriteborder_top": 14,
-    "spriteborder_right": 13,
-    "spriteborder_bottom": 11,
-    "layoutpolicy_vertical": 8,
-    "layoutpolicy_horizontal": 7,
+    "layoutpolicy_horizontal": 19,
+    "layoutpolicy_vertical": 19,
+    "spriteborder_right": 18,
+    "spriteborder_top": 16,
+    "spriteborder_bottom": 12,
+    "state": 6,
     "parentanchor": 4,
-    "state": 4,
+    "glow": 3,
     "spriteborder_left": 3,
     "gfxtype": 2,
-    "glow": 2,
-    "alwaystransparent": 2
+    "alwaystransparent": 2,
+    "blend_mode": 2
    }
   },
   "text_single": {
-   "count": 1204,
+   "count": 1443,
    "props": {
-    "text": 1052,
-    "default_format": 490,
-    "align": 481,
-    "layoutpolicy_horizontal": 410,
-    "using": 375,
-    "max_width": 317,
-    "visible": 308,
-    "name": 290,
-    "parentanchor": 211,
-    "position": 131,
-    "raw_text": 113,
-    "autoresize": 102,
-    "margin": 79,
-    "fontsize": 70,
-    "fontsize_min": 69,
-    "tooltip": 58,
-    "margin_left": 54,
-    "alwaystransparent": 53,
-    "datacontext": 49,
-    "background": 37,
-    "size": 33,
-    "snap_to_pixels": 30,
-    "min_width": 29,
-    "multiline": 28,
-    "tooltipwidget": 24,
+    "text": 1260,
+    "align": 588,
+    "default_format": 526,
+    "layoutpolicy_horizontal": 476,
+    "using": 415,
+    "visible": 382,
+    "max_width": 365,
+    "name": 307,
+    "parentanchor": 231,
+    "autoresize": 146,
+    "position": 138,
+    "raw_text": 119,
+    "margin": 94,
+    "fontsize": 78,
+    "fontsize_min": 75,
+    "tooltip": 66,
+    "alwaystransparent": 65,
+    "margin_left": 62,
+    "datacontext": 59,
+    "background": 45,
+    "size": 42,
+    "snap_to_pixels": 40,
+    "tooltipwidget": 33,
+    "min_width": 33,
+    "multiline": 31,
+    "margin_bottom": 25,
+    "fonttintcolor": 25,
+    "margin_right": 23,
     "state": 23,
-    "margin_right": 21,
-    "margin_bottom": 21,
-    "fonttintcolor": 21,
     "maximumsize": 20,
-    "margin_top": 14,
-    "alpha": 13,
-    "minimumsize": 11,
+    "margin_top": 19,
+    "alpha": 14,
+    "minimumsize": 12,
     "elide": 11,
     "widgetanchor": 8,
-    "layoutpolicy_vertical": 6,
-    "tooltip_visible": 5,
-    "min_height": 4,
+    "layoutpolicy_vertical": 7,
+    "tooltip_visible": 7,
+    "min_height": 6,
     "format_override": 2,
     "font": 2
    }
   },
   "item": {
-   "count": 825,
+   "count": 1139,
    "props": {
-    "widget": 85,
-    "container": 77,
-    "vbox": 72,
-    "hbox": 69,
-    "icon_trait": 42,
-    "button_standard": 33,
-    "icon": 16,
-    "flowcontainer": 14,
-    "text_single": 13,
-    "portrait_head_small": 11,
-    "button": 10,
-    "button_standard_list": 10,
-    "coa_title_tiny_crown": 10,
+    "widget": 124,
+    "hbox": 95,
+    "container": 86,
+    "vbox": 83,
+    "button_standard": 50,
+    "icon_trait": 41,
+    "icon": 28,
+    "text_single": 22,
+    "flowcontainer": 20,
+    "portrait_head_small": 13,
+    "button_standard_list": 12,
+    "button": 11,
+    "widget_skill_item_no_icon": 11,
+    "widget_character_list_item": 10,
+    "modifier_item_icon": 10,
     "button_eventoption": 9,
-    "widget_character_list_item": 9,
-    "widget_skill_item_no_icon": 9,
-    "widget_character_list_item_finder": 8,
-    "icon_situation_phase_effect_participant_group_item": 6,
-    "modifier_item_icon": 6,
-    "button_standard_hover": 6,
+    "coa_title_tiny_crown": 9,
+    "widget_character_list_item_finder": 9,
+    "button_standard_hover": 9,
+    "icon_situation_phase_effect_participant_group_item": 8,
+    "widget_artifact_entry": 7,
+    "button_list": 6,
+    "hbox_trade_market_need_category": 6,
     "button_tertiary": 5,
     "portrait_head": 5,
     "icon_situation_phase_effect_item": 5,
+    "widget_vassal_list_item": 5,
+    "widget_own_scheme_item": 5,
+    "widget_doctrine_selection_item": 5,
+    "hbox_planner_all_goods_category": 5,
+    "button_tab": 4,
     "button_standard_clean": 4,
-    "button_list": 4,
+    "vbox_interaction_trade_good_category_row": 4,
     "button_radio": 4,
-    "widget_vassal_list_item": 4,
-    "widget_doctrine_selection_item": 4,
-    "widget_own_scheme_item": 4,
-    "widget_artifact_entry": 4,
+    "widget_cardinal_candidate_item": 4,
+    "widget_republic_law": 4,
     "button_phase_named_set_item": 4,
-    "button_tab": 3,
     "dlc_button": 3,
     "button_saved_games": 3,
-    "button_normal": 3,
+    "widget_interaction_option_item": 3,
+    "button_interaction_trade_good_balance": 3,
+    "task_contract_location_icon": 3,
+    "coa_title_tiny_crown_with_status_icons": 3,
+    "icon_flat_standard": 3,
     "vbox_special_guest_portrait": 3,
     "button_diverge_pillar_selection": 3,
     "epidemic_item_vbox": 3,
     "vbox_faction_item": 3,
-    "widget_doctrine_item": 3,
+    "button_holyorder_list_item": 3,
+    "vbox_expanded_doctrine_category": 3,
+    "button_decision_entry": 3,
     "icon_artifact": 2,
     "potential_selectable_target_portrait_widget": 2,
     "widget_contestant_item": 2,
@@ -611,139 +631,143 @@
     "vbox_ruler_objective_advice_item": 2,
     "widget_major_obligation_level": 2,
     "widget_minor_obligation_checkbox_item": 2,
-    "task_contract_location_icon": 2,
+    "widget_trade_route_end_pin": 2,
     "widget_landless_ruler_pin": 2,
-    "container_tenet_item": 2,
+    "trade_map_icon_good_chip": 2,
+    "trade_map_icon_hidden_good_entry": 2,
     "textbox": 2,
+    "hbox_trade_route_transaction": 2,
     "data_model_view_toggle_filter": 2,
     "data_model_view_dropdown_filter": 2,
-    "icon_flat_standard": 2,
+    "modifier_stack_entry": 2,
     "vbox_admin_vassal_successor_candidate": 2,
     "icon_flat_standard_gold": 2,
+    "widget_cardinal_voter_item": 2,
     "widget_courtier_item": 2,
+    "button_normal": 2,
+    "icon_district_building_slot": 2,
+    "building_need_segment_preview": 2,
+    "building_need_icon": 2,
+    "production_row": 2,
+    "vbox_potential_building_detail": 2,
+    "button_building_track_level_item_standard": 2,
     "widget_court_position_task": 2,
-    "widget_court_position_item": 2,
     "button_project_item": 2,
     "widget_tradition_selection_buttons": 2,
     "hbox_patron_item": 2,
     "visible": 2,
     "hbox_disciple_item": 2,
     "domicile_construct_item": 2,
+    "button_unity_decision": 2,
     "hbox_legacy_item": 2,
     "recursive": 2,
     "dynasty_tree_item": 2,
     "epidemic_infected_province_item": 2,
     "epidemic_infected_realm_item": 2,
+    "widget_tenet_item_compact": 2,
+    "widget_saint_item": 2,
+    "holy_site_faith_item": 2,
+    "holy_site_creation_faith_item": 2,
     "attribute_button": 2,
     "vbox_house_aspiration_level_info": 2,
-    "flowcontainer_inspiration_list_item": 2,
-    "artifact_claim": 2,
-    "flow_house_member_tiny": 2,
-    "vbox_legacy_item": 2,
-    "vbox_message_settings_filter_item": 2,
-    "widget_message_settings_log_history_item": 2,
-    "button_holyorder_list_item": 2,
-    "container_maa_item": 2,
-    "widget_province_army_item": 2,
-    "widget_project_plan_contribution_item": 2,
-    "button_saved_rulers": 2,
-    "coa_title_small_crown": 2,
-    "tax_slot_vassal_item": 2,
-    "future_era_button": 2,
-    "icon_button_travel_option": 2,
-    "portrait_shoulders": 2
+    "flowcontainer_inspiration_list_item": 2
    }
   },
   "texticon": {
-   "count": 821,
+   "count": 986,
    "props": {
-    "icon": 821,
-    "iconsize": 821
+    "icon": 986,
+    "iconsize": 986
    }
   },
   "iconsize": {
-   "count": 821,
+   "count": 986,
    "props": {
-    "texture": 821,
-    "size": 821,
-    "fontsize": 821,
-    "offset": 815,
-    "uv": 56,
-    "framesize": 35,
-    "frame": 33,
+    "texture": 986,
+    "size": 986,
+    "fontsize": 986,
+    "offset": 980,
+    "uv": 120,
+    "framesize": 46,
+    "frame": 43,
     "color": 14
    }
   },
   "button_icon": {
-   "count": 695,
+   "count": 844,
    "props": {
-    "onclick": 338,
-    "size": 313,
-    "tooltip": 259,
-    "parentanchor": 257,
-    "texture": 194,
-    "alwaystransparent": 171,
-    "visible": 168,
-    "name": 155,
-    "enabled": 128,
-    "using": 116,
-    "position": 74,
-    "button_icon": 55,
-    "shortcut": 51,
-    "datacontext": 38,
-    "down": 37,
-    "state": 26,
-    "button_icon_highlight": 24,
-    "clicksound": 17,
-    "background": 16,
-    "raw_tooltip": 14,
-    "text_single": 14,
-    "icon": 13,
-    "raw_text": 11,
-    "tooltipwidget": 10,
+    "onclick": 428,
+    "size": 406,
+    "tooltip": 333,
+    "parentanchor": 318,
+    "alwaystransparent": 262,
+    "texture": 239,
+    "visible": 203,
+    "name": 193,
+    "using": 164,
+    "enabled": 152,
+    "position": 100,
+    "button_icon": 80,
+    "down": 58,
+    "shortcut": 56,
+    "state": 45,
+    "datacontext": 43,
+    "button_icon_highlight": 36,
+    "text_single": 25,
+    "background": 24,
+    "clicksound": 18,
+    "alpha": 17,
+    "raw_tooltip": 17,
+    "icon": 14,
+    "raw_text": 14,
+    "onrightclick": 12,
+    "button_ignore": 12,
+    "tooltipwidget": 12,
+    "button_replace": 10,
+    "framesize": 9,
+    "upframe": 9,
     "button_plus_small": 9,
-    "framesize": 8,
-    "upframe": 8,
+    "inherit_visual_state": 8,
     "button_add_laws": 8,
-    "inherit_visual_state": 7,
-    "button_ignore": 7,
-    "tooltip_when_disabled": 7,
-    "button_change": 7,
+    "tooltip_when_disabled": 8,
+    "button_change": 8,
+    "frame": 7,
+    "mirror": 7,
+    "tooltip_visible": 7,
+    "highlight_icon": 7,
     "button_minus_small": 7,
     "modify_texture": 6,
-    "frame": 6,
-    "mirror": 6,
-    "onrightclick": 6,
-    "button_replace": 6,
-    "alpha": 6,
-    "downframe": 5,
-    "tooltip_visible": 5,
+    "downframe": 6,
+    "tooltip_offset": 5,
+    "uphoverframe": 5,
+    "allow_outside": 5,
+    "gfxtype": 5,
+    "effectname": 5,
     "button_normal": 5,
-    "uphoverframe": 4,
-    "allow_outside": 4,
-    "gfxtype": 4,
-    "effectname": 4,
-    "highlight_icon": 4,
+    "oversound": 4,
+    "button_election_vote": 4,
+    "glow": 4,
     "icon_round_button_base": 4,
+    "button_promote_candidate": 4,
     "button_give_directive": 3,
     "button_feudal_contract": 3,
     "icon_vassal_contract_warning_blocked": 3,
     "icon_vassal_contract_warning_default": 3,
     "button_army_disband": 3,
-    "oversound": 3,
+    "disableframe": 3,
     "button_cancel": 3,
-    "tooltip_offset": 3,
-    "button_election_vote": 3,
     "uppressedframe": 2,
     "downhoverframe": 2,
     "downpressedframe": 2,
+    "button_generate_claim": 2,
+    "button_feudalize_holding": 2,
+    "button_tribalize_holding": 2,
     "button_copy": 2,
+    "widgetanchor": 2,
     "button_pause": 2,
     "button_attach_to_unit": 2,
     "button_army_details": 2,
-    "disableframe": 2,
     "widgetid": 2,
-    "button_grant_title_to_vassal": 2,
     "button_prison_ransom": 2,
     "button_prison_release": 2,
     "button_prison_execute": 2,
@@ -753,83 +777,372 @@
     "button_capture": 2
    }
   },
-  "button_normal": {
-   "count": 597,
+  "tooltipwidget": {
+   "count": 818,
    "props": {
-    "onclick": 686,
-    "size": 259,
-    "text": 242,
-    "name": 233,
-    "tooltip": 214,
-    "down": 206,
-    "shortcut": 169,
-    "visible": 144,
-    "using": 136,
-    "layoutpolicy_horizontal": 129,
-    "enabled": 123,
-    "datacontext": 80,
-    "alwaystransparent": 77,
-    "state": 73,
+    "widget_value_breakdown_tooltip": 174,
+    "using": 167,
+    "container": 29,
+    "general_law_tooltip": 26,
+    "recursive": 25,
+    "tax_contribution_tooltip": 22,
+    "artifact_tooltip": 18,
+    "faith_tooltip": 17,
+    "rite_tooltip": 16,
+    "container_my_realm_window_contribution_tooltip": 16,
+    "decision_tooltip": 15,
+    "culture_tooltip": 15,
+    "widget": 14,
+    "cooltip_type": 12,
+    "object_tooltip_pop_out": 8,
+    "container_ledger_tooltip": 8,
+    "house_relation_item_tooltip_no_progressbar": 7,
+    "widget_rite_divergence_tooltip": 7,
+    "pass_law_tooltip": 7,
+    "holding_tooltip_click": 6,
+    "widget_knight_summary": 6,
+    "county_opinion_cooltip": 6,
+    "acumen_bar_tooltip": 6,
+    "legitimacy_hud_tooltip": 5,
+    "container_character_tooltip": 5,
+    "widget_maa_summary": 5,
+    "court_position_aptitude_breakdown_tooltip": 5,
+    "visible": 4,
+    "rite_tooltip_click": 4,
+    "widget_gold_breakdown_tooltip": 4,
+    "widget_resource_value_tooltip": 4,
+    "widget_trade_good_net_balance_breakdown_tooltip": 4,
+    "council_task_progress_breakdown_widget": 4,
+    "widget_market_need_holdings_tooltip": 4,
+    "widget_maa_type_container_tooltip": 4,
+    "scrolltip": 4,
+    "county_prosperity_tooltip_container": 4,
+    "district_item_tooltip": 4,
+    "tooltip_my_realm_to_liege": 4,
+    "container_royal_court_tab_tooltip": 4,
+    "herd_breakdown_hud_toolip": 3,
+    "merit_hud_tooltip": 3,
+    "trade_route_transactions_tooltip": 3,
+    "widget_market_tolls_tooltip_main_window": 3,
+    "widget_trade_map_icon_hidden_goods_tooltip": 3,
+    "ruler_designer_culture_tooltip": 3,
+    "faith_tooltip_click": 3,
+    "struggle_phase_tooltip": 3,
+    "modifier_stacks_tooltip": 3,
+    "static_modifier_tooltip": 3,
+    "scripted_relation_tooltip": 3,
+    "trade_needs_column_tooltip": 3,
+    "county_market_needs_tooltip": 3,
+    "council_task_icon_tooltip_widget": 3,
+    "invalid_potential_council_task_icon_tooltip_widget": 3,
+    "county_control_cooltip": 3,
+    "county_fertility_tooltip_container": 3,
+    "widget_trade_market_holding_needs_tooltip": 3,
+    "court_position_type_tooltip": 3,
+    "county_prosperity_ledger": 3,
+    "change_maa_tooltip": 3,
+    "faith_tooltip_core_tenets": 3,
+    "hud_personal_beliefs_tooltip_container": 2,
+    "culture_tooltip_click": 2,
+    "widget_trade_category_net_balance_breakdown_tooltip": 2,
+    "widget_theme_troops_tooltip": 2,
+    "widget_trade_map_icon_balance_breakdown_tooltip": 2,
+    "house_unity_stage_tooltip": 2,
+    "scaled_static_modifier_tooltip": 2,
+    "widget_trade_market_share_tooltip": 2,
+    "tooltip_build_queue_item": 2,
+    "province_size_cooltip": 2,
+    "widget_monthly_change_breakdown_tooltip": 2,
+    "container_food_supply_tooltip": 2,
+    "court_grandeur_progress_bar_tooltip": 2,
+    "court_grandeur_level_tooltip": 2,
+    "court_amenity_setting_tooltip_contents": 2,
+    "court_position_task_icon_tooltip_widget": 2,
+    "diarch_loyalty_breakdown_tooltip": 2,
+    "diarch_score_breakdown_tooltip": 2,
+    "epidemic_modifier_tooltip": 2,
+    "widget_kurultai_succession_tooltip": 2,
+    "cooltip_situation_phase_type": 2,
+    "personal_tenet_tooltip": 2,
+    "not_neutral_phase_catalysts_tooltip": 2,
+    "scripted_score_breakdown_tooltip": 2,
+    "tax_slot_obligation_tooltip": 2,
+    "widget_trade_category_needs_tooltip": 2
+   }
+  },
+  "button": {
+   "count": 756,
+   "props": {
+    "size": 676,
+    "texture": 515,
+    "parentanchor": 344,
+    "visible": 259,
+    "name": 227,
+    "alwaystransparent": 219,
+    "onclick": 199,
+    "using": 141,
+    "position": 136,
+    "state": 107,
+    "effectname": 77,
+    "tooltip": 77,
+    "framesize": 75,
+    "datacontext": 73,
+    "modify_texture": 72,
     "icon": 66,
-    "raw_text": 49,
-    "text_single": 42,
-    "hbox": 36,
-    "framesize": 29,
+    "highlight_icon": 62,
+    "gfxtype": 40,
+    "alpha": 35,
+    "shortcut": 34,
+    "upframe": 33,
+    "down": 32,
+    "tooltipwidget": 30,
+    "visible_at_creation": 30,
+    "spritetype": 28,
+    "raw_text": 26,
+    "enabled": 25,
+    "frame": 25,
+    "downframe": 23,
+    "allow_outside": 22,
+    "overframe": 21,
+    "mirror": 20,
+    "widget": 19,
+    "align": 18,
+    "spriteborder": 17,
+    "disableframe": 16,
+    "texture_density": 16,
+    "shaderfile": 15,
+    "progresspie": 14,
+    "widgetanchor": 14,
+    "portrait_texture": 13,
+    "icon_round_button_base": 13,
+    "uphoverframe": 12,
+    "uppressedframe": 12,
+    "hbox": 11,
+    "button_ignore": 11,
+    "background": 11,
+    "button": 9,
+    "tintcolor": 9,
+    "layoutpolicy_horizontal": 8,
+    "text_single": 7,
+    "onrightclick": 7,
+    "button_icon": 7,
+    "layoutpolicy_vertical": 7,
+    "downhoverframe": 7,
+    "downpressedframe": 7,
+    "margin_widget": 6,
+    "color": 6,
+    "tooltip_offset": 5,
+    "button_trigger": 5,
+    "clicksound": 5,
+    "glow": 5,
+    "fontsize": 4,
+    "tooltip_visible": 4,
+    "text_multi": 4,
+    "text": 3,
+    "button_round": 3,
+    "video_icon": 3,
+    "minimumsize": 3,
+    "margin_top": 3,
+    "maximumsize": 2,
+    "oversound": 2,
+    "vbox": 2,
+    "tooltip_widgetanchor": 2,
+    "default_format": 2,
+    "margin": 2,
+    "button_memories": 2,
+    "highlight_icon_lifestyle_focus": 2,
+    "proportional_icon": 2,
+    "button_icon_highlight": 2
+   }
+  },
+  "flowcontainer": {
+   "count": 724,
+   "props": {
+    "ignoreinvisible": 352,
+    "parentanchor": 286,
+    "spacing": 276,
+    "direction": 262,
+    "text_single": 197,
+    "visible": 194,
+    "flowcontainer": 182,
+    "name": 157,
+    "icon": 155,
+    "position": 136,
+    "widget": 128,
+    "item": 120,
+    "datamodel": 116,
+    "background": 92,
+    "margin": 80,
+    "datacontext": 75,
+    "state": 69,
+    "allow_outside": 65,
+    "container": 54,
+    "margin_bottom": 52,
+    "using": 52,
+    "dockable_button": 44,
+    "text_label_center": 37,
+    "button_round": 35,
+    "wrap_count": 34,
+    "text_map_mode_header": 31,
+    "margin_right": 30,
+    "spacer": 27,
+    "margin_top": 27,
+    "margin_left": 27,
+    "tooltip": 25,
+    "widgetanchor": 24,
+    "alwaystransparent": 21,
+    "layoutpolicy_horizontal": 21,
+    "legacy_progress_none": 20,
+    "legacy_progress": 20,
+    "text_multi": 19,
+    "icon_button_mapmode": 19,
+    "button_standard": 15,
+    "tooltipwidget": 15,
+    "resizeparent": 14,
+    "button_normal": 14,
+    "visible_at_creation": 13,
+    "textbox": 12,
+    "alpha": 11,
+    "button_tab_ledger_bookmark": 11,
+    "minimumsize": 10,
+    "scale": 9,
+    "progressbar_standard": 8,
+    "button_tertiary": 8,
+    "button_rotate_ruler_designer": 8,
+    "editor_textbox": 7,
+    "text_label_left": 7,
+    "filter_mouse": 6,
+    "button_standard_list": 6,
+    "coa_realm_small_crown": 6,
+    "button": 6,
+    "dynamicgridbox": 6,
+    "layoutpolicy_vertical": 6,
+    "min_width": 6,
+    "portrait_head_small": 6,
+    "widget_district_item": 6,
+    "button_tab_vertical_bookmark": 6,
+    "event_portrait_status_icons_right": 5,
+    "event_portrait_status_icons_left": 5,
+    "container_resource_balance": 5,
+    "button_color_selection_tab": 5,
+    "divider_light": 5,
+    "button_round_interaction": 5,
+    "scrollarea": 4,
+    "tooltip_offset": 4,
+    "portrait_head": 4,
+    "button_checkbox_label": 4,
+    "icon_tenet_popularity": 4,
+    "button_royal_court_tab": 4,
+    "maximumsize": 3,
+    "button_hud_character_bar": 3,
+    "button_icon": 3,
+    "army_quality_icon": 3,
+    "widget_character_icon": 3,
+    "button_select_arrow": 3,
+    "button_close": 3,
+    "portrait_status_icons": 3,
+    "icon_flat_standard_gold": 3,
+    "modifier_item_text": 3,
+    "modifier_item_icon": 3,
+    "widget_bonus_innovation_progress": 3,
+    "layoutstretchfactor_horizontal": 3,
+    "text_ledger": 3,
+    "scrollbox": 2,
+    "flow_nameplate_coa": 2,
+    "text_nameplate": 2,
+    "flow_nameplate": 2,
+    "button_cancel": 2,
+    "widget_stress_sounds": 2,
+    "progressbar": 2,
+    "button_menu": 2,
+    "domicile_location_icon": 2,
+    "widget_trade_post_icon": 2,
+    "button_group_court_language_data": 2
+   }
+  },
+  "button_normal": {
+   "count": 723,
+   "props": {
+    "onclick": 825,
+    "size": 319,
+    "name": 274,
+    "text": 274,
+    "tooltip": 267,
+    "down": 261,
+    "shortcut": 206,
+    "visible": 193,
+    "using": 172,
+    "layoutpolicy_horizontal": 164,
+    "enabled": 151,
+    "alwaystransparent": 117,
+    "datacontext": 101,
+    "state": 82,
+    "icon": 79,
+    "raw_text": 53,
+    "hbox": 50,
+    "text_single": 45,
+    "button_icon": 34,
+    "framesize": 31,
     "texture": 27,
+    "parentanchor": 27,
+    "default_format": 26,
     "modify_texture": 25,
-    "parentanchor": 24,
-    "button_icon": 24,
-    "default_format": 23,
-    "minimumsize": 23,
-    "highlight_icon": 22,
+    "highlight_icon": 25,
+    "minimumsize": 25,
     "widget": 21,
     "gfxtype": 20,
     "upframe": 20,
     "downframe": 20,
+    "spritetype": 20,
+    "spriteborder": 20,
     "effectname": 19,
-    "spritetype": 18,
-    "spriteborder": 18,
-    "tooltipwidget": 14,
+    "tooltipwidget": 19,
+    "background": 16,
+    "position": 14,
+    "tooltip_when_disabled": 14,
+    "clicksound": 13,
     "downhoverframe": 12,
-    "clicksound": 12,
+    "icon_round_button_base": 12,
+    "progresspie": 12,
+    "selection_glow": 12,
+    "vbox": 12,
     "uphoverframe": 11,
     "uppressedframe": 11,
-    "selection_glow": 11,
     "raw_tooltip": 11,
     "downpressedframe": 10,
     "disableframe": 10,
-    "position": 10,
-    "icon_round_button_base": 10,
-    "button": 10,
-    "progresspie": 9,
-    "background": 9,
-    "layoutpolicy_vertical": 9,
-    "vbox": 9,
-    "tooltip_when_disabled": 8,
-    "text_multi": 8,
+    "layoutpolicy_vertical": 10,
+    "text_multi": 10,
+    "button": 9,
+    "button_ignore": 9,
+    "onmousehierarchyenter": 8,
+    "character_list_arrow": 8,
     "buttontext": 7,
-    "onmousehierarchyenter": 7,
+    "tooltip_visible": 7,
     "frame": 7,
+    "onrightclick": 7,
+    "max_width": 7,
     "overframe": 6,
-    "button_ignore": 6,
-    "character_list_arrow": 6,
-    "button_replace": 6,
-    "max_width": 6,
-    "onrightclick": 5,
+    "allow_outside": 6,
+    "oncreate": 6,
+    "warning_icon": 6,
+    "blockoverride": 6,
+    "margin_widget": 5,
+    "onmousehierarchyleave": 5,
     "button_trigger": 5,
-    "flowcontainer": 5,
+    "button_replace": 5,
     "align": 5,
-    "warning_icon": 5,
     "mirror": 5,
-    "onmousehierarchyleave": 4,
     "shaderfile": 4,
-    "oncreate": 4,
+    "flowcontainer": 4,
     "button_change": 4,
-    "allow_outside": 4,
-    "blockoverride": 4,
-    "margin_widget": 3,
+    "min_height": 4,
+    "maximumsize": 4,
+    "button_plus": 4,
+    "layoutstretchfactor_horizontal": 4,
     "scale": 3,
     "button_normal": 3,
+    "visible_at_creation": 3,
     "button_round": 3,
     "animation_sonar": 3,
     "tooltip_offset": 3,
@@ -839,163 +1152,82 @@
     "button_search": 3,
     "focuspolicy": 3,
     "widget_tradition_icon": 3,
+    "icon_building": 3,
     "button_expand": 3,
-    "button_plus": 3,
+    "widgetid": 3,
     "icon_flat_standard": 3,
     "margin_left": 3,
-    "container": 2,
-    "visible_at_creation": 2,
     "highlight_icon_lifestyle_focus": 2,
-    "tooltip_visible": 2,
     "coa_realm_small": 2,
+    "container": 2,
     "button_randomize": 2,
     "button_copy": 2,
-    "icon_building": 2,
-    "widget_innovation_progress_banner_fc": 2,
-    "widgetid": 2,
-    "button_cancel": 2
-   }
-  },
-  "button": {
-   "count": 596,
-   "props": {
-    "size": 526,
-    "texture": 401,
-    "parentanchor": 253,
-    "visible": 219,
-    "name": 191,
-    "onclick": 181,
-    "alwaystransparent": 147,
-    "using": 140,
-    "position": 118,
-    "state": 95,
-    "tooltip": 86,
-    "effectname": 70,
-    "modify_texture": 66,
-    "framesize": 63,
-    "icon": 60,
-    "datacontext": 53,
-    "highlight_icon": 46,
-    "gfxtype": 35,
-    "shortcut": 31,
-    "spritetype": 28,
-    "upframe": 28,
-    "visible_at_creation": 28,
-    "alpha": 27,
-    "raw_text": 26,
-    "tooltipwidget": 24,
-    "enabled": 23,
-    "down": 22,
-    "overframe": 21,
-    "mirror": 20,
-    "frame": 19,
-    "align": 18,
-    "downframe": 18,
-    "spriteborder": 17,
-    "texture_density": 16,
-    "background": 14,
-    "shaderfile": 14,
-    "portrait_texture": 13,
-    "allow_outside": 12,
-    "disableframe": 12,
-    "progresspie": 11,
-    "widgetanchor": 11,
-    "widget": 10,
-    "icon_round_button_base": 10,
-    "hbox": 9,
-    "button": 9,
-    "tintcolor": 9,
-    "layoutpolicy_horizontal": 8,
-    "tooltip_offset": 7,
-    "onrightclick": 7,
-    "button_ignore": 7,
-    "button_icon": 7,
-    "layoutpolicy_vertical": 7,
-    "uphoverframe": 7,
-    "uppressedframe": 7,
-    "text_single": 6,
-    "button_icon_highlight": 6,
-    "button_trigger": 5,
-    "margin_widget": 5,
-    "clicksound": 5,
-    "fontsize": 4,
-    "text_multi": 4,
-    "text": 3,
-    "tooltip_visible": 3,
-    "button_round": 3,
-    "video_icon": 3,
-    "glow": 3,
-    "tooltip_when_disabled": 3,
-    "minimumsize": 3,
-    "downhoverframe": 3,
-    "downpressedframe": 3,
-    "maximumsize": 2,
-    "oversound": 2,
-    "default_format": 2,
-    "margin": 2,
-    "color": 2,
-    "button_memories": 2,
-    "highlight_icon_lifestyle_focus": 2
+    "margin": 2
    }
   },
   "container": {
-   "count": 563,
+   "count": 711,
    "props": {
-    "icon": 298,
-    "alwaystransparent": 174,
-    "name": 162,
-    "visible": 138,
-    "using": 130,
-    "datacontext": 93,
-    "parentanchor": 81,
-    "object_tooltip_pop_out": 72,
-    "position": 55,
-    "text_single": 51,
-    "widget": 46,
-    "flowcontainer": 43,
-    "container": 35,
-    "highlight_icon": 29,
-    "state": 28,
-    "button": 28,
+    "icon": 355,
+    "alwaystransparent": 236,
+    "name": 203,
+    "visible": 177,
+    "using": 161,
+    "datacontext": 142,
+    "object_tooltip_pop_out": 104,
+    "parentanchor": 90,
+    "position": 61,
+    "text_single": 52,
+    "flowcontainer": 50,
+    "widget": 47,
+    "container": 46,
+    "ignoreinvisible": 41,
+    "state": 34,
+    "highlight_icon": 34,
+    "button": 30,
     "watch_textbox": 26,
-    "ignoreinvisible": 23,
-    "portrait_head_small": 22,
-    "background": 17,
-    "text_multi": 15,
-    "tooltipwidget": 14,
-    "widgetanchor": 13,
+    "portrait_head_small": 20,
+    "background": 19,
+    "widgetanchor": 17,
+    "tooltipwidget": 16,
+    "text_multi": 14,
     "icon_maa_combat": 12,
+    "tooltip": 11,
     "spacer": 11,
     "button_normal": 11,
-    "tooltip": 10,
-    "text_label_center": 10,
+    "allow_outside": 10,
+    "icon_trait": 10,
     "button_round": 9,
-    "icon_trait": 9,
+    "text_label_center": 9,
+    "scale": 8,
     "visible_at_creation": 7,
     "line": 7,
-    "icon_hud_background": 6,
-    "scale": 6,
-    "allow_outside": 6,
-    "scrollbox": 5,
+    "min_width": 5,
+    "icon_hud_background": 5,
+    "coa_title_tiny": 5,
     "datamodel": 5,
     "item": 5,
-    "progressbar_standard": 5,
     "minimumsize": 5,
     "portrait_body": 5,
-    "min_width": 4,
-    "coa_title_tiny": 4,
+    "option_event_item_stress_fulfillment_container": 4,
+    "scrollbox": 4,
     "button_group": 4,
+    "progressbar_standard": 4,
     "trait_icon_base": 4,
-    "icon_button_mapmode": 4,
+    "button_default_law_choice": 4,
+    "button_clan_law_choice": 4,
+    "button_law_choice_no_negatives": 4,
     "textbox": 3,
     "scrollarea": 3,
     "layer": 3,
-    "layoutpolicy_vertical": 3,
+    "religious_head_map_icon": 3,
     "button_checkbox": 3,
     "activity_event_header": 3,
     "coa_title_tiny_crown": 3,
+    "button_tertiary": 3,
     "widgetid": 3,
     "portrait_head": 3,
+    "puppet_tooltip_pop_out": 3,
     "current_struggle_phase_progress": 3,
     "gridbox_credits_portraits": 2,
     "button_standard_list": 2,
@@ -1004,330 +1236,190 @@
     "margin_widget": 2,
     "portrait_hud": 2,
     "dynamicgridbox_interaction_list": 2,
+    "layoutpolicy_vertical": 2,
     "widget_unit_icon_item": 2,
+    "coa_title_small_crown": 2,
     "animations_map_coa": 2,
+    "coa_realm_medium_crown": 2,
+    "coa_realm_small_crown": 2,
     "layoutpolicy_horizontal": 2,
+    "tooltip_offset": 2,
     "coa_confederation_small": 2,
     "coa_bloc_small": 2,
     "filter_mouse": 2,
     "dynamicgridbox": 2,
     "artifact_tooltip": 2,
     "button_standard": 2,
+    "enabled": 2,
     "button_marry_off": 2,
+    "button_primary": 2,
     "widget_prominent_theme_item": 2,
-    "widget_building_item_ledger": 2,
+    "button_round_interaction": 2,
     "icon_title_has_laws_status": 2,
-    "button_tertiary": 2,
-    "button_trait_slot_entry": 2
-   }
-  },
-  "flowcontainer": {
-   "count": 555,
-   "props": {
-    "ignoreinvisible": 272,
-    "direction": 227,
-    "parentanchor": 226,
-    "spacing": 207,
-    "text_single": 164,
-    "flowcontainer": 155,
-    "visible": 149,
-    "name": 131,
-    "widget": 119,
-    "icon": 117,
-    "position": 109,
-    "background": 68,
-    "datacontext": 65,
-    "margin": 64,
-    "state": 62,
-    "item": 58,
-    "text_label_center": 58,
-    "datamodel": 55,
-    "allow_outside": 51,
-    "container": 50,
-    "margin_bottom": 47,
-    "dockable_button": 43,
-    "using": 42,
-    "margin_right": 29,
-    "margin_left": 26,
-    "button_round": 25,
-    "margin_top": 23,
-    "spacer": 22,
-    "widgetanchor": 22,
-    "icon_button_mapmode": 22,
-    "tooltip": 21,
-    "legacy_progress_none": 20,
-    "legacy_progress": 20,
-    "alwaystransparent": 18,
-    "text_multi": 17,
-    "button_normal": 15,
-    "button_standard": 14,
-    "visible_at_creation": 12,
-    "resizeparent": 12,
-    "textbox": 12,
-    "button_tab_ledger_bookmark": 11,
-    "alpha": 10,
-    "progressbar_standard": 10,
-    "minimumsize": 9,
-    "layoutpolicy_horizontal": 9,
-    "button_tertiary": 8,
-    "button_rotate_ruler_designer": 8,
-    "editor_textbox": 7,
-    "text_label_left": 7,
-    "button_standard_list": 6,
-    "tooltipwidget": 6,
-    "button": 6,
-    "dynamicgridbox": 6,
-    "min_width": 6,
-    "event_portrait_status_icons_right": 5,
-    "event_portrait_status_icons_left": 5,
-    "container_resource_balance": 5,
-    "button_color_selection_tab": 5,
-    "scale": 5,
-    "portrait_head_small": 5,
-    "filter_mouse": 4,
-    "scrollarea": 4,
-    "button_hud_character_bar": 4,
-    "layoutpolicy_vertical": 4,
-    "widget_character_icon": 4,
-    "button_checkbox_label": 4,
-    "button_tab_vertical_bookmark": 4,
-    "button_royal_court_tab": 4,
-    "army_quality_icon": 3,
-    "portrait_head": 3,
-    "portrait_status_icons": 3,
-    "divider_light": 3,
-    "icon_flat_standard_gold": 3,
-    "widget_building_item": 3,
-    "widget_bonus_innovation_progress": 3,
-    "text_ledger": 3,
-    "maximumsize": 2,
-    "scrollbox": 2,
-    "flow_nameplate_coa": 2,
-    "text_nameplate": 2,
-    "flow_nameplate": 2,
-    "button_cancel": 2,
-    "widget_stress_sounds": 2,
-    "progressbar": 2,
-    "domicile_location_icon": 2,
-    "button_group_court_language_data": 2,
-    "widget_landless_ruler_pin": 2,
-    "container_travel_danger": 2,
-    "widget_travel_points_of_interest": 2,
-    "icon_building": 2,
-    "highlight_icon_building": 2,
-    "container_allied_unit_icon_item": 2,
-    "container_hostile_unit_icon_item": 2,
-    "dropdown_menu_standard": 2,
-    "button_select_arrow": 2,
-    "button_go_to_my_location": 2,
-    "button_me": 2,
-    "button_back": 2,
-    "button_close": 2,
-    "fixedgridbox": 2
-   }
-  },
-  "tooltipwidget": {
-   "count": 548,
-   "props": {
-    "widget_value_breakdown_tooltip": 112,
-    "using": 112,
-    "recursive": 24,
-    "tax_contribution_tooltip": 22,
-    "artifact_tooltip": 17,
-    "general_law_tooltip": 17,
-    "faith_tooltip": 16,
-    "container_my_realm_window_contribution_tooltip": 16,
-    "container": 15,
-    "widget": 14,
-    "culture_tooltip": 13,
-    "cooltip_type": 12,
-    "decision_tooltip": 8,
-    "container_ledger_tooltip": 8,
-    "faith_tooltip_click": 7,
-    "faith_tooltip_core_tenents": 6,
-    "object_tooltip_pop_out": 6,
-    "widget_knight_summary": 6,
-    "legitimacy_hud_tooltip": 5,
-    "container_character_tooltip": 5,
-    "widget_maa_summary": 5,
-    "house_relation_item_tooltip_no_progressbar": 5,
-    "court_position_aptitude_breakdown_tooltip": 5,
-    "visible": 4,
-    "widget_gold_breakdown_tooltip": 4,
-    "widget_resource_value_tooltip": 4,
-    "holding_tooltip_click": 4,
-    "council_task_progress_breakdown_widget": 4,
-    "widget_maa_type_container_tooltip": 4,
-    "county_fertility_tooltip_container": 4,
-    "county_development_ledger": 4,
-    "tooltip_my_realm_to_liege": 4,
-    "pass_law_tooltip": 4,
-    "container_royal_court_tab_tooltip": 4,
-    "herd_breakdown_hud_toolip": 3,
-    "merit_hud_tooltip": 3,
-    "ruler_designer_culture_tooltip": 3,
-    "struggle_phase_tooltip": 3,
-    "scripted_relation_tooltip": 3,
-    "council_task_icon_tooltip_widget": 3,
-    "invalid_potential_council_task_icon_tooltip_widget": 3,
-    "county_development_tooltip_container": 3,
-    "change_maa_tooltip": 3,
-    "culture_tooltip_click": 2,
-    "widget_theme_troops_tooltip": 2,
-    "faith_tooltip_ruler_designer": 2,
-    "house_unity_stage_tooltip": 2,
-    "static_modifier_tooltip": 2,
-    "county_control_tooltip_container": 2,
-    "court_grandeur_progress_bar_tooltip": 2,
-    "court_grandeur_level_tooltip": 2,
-    "court_amenity_setting_tooltip_contents": 2,
-    "court_position_task_icon_tooltip_widget": 2,
-    "diarch_loyalty_breakdown_tooltip": 2,
-    "diarch_score_breakdown_tooltip": 2,
-    "epidemic_modifier_tooltip": 2,
-    "widget_kurultai_succession_tooltip": 2,
-    "not_neutral_phase_catalysts_tooltip": 2,
-    "scripted_score_breakdown_tooltip": 2,
-    "tax_slot_obligation_tooltip": 2
+    "button_trait_slot_entry": 2,
+    "trade_category_tooltip": 2
    }
   },
   "button_standard": {
-   "count": 312,
+   "count": 408,
    "props": {
-    "onclick": 317,
-    "text": 169,
-    "size": 161,
-    "tooltip": 142,
-    "name": 124,
-    "enabled": 116,
-    "visible": 83,
-    "using": 61,
-    "layoutpolicy_horizontal": 56,
-    "hbox": 56,
-    "down": 54,
-    "background": 47,
-    "datacontext": 39,
-    "icon": 23,
-    "shortcut": 20,
-    "alwaystransparent": 18,
-    "minimumsize": 16,
-    "clicksound": 16,
-    "parentanchor": 16,
-    "widget": 13,
-    "tooltipwidget": 12,
-    "margin": 11,
-    "onrightclick": 11,
-    "button_ignore": 10,
-    "vbox": 10,
+    "onclick": 411,
+    "size": 214,
+    "text": 191,
+    "tooltip": 177,
+    "name": 150,
+    "enabled": 143,
+    "visible": 125,
+    "using": 90,
+    "down": 89,
+    "layoutpolicy_horizontal": 78,
+    "hbox": 77,
+    "datacontext": 67,
+    "background": 55,
+    "icon": 34,
+    "margin": 28,
+    "alwaystransparent": 23,
+    "shortcut": 22,
+    "tooltipwidget": 21,
+    "parentanchor": 20,
+    "clicksound": 19,
+    "minimumsize": 18,
+    "widget": 17,
+    "vbox": 15,
+    "tooltip_when_disabled": 13,
+    "onrightclick": 12,
+    "button_icon": 11,
+    "button_ignore": 11,
+    "tooltip_visible": 9,
     "margin_widget": 9,
-    "default_format": 7,
-    "tooltip_visible": 7,
-    "button_icon": 6,
+    "default_format": 8,
+    "text_single": 7,
     "align": 6,
     "downframe": 6,
     "downhoverframe": 6,
     "downpressedframe": 6,
-    "tooltip_when_disabled": 5,
+    "warning_icon": 6,
+    "selection_glow": 6,
     "text_multi": 5,
-    "text_single": 4,
-    "warning_icon": 4,
-    "selection_glow": 4,
-    "raw_text": 3,
+    "raw_text": 4,
+    "upframe": 4,
+    "buttontext": 4,
+    "progressbar_standard": 4,
+    "max_width": 4,
     "onmousehierarchyenter": 3,
-    "upframe": 3,
-    "buttontext": 3,
+    "alpha": 3,
+    "widgetanchor": 3,
     "texture": 3,
+    "highlight_icon": 3,
+    "widgetid": 3,
+    "button_icon_highlight": 3,
+    "button_plus": 3,
+    "state": 3,
     "button_normal": 3,
     "text_label_right": 3,
+    "position": 3,
     "button_expand": 2,
-    "icon_flat_standard": 2,
+    "button_change": 2,
+    "button_select_arrow": 2,
     "button_rules": 2,
     "declare_war_casus_belli_item": 2,
+    "flowcontainer": 2,
     "textbox": 2,
-    "widgetanchor": 2,
     "filter_mouse": 2,
     "gfxtype": 2,
     "uphoverframe": 2,
     "uppressedframe": 2,
     "disableframe": 2,
+    "spritetype": 2,
+    "spriteborder": 2,
+    "layoutpolicy_vertical": 2,
+    "allow_outside": 2,
+    "widget_small_building_slots": 2,
+    "button_icon_can_upgrade": 2,
+    "widget_icon_can_build": 2,
+    "widget_in_build_queue_indicator": 2,
+    "widget_cancel_district_construction_button": 2,
+    "icon_construction_progress_indicator": 2,
+    "button_county_district_slot": 2,
+    "drag_highlight_indicator": 2,
     "text_label_center": 2,
-    "max_width": 2,
-    "widgetid": 2
+    "datacontext_from_model": 2
    }
   },
   "fixedgridbox": {
-   "count": 283,
+   "count": 335,
    "props": {
-    "item": 282,
-    "addcolumn": 279,
-    "addrow": 276,
-    "datamodel": 266,
-    "name": 204,
-    "flipdirection": 162,
-    "datamodel_wrap": 116,
-    "visible": 94,
-    "maxhorizontalslots": 77,
-    "layoutpolicy_horizontal": 57,
-    "maxverticalslots": 57,
-    "setitemsizefromcell": 35,
+    "item": 329,
+    "addcolumn": 328,
+    "addrow": 325,
+    "datamodel": 313,
+    "name": 224,
+    "flipdirection": 196,
+    "datamodel_wrap": 145,
+    "visible": 116,
+    "maxhorizontalslots": 81,
+    "layoutpolicy_horizontal": 80,
+    "maxverticalslots": 58,
+    "setitemsizefromcell": 40,
     "size": 28,
+    "datamodel_reuse_widgets": 26,
     "position": 24,
-    "datamodel_reuse_widgets": 23,
-    "layoutanchor": 18,
-    "layoutpolicy_vertical": 15,
-    "datacontext": 10,
+    "layoutanchor": 21,
+    "layoutpolicy_vertical": 20,
+    "datacontext": 12,
     "alwaystransparent": 4,
+    "parentanchor": 3,
     "state": 2,
-    "parentanchor": 2,
+    "using": 2,
     "allow_outside": 2
    }
   },
   "window": {
-   "count": 268,
+   "count": 320,
    "props": {
-    "using": 402,
-    "state": 379,
-    "name": 233,
-    "layer": 213,
-    "datacontext": 208,
-    "size": 178,
-    "vbox": 174,
-    "parentanchor": 160,
-    "movable": 121,
-    "position": 107,
-    "widget": 106,
-    "allow_outside": 78,
-    "widgetid": 48,
-    "margin_widget": 34,
-    "window_character_filter": 33,
-    "widgetanchor": 31,
-    "visible": 27,
+    "state": 471,
+    "using": 469,
+    "name": 266,
+    "datacontext": 262,
+    "layer": 245,
+    "size": 210,
+    "vbox": 205,
+    "parentanchor": 179,
+    "movable": 152,
+    "position": 133,
+    "widget": 113,
+    "allow_outside": 96,
+    "widgetid": 65,
+    "visible": 45,
+    "margin_widget": 41,
+    "widgetanchor": 38,
+    "window_character_filter": 37,
+    "alwaystransparent": 29,
     "background": 24,
-    "alwaystransparent": 20,
+    "resizable": 18,
     "button": 17,
-    "resizable": 17,
     "filter_mouse": 15,
     "container": 13,
+    "visible_at_creation": 13,
     "icon": 12,
     "button_normal": 11,
     "flowcontainer": 10,
+    "window": 9,
+    "oncreate": 9,
     "watch_textbox": 8,
     "gfxtype": 8,
-    "visible_at_creation": 7,
-    "minimumsize": 7,
+    "minimumsize": 8,
     "focuspolicy": 6,
+    "error_horse": 6,
     "alpha": 5,
-    "error_horse": 5,
+    "hbox": 5,
     "scrollarea": 4,
     "layoutpolicy_vertical": 4,
+    "text_label_center": 4,
     "event_window_dimmer_widget": 3,
     "event_window_background_widget": 3,
     "event_window_effect_2d_widget": 3,
-    "window": 3,
     "attachto": 3,
-    "text_label_center": 3,
-    "hbox": 3,
-    "oncreate": 3,
     "textbox": 2,
     "checkbutton": 2,
     "watch_window_war_participants": 2,
@@ -1338,33 +1430,36 @@
     "travel_planning_window": 2,
     "travel_entourage_list_window": 2,
     "buttons_window_control": 2,
+    "window_instant_law_picker": 2,
     "location_picking_text_widget": 2,
+    "situation_catalysts_history_window": 2,
     "container_saving_indicator": 2,
-    "window_situation_participant_groups": 2
+    "window_situation_participant_groups": 2,
+    "trader_character_list_window": 2
    }
   },
   "scrollarea": {
-   "count": 262,
+   "count": 320,
    "props": {
-    "layoutpolicy_horizontal": 199,
-    "layoutpolicy_vertical": 194,
-    "name": 129,
-    "size": 71,
-    "visible": 69,
+    "layoutpolicy_horizontal": 256,
+    "layoutpolicy_vertical": 245,
+    "name": 134,
+    "size": 75,
+    "visible": 73,
     "scrollwidget": 65,
-    "scrollbarpolicy_horizontal": 62,
+    "scrollbarpolicy_horizontal": 63,
     "scrollbar_vertical": 57,
-    "maximumsize": 31,
+    "maximumsize": 32,
+    "minimumsize": 30,
     "position": 28,
-    "minimumsize": 28,
     "using": 28,
     "autoresizescrollarea": 26,
-    "background": 21,
+    "background": 25,
+    "state": 16,
+    "datacontext": 13,
     "scrollbar_horizontal": 12,
-    "state": 12,
-    "datacontext": 11,
     "scrollbarpolicy_vertical": 10,
-    "widgetid": 7,
+    "widgetid": 6,
     "min_width": 4,
     "parentanchor": 2,
     "scrollbaralign_vertical": 2,
@@ -1375,21 +1470,21 @@
    }
   },
   "button_group": {
-   "count": 258,
+   "count": 280,
    "props": {
-    "onclick": 128,
-    "visible": 92,
-    "datacontext": 68,
-    "using": 65,
-    "tooltip": 57,
-    "parentanchor": 49,
+    "onclick": 137,
+    "visible": 94,
+    "datacontext": 77,
+    "using": 66,
+    "tooltip": 63,
+    "parentanchor": 56,
     "name": 46,
-    "size": 35,
-    "layoutpolicy_horizontal": 35,
-    "position": 34,
-    "flowcontainer": 29,
-    "coat_of_arms_icon": 25,
-    "scale": 19,
+    "position": 42,
+    "size": 36,
+    "layoutpolicy_horizontal": 36,
+    "flowcontainer": 31,
+    "coat_of_arms_icon": 26,
+    "scale": 21,
     "raw_tooltip": 15,
     "background": 14,
     "clicksound": 14,
@@ -1397,155 +1492,217 @@
     "highlight_icon": 11,
     "state": 11,
     "alwaystransparent": 9,
+    "enabled": 8,
     "filter_mouse": 8,
     "hbox": 7,
-    "enabled": 7,
+    "allow_outside": 7,
     "coa_dynasty_frame": 7,
     "coa_house_frame": 7,
-    "shortcut": 5,
-    "widget": 5,
     "coa_confederation_frame": 5,
     "container": 4,
     "button": 4,
-    "allow_outside": 3,
+    "shortcut": 4,
+    "tooltip_visible": 4,
+    "widget": 3,
     "icon_trait": 3,
     "progressbar": 2,
     "widgetanchor": 2,
     "icon_ai_order": 2,
     "text_single": 2,
-    "tooltipwidget": 2
+    "tooltipwidget": 2,
+    "icon": 2,
+    "widget_tenet_item": 2
    }
   },
   "highlight_icon": {
-   "count": 177,
+   "count": 211,
    "props": {
-    "size": 161,
-    "texture": 154,
-    "parentanchor": 93,
-    "name": 69,
-    "visible": 55,
-    "position": 42,
-    "framesize": 30,
-    "frame": 25,
-    "modify_texture": 23,
-    "alwaystransparent": 22,
-    "effectname": 18,
-    "spritetype": 18,
-    "state": 14,
+    "size": 193,
+    "texture": 181,
+    "parentanchor": 116,
+    "name": 70,
+    "visible": 50,
+    "position": 49,
+    "framesize": 41,
+    "frame": 34,
+    "alwaystransparent": 25,
+    "modify_texture": 24,
+    "state": 22,
+    "effectname": 20,
+    "spritetype": 19,
+    "inherit_visual_state": 18,
     "visible_at_creation": 12,
-    "inherit_visual_state": 12,
+    "alpha": 11,
     "texture_density": 11,
     "using": 8,
-    "alpha": 7,
+    "datacontext": 6,
     "glow": 6,
     "widgetanchor": 6,
-    "datacontext": 5,
+    "gfxtype": 5,
+    "spriteborder": 5,
+    "enabled": 5,
     "tooltip": 4,
-    "spriteborder": 4,
-    "enabled": 4,
-    "gfxtype": 3,
+    "upframe": 4,
+    "uphoverframe": 4,
+    "uppressedframe": 4,
+    "downframe": 4,
+    "downhoverframe": 4,
+    "downpressedframe": 4,
+    "disableframe": 4,
     "spriteborder_bottom": 3,
     "highlight_icon": 2,
     "tintcolor": 2,
-    "upframe": 2,
-    "uphoverframe": 2,
-    "uppressedframe": 2,
-    "downframe": 2,
-    "downhoverframe": 2,
-    "downpressedframe": 2,
-    "disableframe": 2,
+    "scale": 2,
+    "button_round": 2,
+    "icon_doctrine": 2,
     "mirror": 2,
     "spriteborder_right": 2
    }
   },
   "text_multi": {
-   "count": 144,
+   "count": 164,
    "props": {
-    "text": 136,
-    "autoresize": 123,
-    "max_width": 97,
-    "name": 71,
-    "layoutpolicy_horizontal": 64,
-    "align": 55,
-    "default_format": 46,
-    "margin": 43,
-    "using": 34,
-    "visible": 28,
-    "maximumsize": 24,
-    "min_width": 19,
-    "alwaystransparent": 18,
+    "text": 149,
+    "autoresize": 141,
+    "max_width": 118,
+    "name": 76,
+    "layoutpolicy_horizontal": 75,
+    "align": 66,
+    "default_format": 59,
+    "margin": 53,
+    "using": 38,
+    "visible": 36,
+    "maximumsize": 23,
+    "min_width": 20,
+    "alwaystransparent": 14,
+    "datacontext": 14,
     "format_override": 14,
-    "datacontext": 12,
+    "parentanchor": 12,
     "layoutpolicy_vertical": 12,
+    "tooltip": 11,
     "size": 11,
-    "parentanchor": 11,
     "margin_right": 11,
     "minimumsize": 10,
-    "tooltip": 9,
     "position": 9,
-    "background": 8,
+    "background": 9,
+    "margin_bottom": 8,
     "fontsize": 7,
     "multiline": 7,
-    "fontsize_min": 5,
-    "margin_top": 5,
-    "margin_bottom": 5,
-    "max_height": 3,
+    "fontsize_min": 6,
+    "margin_top": 6,
+    "max_height": 4,
+    "fonttintcolor": 3,
+    "raw_text": 2,
+    "resizeparent": 2,
     "margin_left": 2,
-    "snap_to_pixels": 2,
-    "fonttintcolor": 2
+    "snap_to_pixels": 2
+   }
+  },
+  "spacer": {
+   "count": 163,
+   "props": {
+    "size": 163,
+    "visible": 33,
+    "datacontext": 2,
+    "name": 2
+   }
+  },
+  "margin_widget": {
+   "count": 149,
+   "props": {
+    "size": 110,
+    "margin": 68,
+    "widget": 43,
+    "parentanchor": 29,
+    "margin_right": 28,
+    "margin_bottom": 27,
+    "icon": 27,
+    "margin_top": 26,
+    "layoutpolicy_horizontal": 24,
+    "name": 23,
+    "state": 22,
+    "datacontext": 16,
+    "visible": 15,
+    "minimumsize": 15,
+    "position": 14,
+    "using": 12,
+    "scissor": 12,
+    "maximumsize": 12,
+    "proportional_icon": 12,
+    "vbox": 11,
+    "allow_outside": 10,
+    "flowcontainer": 9,
+    "background": 9,
+    "margin_left": 6,
+    "scrollarea": 5,
+    "hbox": 5,
+    "animation_hud_daily_tick": 5,
+    "portrait_button": 5,
+    "alwaystransparent": 4,
+    "video_icon": 4,
+    "text_single": 4,
+    "text_multi": 3,
+    "hbox_complex_bar_progress": 3,
+    "hbox_complex_bar_levels": 3,
+    "widgetanchor": 2,
+    "portrait_status_icons": 2,
+    "buttons_window_control": 2,
+    "layoutpolicy_vertical": 2
    }
   },
   "game_button": {
-   "count": 131,
+   "count": 146,
    "props": {
-    "onclick": 108,
-    "size": 102,
-    "visible": 51,
-    "texture": 45,
-    "name": 43,
-    "state": 39,
-    "parentanchor": 34,
-    "tooltip": 34,
-    "using": 32,
+    "onclick": 129,
+    "size": 117,
+    "visible": 58,
+    "texture": 50,
+    "name": 46,
+    "parentanchor": 43,
+    "state": 42,
+    "tooltip": 39,
+    "using": 38,
     "framesize": 32,
-    "position": 30,
-    "shortcut": 23,
+    "position": 32,
+    "datacontext": 26,
+    "shortcut": 25,
+    "gfxtype": 21,
     "highlight_icon": 21,
-    "gfxtype": 20,
-    "effectname": 19,
-    "datacontext": 19,
+    "effectname": 20,
+    "icon": 19,
     "widget": 16,
-    "icon": 15,
-    "clicksound": 14,
-    "upframe": 14,
-    "overframe": 14,
-    "alwaystransparent": 12,
+    "clicksound": 15,
+    "upframe": 15,
+    "overframe": 15,
+    "alwaystransparent": 13,
+    "onrightclick": 12,
+    "enabled": 12,
     "spritetype": 11,
     "spriteborder": 11,
-    "onrightclick": 11,
-    "frame": 10,
+    "alpha": 10,
     "down": 10,
-    "enabled": 10,
-    "alpha": 9,
+    "tooltipwidget": 10,
+    "frame": 9,
     "oversound": 8,
     "button_ignore": 8,
-    "tooltipwidget": 8,
+    "icon_round_button_base": 7,
     "layoutpolicy_horizontal": 6,
     "allow_outside": 6,
     "text_label_center": 6,
-    "icon_round_button_base": 6,
+    "tooltip_offset": 5,
     "downframe": 5,
     "hbox": 5,
     "background": 5,
+    "button_icon": 5,
     "minimumsize": 4,
     "button_plus": 4,
-    "tooltip_visible": 4,
-    "button_icon": 4,
+    "text_single": 4,
     "text_multi": 4,
     "button_domicile_building_can_upgrade": 4,
     "button_domicile_building_cannot_upgrade": 4,
-    "tooltip_offset": 3,
-    "text_single": 3,
+    "tooltip_visible": 3,
+    "button_edit_text": 3,
+    "glow": 3,
     "flowcontainer": 3,
     "shaderfile": 2,
     "filter_mouse": 2,
@@ -1556,158 +1713,54 @@
     "widget_struggle_icon": 2,
     "button_round": 2,
     "scissor": 2,
-    "button_edit_text": 2,
     "button_domicile_building_unavailable": 2,
     "vbox": 2,
     "button_close": 2,
     "button_star_frames": 2,
     "legend_library_entry_vbox": 2,
     "tintcolor": 2,
+    "button_standard_hover": 2,
+    "button_icon_christian_church_turn_page": 2,
     "min_height": 2,
     "default_struggle_phase_banner": 2
    }
   },
-  "margin_widget": {
-   "count": 130,
-   "props": {
-    "size": 91,
-    "margin": 56,
-    "widget": 34,
-    "parentanchor": 24,
-    "icon": 24,
-    "name": 23,
-    "margin_bottom": 23,
-    "state": 22,
-    "margin_top": 22,
-    "margin_right": 22,
-    "layoutpolicy_horizontal": 22,
-    "datacontext": 16,
-    "minimumsize": 15,
-    "position": 14,
-    "visible": 14,
-    "maximumsize": 12,
-    "using": 11,
-    "allow_outside": 10,
-    "vbox": 10,
-    "flowcontainer": 9,
-    "scissor": 9,
-    "proportional_icon": 9,
-    "background": 8,
-    "scrollarea": 5,
-    "hbox": 5,
-    "animation_hud_daily_tick": 5,
-    "alwaystransparent": 4,
-    "margin_left": 4,
-    "video_icon": 4,
-    "portrait_button": 4,
-    "text_single": 4,
-    "hbox_complex_bar_levels": 3,
-    "widgetanchor": 2,
-    "hbox_complex_bar_progress": 2,
-    "portrait_status_icons": 2,
-    "buttons_window_control": 2,
-    "layoutpolicy_vertical": 2
-   }
-  },
-  "text_label_center": {
-   "count": 129,
-   "props": {
-    "text": 113,
-    "visible": 48,
-    "align": 44,
-    "margin": 32,
-    "fontsize": 30,
-    "layoutpolicy_horizontal": 28,
-    "default_format": 27,
-    "parentanchor": 27,
-    "using": 14,
-    "raw_text": 14,
-    "fontsize_min": 13,
-    "max_width": 13,
-    "name": 12,
-    "position": 10,
-    "allow_outside": 6,
-    "tooltip": 4,
-    "alwaystransparent": 4,
-    "multiline": 2,
-    "minimumsize": 2,
-    "autoresize": 2,
-    "min_width": 2,
-    "container": 2
-   }
-  },
-  "spacer": {
-   "count": 127,
-   "props": {
-    "size": 127,
-    "visible": 21,
-    "datacontext": 2,
-    "name": 2
-   }
-  },
-  "dockable_button": {
-   "count": 127,
-   "props": {
-    "onclick": 125,
-    "size": 107,
-    "raw_text": 105,
-    "raw_tooltip": 90,
-    "icon": 44,
-    "using": 21,
-    "name": 20,
-    "tintcolor": 20,
-    "layoutpolicy_horizontal": 16,
-    "button_ignore": 14,
-    "onrightclick": 10,
-    "text": 2,
-    "tooltip": 2,
-    "click_modifiers": 2,
-    "rightclick_modifiers": 2,
-    "visible": 2
-   }
-  },
-  "start_sound": {
-   "count": 115,
-   "props": {
-    "soundeffect": 115,
-    "soundparam": 26
-   }
-  },
   "progressbar": {
-   "count": 106,
+   "count": 131,
    "props": {
-    "size": 94,
-    "value": 90,
-    "name": 75,
-    "max": 59,
-    "min": 50,
-    "visible": 47,
-    "parentanchor": 39,
-    "progresstexture": 24,
-    "direction": 23,
+    "size": 119,
+    "value": 112,
+    "name": 81,
+    "max": 76,
+    "min": 60,
+    "parentanchor": 55,
+    "visible": 51,
+    "position": 29,
+    "texture": 27,
+    "framesize": 27,
+    "progresstexture": 25,
+    "direction": 25,
+    "alwaystransparent": 25,
+    "frame": 24,
+    "layoutpolicy_horizontal": 23,
     "noprogresstexture": 22,
-    "position": 21,
-    "alwaystransparent": 21,
-    "layoutpolicy_horizontal": 21,
-    "texture": 19,
-    "framesize": 19,
-    "frame": 16,
-    "using": 15,
-    "tooltip": 12,
+    "using": 17,
+    "tooltip": 14,
     "state": 10,
-    "marker": 7,
+    "text_single": 9,
+    "marker": 8,
+    "icon": 7,
+    "tooltipwidget": 7,
     "modify_texture": 6,
-    "text_single": 6,
+    "widgetanchor": 6,
     "gfxtype": 5,
     "tintcolor": 5,
     "alpha": 4,
     "loopinterval": 3,
-    "icon": 3,
     "spritetype": 3,
     "spriteborder": 3,
-    "widgetanchor": 3,
+    "allow_outside": 3,
     "shaderfile": 2,
-    "tooltipwidget": 2,
     "layoutstretchfactor_horizontal": 2,
     "hbox": 2,
     "datacontext": 2,
@@ -1715,40 +1768,190 @@
     "animated_progress_value": 2
    }
   },
-  "format": {
-   "count": 106,
+  "dockable_button": {
+   "count": 131,
    "props": {
-    "name": 106,
-    "format": 106
+    "onclick": 125,
+    "size": 107,
+    "raw_text": 105,
+    "raw_tooltip": 90,
+    "icon": 49,
+    "using": 25,
+    "name": 24,
+    "tintcolor": 19,
+    "button_ignore": 18,
+    "layoutpolicy_horizontal": 15,
+    "onrightclick": 10,
+    "tooltip": 6,
+    "click_modifiers": 6,
+    "rightclick_modifiers": 6,
+    "text": 2,
+    "visible": 2
+   }
+  },
+  "start_sound": {
+   "count": 123,
+   "props": {
+    "soundeffect": 123,
+    "soundparam": 33
+   }
+  },
+  "button_round": {
+   "count": 119,
+   "props": {
+    "onclick": 71,
+    "tooltip": 61,
+    "using": 50,
+    "name": 50,
+    "size": 40,
+    "visible": 31,
+    "datacontext": 26,
+    "enabled": 25,
+    "button_icon": 18,
+    "alwaystransparent": 16,
+    "button_replace": 15,
+    "parentanchor": 14,
+    "icon": 11,
+    "state": 10,
+    "text_single": 10,
+    "button_cancel": 8,
+    "button_plus": 7,
+    "tooltipwidget": 7,
+    "background": 7,
+    "position": 6,
+    "tooltip_visible": 5,
+    "alpha": 4,
+    "button_icon_highlight": 4,
+    "down": 3,
+    "highlight_icon": 3,
+    "shortcut": 3,
+    "upframe": 3,
+    "button": 3,
+    "widgetid": 2,
+    "icon_round_button_base": 2,
+    "button_play": 2,
+    "button_pause": 2,
+    "frame": 2,
+    "button_change": 2
+   }
+  },
+  "glow": {
+   "count": 118,
+   "props": {
+    "using": 144,
+    "glow_radius": 114,
+    "color": 44,
+    "alpha": 35,
+    "glow_generation_rules": 23,
+    "visible": 19
+   }
+  },
+  "text_label_center": {
+   "count": 115,
+   "props": {
+    "text": 99,
+    "layoutpolicy_horizontal": 32,
+    "default_format": 30,
+    "parentanchor": 29,
+    "visible": 27,
+    "align": 24,
+    "max_width": 18,
+    "using": 16,
+    "name": 15,
+    "raw_text": 14,
+    "fontsize_min": 13,
+    "position": 12,
+    "margin": 9,
+    "fontsize": 7,
+    "allow_outside": 6,
+    "tooltip": 4,
+    "alwaystransparent": 4,
+    "minimumsize": 3,
+    "multiline": 2,
+    "autoresize": 2,
+    "min_width": 2,
+    "container": 2,
+    "icon": 2
+   }
+  },
+  "format": {
+   "count": 112,
+   "props": {
+    "name": 112,
+    "format": 112
+   }
+  },
+  "divider_light": {
+   "count": 101,
+   "props": {
+    "layoutpolicy_horizontal": 48,
+    "layoutpolicy_vertical": 43,
+    "alpha": 16,
+    "modify_texture": 9,
+    "parentanchor": 6,
+    "min_width": 6,
+    "size": 5,
+    "visible": 5,
+    "using": 2
    }
   },
   "icon_flat_standard": {
-   "count": 84,
+   "count": 100,
    "props": {
-    "size": 65,
-    "texture": 62,
-    "visible": 30,
-    "parentanchor": 23,
-    "name": 19,
+    "size": 79,
+    "texture": 74,
+    "visible": 38,
+    "parentanchor": 32,
+    "name": 25,
     "tooltip": 8,
-    "datacontext": 6,
-    "modify_texture": 4,
-    "position": 4,
+    "datacontext": 7,
+    "modify_texture": 5,
+    "position": 3,
     "allow_outside": 2,
+    "alwaystransparent": 2,
+    "alpha": 2,
     "tooltipwidget": 2
    }
   },
-  "filter_item": {
-   "count": 77,
+  "scrollbox": {
+   "count": 98,
    "props": {
-    "layoutpolicy_horizontal": 77,
-    "datacontext": 77
+    "layoutpolicy_horizontal": 87,
+    "layoutpolicy_vertical": 74,
+    "name": 31,
+    "size": 25,
+    "visible": 21,
+    "maximumsize": 6,
+    "autoresizescrollarea": 6,
+    "minimumsize": 5,
+    "datacontext": 4,
+    "background": 3,
+    "using": 3,
+    "state": 3,
+    "max_width": 2,
+    "vbox": 2,
+    "alwaystransparent": 2
+   }
+  },
+  "filter_item": {
+   "count": 87,
+   "props": {
+    "layoutpolicy_horizontal": 87,
+    "datacontext": 87
+   }
+  },
+  "object_tooltip_pop_out": {
+   "count": 83,
+   "props": {
+    "datacontext": 19,
+    "alwaystransparent": 3,
+    "visible": 2
    }
   },
   "hbox_sort_ledger_short": {
-   "count": 77,
+   "count": 79,
    "props": {
-    "name": 77,
+    "name": 79,
     "margin_left": 11
    }
   },
@@ -1758,148 +1961,139 @@
     "visible": 9
    }
   },
-  "divider_light": {
-   "count": 75,
-   "props": {
-    "layoutpolicy_horizontal": 40,
-    "layoutpolicy_vertical": 27,
-    "alpha": 16,
-    "modify_texture": 7,
-    "parentanchor": 5,
-    "size": 4,
-    "visible": 4,
-    "min_width": 4
-   }
-  },
-  "glow": {
-   "count": 75,
-   "props": {
-    "using": 113,
-    "glow_radius": 71,
-    "alpha": 26,
-    "glow_generation_rules": 19,
-    "color": 15,
-    "visible": 13
-   }
-  },
-  "scrollbox": {
+  "button_primary": {
    "count": 74,
    "props": {
-    "layoutpolicy_horizontal": 63,
-    "layoutpolicy_vertical": 60,
-    "name": 29,
-    "visible": 17,
-    "size": 13,
-    "datacontext": 4,
-    "minimumsize": 3,
-    "maximumsize": 3,
-    "background": 3,
-    "autoresizescrollarea": 3,
-    "using": 3,
-    "state": 3,
-    "alwaystransparent": 2
-   }
-  },
-  "button_primary": {
-   "count": 69,
-   "props": {
-    "onclick": 71,
-    "text": 63,
-    "enabled": 39,
-    "name": 38,
-    "tooltip": 33,
-    "size": 25,
-    "visible": 21,
+    "onclick": 76,
+    "text": 67,
+    "name": 43,
+    "enabled": 42,
+    "tooltip": 37,
+    "size": 27,
+    "visible": 23,
     "shortcut": 12,
+    "using": 10,
     "clicksound": 9,
-    "using": 9,
     "parentanchor": 8,
+    "default_format": 6,
+    "layoutpolicy_horizontal": 6,
     "position": 5,
-    "default_format": 5,
     "datacontext": 4,
-    "layoutpolicy_horizontal": 4,
     "text_single": 3,
     "min_width": 3,
-    "state": 2
+    "down": 2,
+    "state": 2,
+    "tooltip_when_disabled": 2,
+    "margin_widget": 2
    }
   },
-  "button_round": {
-   "count": 67,
+  "portrait_button": {
+   "count": 73,
    "props": {
-    "onclick": 45,
-    "tooltip": 41,
-    "using": 32,
-    "size": 31,
-    "name": 23,
+    "using": 64,
+    "size": 60,
+    "mask": 59,
+    "portrait_texture": 54,
+    "effectname": 49,
+    "parentanchor": 46,
+    "position": 37,
+    "visible": 23,
+    "alwaystransparent": 17,
+    "background_texture": 16,
+    "texture": 16,
+    "highlight_icon": 14,
+    "name": 13,
+    "state": 7,
+    "shaderfile": 6,
+    "datacontext": 5,
+    "tooltip_visible": 5,
+    "background": 5,
+    "pop_out": 3,
+    "pop_out_v": 3,
+    "tooltip_offset": 3,
+    "gfxtype": 3,
+    "button_ignore": 3,
+    "allow_outside": 3,
+    "grayscale": 2,
+    "onclick": 2,
+    "scale": 2,
+    "text_label_center": 2
+   }
+  },
+  "button_standard_clean": {
+   "count": 68,
+   "props": {
+    "onclick": 63,
+    "size": 50,
+    "tooltip": 23,
+    "layoutpolicy_horizontal": 22,
+    "visible": 18,
+    "hbox": 18,
+    "name": 17,
     "enabled": 16,
     "datacontext": 15,
-    "visible": 14,
-    "alwaystransparent": 14,
-    "button_replace": 11,
-    "parentanchor": 8,
-    "state": 8,
-    "icon": 8,
-    "button_icon": 7,
-    "button_plus": 5,
-    "position": 5,
-    "button_cancel": 5,
-    "text_single": 4,
-    "tooltipwidget": 4,
-    "background": 4,
-    "down": 3,
-    "alpha": 3,
-    "upframe": 3,
-    "shortcut": 2,
-    "button_play": 2,
-    "button_pause": 2,
-    "frame": 2,
-    "button_change": 2,
-    "tooltip_visible": 2,
-    "button": 2
+    "down": 14,
+    "using": 12,
+    "widget": 11,
+    "icon": 10,
+    "tooltipwidget": 8,
+    "background": 7,
+    "alwaystransparent": 6,
+    "skillitem_sort_icon": 5,
+    "text_single": 5,
+    "vbox": 4,
+    "text_label_center": 3,
+    "button": 3,
+    "state": 3,
+    "divider_light": 3,
+    "text": 2,
+    "selection_glow": 2,
+    "button_music_category": 2,
+    "flowcontainer": 2,
+    "button_select_arrow": 2,
+    "button_artifact": 2,
+    "button_ignore": 2,
+    "modify_texture": 2
    }
   },
   "scrollwidget": {
    "count": 65,
    "props": {
     "fixedgridbox": 25,
-    "text_multi": 16,
-    "vbox": 7,
+    "text_multi": 15,
+    "vbox": 8,
     "dynamicgridbox": 7,
     "hbox": 5,
     "flowcontainer": 2
    }
   },
-  "portrait_button": {
-   "count": 63,
+  "button_tertiary": {
+   "count": 64,
    "props": {
-    "using": 56,
-    "size": 53,
-    "mask": 52,
-    "portrait_texture": 47,
-    "parentanchor": 41,
-    "effectname": 41,
-    "position": 29,
-    "visible": 19,
-    "alwaystransparent": 17,
-    "name": 13,
-    "highlight_icon": 13,
-    "background_texture": 12,
-    "texture": 12,
-    "state": 7,
-    "datacontext": 5,
-    "shaderfile": 5,
-    "tooltip_visible": 5,
-    "background": 5,
-    "gfxtype": 3,
-    "button_ignore": 3,
-    "pop_out": 2,
-    "pop_out_v": 2,
-    "grayscale": 2,
-    "tooltip_offset": 2,
-    "onclick": 2,
-    "scale": 2,
-    "allow_outside": 2,
-    "text_label_center": 2
+    "layoutpolicy_horizontal": 22,
+    "onclick": 20,
+    "size": 12,
+    "hbox": 10,
+    "name": 10,
+    "text": 7,
+    "visible": 5,
+    "raw_text": 5,
+    "datacontext": 4,
+    "shortcut": 4,
+    "parentanchor": 4,
+    "position": 3,
+    "min_width": 2,
+    "raw_tooltip": 2,
+    "tooltip": 2,
+    "button_expand": 2,
+    "min_height": 2,
+    "hbox_domicile_building_overview_item": 2
+   }
+  },
+  "widget_value_breakdown_list": {
+   "count": 60,
+   "props": {
+    "datacontext": 38
    }
   },
   "scrollbar_vertical": {
@@ -1908,39 +2102,19 @@
     "using": 58
    }
   },
-  "dynamicgridbox": {
-   "count": 56,
-   "props": {
-    "item": 46,
-    "datamodel": 44,
-    "flipdirection": 31,
-    "name": 24,
-    "datamodel_wrap": 20,
-    "visible": 14,
-    "position": 12,
-    "parentanchor": 12,
-    "layoutpolicy_horizontal": 8,
-    "alwaystransparent": 6,
-    "maxverticalslots": 4,
-    "ignoreinvisible": 3,
-    "size": 3,
-    "layoutpolicy_vertical": 2,
-    "maxhorizontalslots": 2
-   }
-  },
   "progressbar_standard": {
-   "count": 55,
+   "count": 57,
    "props": {
-    "value": 44,
-    "size": 33,
-    "max": 23,
-    "min": 19,
+    "value": 45,
+    "size": 34,
+    "max": 26,
+    "min": 21,
     "using": 15,
+    "layoutpolicy_horizontal": 14,
     "visible": 14,
-    "layoutpolicy_horizontal": 13,
     "name": 13,
+    "tooltipwidget": 12,
     "text_single": 12,
-    "tooltipwidget": 10,
     "progresstexture": 9,
     "noprogresstexture": 8,
     "position": 8,
@@ -1949,100 +2123,72 @@
     "minimumsize": 5,
     "datacontext": 4,
     "marker": 4,
-    "direction": 3,
     "layoutstretchfactor_horizontal": 3,
     "tooltip": 3,
     "color": 3,
     "tooltip_visible": 2
    }
   },
-  "object_tooltip_pop_out": {
+  "dynamicgridbox": {
    "count": 55,
    "props": {
-    "datacontext": 12,
-    "alwaystransparent": 3,
-    "visible": 2
+    "item": 45,
+    "datamodel": 43,
+    "flipdirection": 30,
+    "name": 23,
+    "datamodel_wrap": 19,
+    "visible": 14,
+    "position": 12,
+    "parentanchor": 12,
+    "layoutpolicy_horizontal": 8,
+    "alwaystransparent": 6,
+    "ignoreinvisible": 4,
+    "maxverticalslots": 4,
+    "size": 3,
+    "layoutpolicy_vertical": 2,
+    "maxhorizontalslots": 2,
+    "layoutanchor": 2
    }
   },
-  "button_tertiary": {
-   "count": 53,
+  "dropdown": {
+   "count": 55,
    "props": {
-    "onclick": 22,
-    "layoutpolicy_horizontal": 20,
-    "hbox": 13,
-    "name": 12,
-    "size": 9,
-    "shortcut": 7,
-    "visible": 7,
-    "text": 6,
-    "parentanchor": 6,
-    "state": 6,
-    "min_width": 5,
-    "position": 5,
-    "tooltip": 5,
-    "datacontext": 4,
-    "raw_text": 4,
-    "down": 4,
-    "using": 4,
-    "alpha": 3,
-    "allow_outside": 2,
-    "button_expand": 2,
-    "min_height": 2,
-    "hbox_domicile_building_overview_item": 2
-   }
-  },
-  "button_standard_clean": {
-   "count": 50,
-   "props": {
-    "onclick": 44,
-    "size": 37,
-    "tooltip": 20,
-    "name": 15,
-    "layoutpolicy_horizontal": 15,
-    "hbox": 14,
-    "widget": 12,
-    "icon": 12,
-    "using": 12,
-    "enabled": 10,
-    "down": 10,
-    "visible": 9,
-    "datacontext": 9,
-    "text_single": 6,
-    "skillitem_sort_icon": 5,
-    "tooltipwidget": 5,
-    "alwaystransparent": 4,
-    "background": 4,
-    "vbox": 3,
-    "state": 3,
-    "text": 2,
-    "selection_glow": 2,
-    "button_music_category": 2,
-    "icon_doctrine": 2,
-    "button_ignore": 2,
-    "disableframe": 2
+    "name": 28,
+    "datamodel": 8,
+    "onselectionchanged": 8,
+    "selectedindex": 8,
+    "active_item": 5,
+    "item": 5,
+    "list": 5,
+    "size": 2,
+    "using": 2
    }
   },
   "button_frontend": {
-   "count": 50,
+   "count": 55,
    "props": {
-    "onclick": 53,
-    "text": 37,
-    "size": 27,
+    "onclick": 58,
+    "text": 40,
+    "size": 29,
     "name": 27,
     "tooltip": 27,
-    "visible": 21,
+    "visible": 26,
     "state": 21,
-    "shortcut": 20,
-    "enabled": 14,
+    "shortcut": 17,
+    "enabled": 16,
     "fontsize": 10,
-    "using": 9,
+    "using": 10,
     "datacontext": 8,
     "default_format": 6,
+    "layoutpolicy_horizontal": 6,
     "raw_text": 5,
     "parentanchor": 5,
-    "down": 3,
+    "down": 4,
     "icon_online_offline": 3,
+    "clicksound": 3,
     "min_width": 3,
+    "align": 3,
+    "text_single": 3,
     "texture": 2,
     "gfxtype": 2,
     "effectname": 2,
@@ -2053,9 +2199,8 @@
     "spritetype": 2,
     "spriteborder": 2,
     "buttontext": 2,
-    "clicksound": 2,
-    "layoutpolicy_horizontal": 2,
-    "align": 2,
+    "hbox": 2,
+    "tooltip_visible": 2,
     "margin_left": 2,
     "tooltipwidget": 2,
     "alpha": 2,
@@ -2064,18 +2209,41 @@
     "icon": 2
    }
   },
-  "dropdown": {
-   "count": 48,
+  "button_icon_custom": {
+   "count": 46,
    "props": {
-    "name": 25,
-    "datamodel": 5,
-    "onselectionchanged": 5,
-    "selectedindex": 5,
-    "active_item": 5,
-    "item": 5,
-    "list": 5,
-    "size": 2,
+    "size": 26,
+    "alwaystransparent": 24,
+    "parentanchor": 20,
+    "name": 16,
+    "enabled": 14,
+    "onclick": 10,
+    "mirror": 8,
+    "texture": 5,
+    "tooltip": 4,
+    "state": 2,
+    "position": 2,
+    "clicksound": 2,
     "using": 2
+   }
+  },
+  "datacontext_from_model": {
+   "count": 41,
+   "props": {
+    "index": 40,
+    "datamodel": 27
+   }
+  },
+  "cooltip_paragraph": {
+   "count": 40,
+   "props": {
+    "text": 35,
+    "visible": 21,
+    "layoutpolicy_horizontal": 8,
+    "default_format": 7,
+    "max_width": 4,
+    "tooltip_visible": 2,
+    "tooltipwidget": 2
    }
   },
   "animation": {
@@ -2088,62 +2256,75 @@
     "using": 2
    }
   },
-  "datacontext_from_model": {
+  "header_pattern": {
    "count": 36,
    "props": {
-    "index": 35,
-    "datamodel": 22
+    "layoutpolicy_horizontal": 35,
+    "name": 3,
+    "visible": 2,
+    "button_tertiary": 2,
+    "container": 2
    }
   },
-  "expand": {
+  "coa_title_tiny": {
    "count": 36,
    "props": {
-    "layoutpolicy_horizontal": 12,
-    "layoutpolicy_vertical": 12,
-    "visible": 11,
-    "min_height": 2,
-    "maximumsize": 2
+    "highlight_icon": 21,
+    "datacontext": 18,
+    "parentanchor": 16,
+    "using": 16,
+    "position": 15,
+    "visible": 6,
+    "tooltip_visible": 4,
+    "scale": 4,
+    "name": 3,
+    "tooltip": 2
    }
   },
-  "cooltip_paragraph": {
-   "count": 35,
+  "button_tab": {
+   "count": 34,
    "props": {
-    "text": 30,
-    "visible": 19,
-    "layoutpolicy_horizontal": 7,
-    "default_format": 6,
-    "max_width": 4,
-    "tooltip_visible": 2,
-    "tooltipwidget": 2
+    "onclick": 34,
+    "down": 32,
+    "layoutpolicy_horizontal": 29,
+    "raw_text": 15,
+    "shortcut": 14,
+    "name": 13,
+    "text": 13,
+    "using": 11,
+    "tooltip": 10,
+    "visible": 9,
+    "size": 5,
+    "default_format": 4,
+    "state": 4,
+    "datacontext": 3,
+    "hbox": 2,
+    "button_icon": 2,
+    "button_standard_clean": 2
    }
   },
-  "button_icon_custom": {
-   "count": 35,
+  "button_toggle": {
+   "count": 34,
    "props": {
-    "alwaystransparent": 21,
-    "parentanchor": 18,
-    "name": 16,
-    "size": 15,
-    "enabled": 6,
-    "onclick": 6,
-    "texture": 5,
+    "frame": 25,
+    "onclick": 15,
+    "alwaystransparent": 14,
+    "size": 12,
+    "using": 11,
+    "visible": 10,
+    "parentanchor": 9,
+    "tooltip": 8,
+    "name": 7,
+    "enabled": 5,
     "mirror": 4,
-    "state": 2,
-    "tooltip": 2,
-    "clicksound": 2
-   }
-  },
-  "text_ledger_center": {
-   "count": 35,
-   "props": {
-    "text": 25,
-    "tooltip": 23,
-    "visible": 19,
-    "format_override": 7,
-    "default_format": 7,
-    "alpha": 5,
-    "tooltipwidget": 3,
-    "align": 2
+    "position": 4,
+    "button_radio": 4,
+    "texture": 3,
+    "framesize": 3,
+    "alpha": 3,
+    "datacontext": 2,
+    "icon": 2,
+    "tooltipwidget": 2
    }
   },
   "activity_locale_vfx": {
@@ -2154,31 +2335,12 @@
     "entity_instance": 33
    }
   },
-  "button_tab": {
-   "count": 32,
-   "props": {
-    "onclick": 31,
-    "down": 30,
-    "layoutpolicy_horizontal": 28,
-    "raw_text": 15,
-    "shortcut": 13,
-    "name": 13,
-    "text": 13,
-    "using": 9,
-    "visible": 8,
-    "tooltip": 8,
-    "default_format": 4,
-    "size": 3,
-    "hbox": 2,
-    "state": 2
-   }
-  },
   "checkbutton": {
-   "count": 32,
+   "count": 33,
    "props": {
-    "onclick": 17,
+    "onclick": 18,
+    "checked": 17,
     "name": 17,
-    "checked": 16,
     "texture": 10,
     "enabled": 8,
     "size": 7,
@@ -2192,32 +2354,79 @@
     "position": 2,
     "parentanchor": 2,
     "visible": 2,
-    "tooltip_visible": 2
+    "tooltip_offset": 2
    }
   },
-  "header_pattern": {
-   "count": 31,
+  "soundparam": {
+   "count": 33,
    "props": {
-    "layoutpolicy_horizontal": 30,
-    "visible": 2,
-    "name": 2,
-    "container": 2
+    "name": 33,
+    "value": 33
    }
   },
-  "coa_title_tiny": {
+  "button_sort_ledger_short": {
+   "count": 33,
+   "props": {
+    "name": 33,
+    "parentanchor": 18,
+    "position": 10
+   }
+  },
+  "text_ledger_center": {
+   "count": 33,
+   "props": {
+    "text": 20,
+    "tooltip": 17,
+    "visible": 14,
+    "default_format": 8,
+    "alpha": 5,
+    "format_override": 5,
+    "tooltipwidget": 3,
+    "align": 2,
+    "using": 2
+   }
+  },
+  "expand": {
+   "count": 32,
+   "props": {
+    "layoutpolicy_horizontal": 12,
+    "layoutpolicy_vertical": 12,
+    "visible": 7,
+    "min_height": 2,
+    "maximumsize": 2
+   }
+  },
+  "button_standard_hover": {
+   "count": 32,
+   "props": {
+    "onclick": 26,
+    "datacontext": 17,
+    "visible": 15,
+    "size": 12,
+    "tooltip": 12,
+    "using": 9,
+    "down": 8,
+    "name": 6,
+    "alpha": 5,
+    "hbox": 4,
+    "layoutpolicy_horizontal": 4,
+    "state": 4,
+    "background": 4,
+    "layoutpolicy_vertical": 2,
+    "minimumsize": 2,
+    "flowcontainer": 2,
+    "enabled": 2,
+    "warning_icon": 2,
+    "vbox": 2,
+    "tooltipwidget": 2,
+    "parentanchor": 2
+   }
+  },
+  "blockoverride": {
    "count": 31,
    "props": {
-    "highlight_icon": 18,
-    "using": 15,
-    "datacontext": 14,
-    "parentanchor": 13,
-    "position": 10,
-    "tooltip_visible": 4,
-    "name": 4,
-    "visible": 4,
-    "scale": 3,
-    "icon": 2,
-    "tooltip": 2
+    "visible": 17,
+    "datacontext": 12
    }
   },
   "attachto": {
@@ -2228,22 +2437,14 @@
     "inherit_data_context": 2
    }
   },
-  "button_sort_ledger_short": {
+  "text_ledger": {
    "count": 29,
    "props": {
-    "name": 29,
-    "parentanchor": 17,
-    "position": 7
-   }
-  },
-  "text_ledger": {
-   "count": 27,
-   "props": {
-    "size": 26,
-    "text": 20,
-    "default_format": 14,
+    "size": 28,
+    "text": 22,
+    "default_format": 15,
     "align": 8,
-    "format_override": 6,
+    "format_override": 7,
     "alwaystransparent": 3,
     "layoutpolicy_horizontal": 3,
     "parentanchor": 2,
@@ -2254,6 +2455,31 @@
     "alpha": 2,
     "visible": 2,
     "tooltipwidget": 2
+   }
+  },
+  "portrait_head_small": {
+   "count": 28,
+   "props": {
+    "datacontext": 19,
+    "parentanchor": 10,
+    "position": 9,
+    "name": 9,
+    "size": 7,
+    "visible": 6
+   }
+  },
+  "coa_realm_small": {
+   "count": 28,
+   "props": {
+    "parentanchor": 21,
+    "visible": 17,
+    "position": 17,
+    "datacontext": 11,
+    "name": 8,
+    "scale": 3,
+    "tooltip_visible": 2,
+    "alwaystransparent": 2,
+    "using": 2
    }
   },
   "activity_locale_widget": {
@@ -2273,53 +2499,43 @@
     "using": 21
    }
   },
-  "portrait_head_small": {
+  "progresspie": {
    "count": 26,
    "props": {
-    "datacontext": 20,
-    "parentanchor": 10,
-    "position": 9,
-    "name": 8,
-    "size": 7,
-    "visible": 6
+    "texture": 26,
+    "framesize": 26,
+    "frame": 26,
+    "value": 26,
+    "size": 24,
+    "parentanchor": 24,
+    "max": 22,
+    "min": 20,
+    "name": 16,
+    "visible": 12,
+    "widgetanchor": 12,
+    "position": 5,
+    "datacontext": 4,
+    "tooltip": 3,
+    "modify_texture": 2
    }
   },
-  "soundparam": {
+  "overlappingitembox": {
    "count": 26,
    "props": {
-    "name": 26,
-    "value": 26
-   }
-  },
-  "blockoverride": {
-   "count": 26,
-   "props": {
-    "visible": 15,
-    "datacontext": 9
-   }
-  },
-  "button_toggle": {
-   "count": 26,
-   "props": {
-    "frame": 18,
-    "alwaystransparent": 12,
-    "onclick": 12,
-    "using": 11,
-    "size": 8,
-    "visible": 8,
-    "tooltip": 8,
-    "name": 7,
-    "parentanchor": 7,
-    "enabled": 5,
-    "position": 4,
-    "button_radio": 4,
-    "mirror": 3,
-    "alpha": 3,
-    "texture": 2,
-    "framesize": 2,
-    "datacontext": 2,
-    "icon": 2,
-    "tooltipwidget": 2
+    "item": 23,
+    "datamodel": 20,
+    "size": 18,
+    "name": 10,
+    "spacing": 7,
+    "layoutpolicy_horizontal": 7,
+    "datacontext": 5,
+    "ignoreinvisible": 5,
+    "minimumsize": 5,
+    "autoresize": 5,
+    "maximumsize": 4,
+    "visible": 3,
+    "righttoleft": 3,
+    "parentanchor": 2
    }
   },
   "button_standard_list": {
@@ -2354,64 +2570,55 @@
     "parentanchor": 2
    }
   },
-  "coa_realm_small": {
-   "count": 23,
+  "coa_realm_tiny": {
+   "count": 25,
    "props": {
-    "parentanchor": 17,
-    "position": 15,
-    "visible": 12,
-    "datacontext": 11,
-    "name": 8,
+    "position": 16,
+    "visible": 15,
+    "parentanchor": 8,
+    "datacontext": 7,
+    "using": 4,
     "scale": 3,
+    "name": 2,
     "tooltip_visible": 2,
-    "alwaystransparent": 2,
-    "using": 2
-   }
-  },
-  "overlappingitembox": {
-   "count": 22,
-   "props": {
-    "item": 19,
-    "size": 17,
-    "datamodel": 16,
-    "name": 9,
-    "layoutpolicy_horizontal": 7,
-    "spacing": 6,
-    "datacontext": 4,
-    "visible": 3,
-    "minimumsize": 3,
-    "autoresize": 3,
-    "ignoreinvisible": 2,
-    "maximumsize": 2,
-    "righttoleft": 2,
-    "parentanchor": 2
+    "alwaystransparent": 2
    }
   },
   "glow_generation_rules": {
-   "count": 20,
+   "count": 25,
    "props": {
-    "glow_alpha_mask": 20,
-    "glow_blur_passes": 20,
-    "glow_texture_downscale": 20,
-    "glow_ignore_inside_pixels": 20
+    "glow_alpha_mask": 25,
+    "glow_blur_passes": 25,
+    "glow_texture_downscale": 25,
+    "glow_ignore_inside_pixels": 25
    }
   },
-  "progresspie": {
+  "divider": {
+   "count": 22,
+   "props": {
+    "layoutpolicy_horizontal": 11,
+    "layoutpolicy_vertical": 8,
+    "min_width": 6,
+    "modify_texture": 5,
+    "visible": 3,
+    "parentanchor": 3,
+    "size": 3
+   }
+  },
+  "portrait_head": {
    "count": 20,
    "props": {
-    "texture": 20,
-    "framesize": 20,
-    "frame": 20,
-    "value": 20,
-    "size": 19,
-    "parentanchor": 18,
-    "max": 18,
-    "min": 17,
-    "name": 15,
-    "widgetanchor": 8,
-    "visible": 8,
-    "position": 5,
-    "datacontext": 4
+    "datacontext": 8,
+    "name": 8,
+    "visible": 7,
+    "tooltip_visible": 5
+   }
+  },
+  "header_pattern_interaction": {
+   "count": 20,
+   "props": {
+    "layoutpolicy_horizontal": 20,
+    "icon_character_interaction": 12
    }
   },
   "legacy_progress": {
@@ -2420,51 +2627,56 @@
     "visible": 20
    }
   },
-  "portrait_head": {
-   "count": 19,
-   "props": {
-    "datacontext": 8,
-    "name": 8,
-    "visible": 6,
-    "tooltip_visible": 5
-   }
-  },
-  "header_pattern_interaction": {
-   "count": 19,
-   "props": {
-    "layoutpolicy_horizontal": 19,
-    "icon_character_interaction": 11
-   }
-  },
   "warning_icon": {
-   "count": 18,
+   "count": 19,
    "props": {
     "size": 16,
-    "visible": 10,
+    "visible": 11,
+    "tooltip": 10,
     "name": 10,
-    "tooltip": 9,
-    "parentanchor": 3,
-    "position": 3
+    "position": 4,
+    "parentanchor": 3
    }
   },
-  "coa_realm_medium": {
-   "count": 18,
+  "widget_hud_main_tab": {
+   "count": 19,
    "props": {
-    "parentanchor": 12,
-    "position": 11,
-    "datacontext": 10,
-    "visible": 9,
-    "name": 4,
-    "tooltip": 4,
-    "tintcolor": 2,
-    "scale": 2
+    "name": 15,
+    "datacontext": 14,
+    "visible": 13
    }
   },
-  "editbox_standard_with_label": {
+  "widget_level_marker_no_anchor": {
+   "count": 19,
+   "props": {
+    "icon": 8,
+    "parentanchor": 7,
+    "allow_outside": 6,
+    "visible": 5,
+    "scale": 5,
+    "position": 5,
+    "name": 3,
+    "widgetanchor": 3,
+    "text_single": 2
+   }
+  },
+  "vbox_ledger": {
+   "count": 19,
+   "props": {
+    "visible": 17
+   }
+  },
+  "buttontext": {
    "count": 18,
    "props": {
-    "layoutpolicy_horizontal": 14,
-    "size": 2
+    "text_single": 17
+   }
+  },
+  "vbox_filter_group": {
+   "count": 18,
+   "props": {
+    "layoutpolicy_horizontal": 18,
+    "datacontext": 18
    }
   },
   "editor_toolbar_button": {
@@ -2489,38 +2701,54 @@
     "spacing": 3
    }
   },
-  "vbox_ledger": {
+  "button_decision_entry": {
    "count": 18,
    "props": {
-    "visible": 17
-   }
-  },
-  "buttontext": {
-   "count": 17,
-   "props": {
-    "text_single": 16
-   }
-  },
-  "button_standard_hover": {
-   "count": 17,
-   "props": {
-    "onclick": 18,
+    "onclick": 20,
+    "using": 15,
+    "visible": 12,
+    "size": 11,
+    "name": 9,
     "datacontext": 9,
-    "tooltip": 8,
-    "size": 7,
-    "down": 6,
-    "visible": 6,
-    "hbox": 4,
-    "name": 4,
-    "using": 4,
-    "layoutpolicy_horizontal": 3,
-    "layoutpolicy_vertical": 2,
-    "minimumsize": 2,
-    "flowcontainer": 2,
-    "background": 2,
-    "state": 2,
-    "vbox": 2,
+    "layoutpolicy_horizontal": 3
+   }
+  },
+  "text_ledger_full": {
+   "count": 18,
+   "props": {
+    "text": 9,
+    "visible": 8,
+    "tooltip": 7,
+    "format_override": 4,
+    "default_format": 4,
+    "tooltipwidget": 3,
+    "using": 2,
+    "raw_text": 2
+   }
+  },
+  "icon_doctrine": {
+   "count": 17,
+   "props": {
+    "size": 17,
+    "texture": 17,
+    "visible": 16,
+    "name": 6,
+    "datacontext": 4,
+    "color": 4,
     "parentanchor": 2
+   }
+  },
+  "coa_realm_medium": {
+   "count": 17,
+   "props": {
+    "parentanchor": 12,
+    "datacontext": 10,
+    "position": 10,
+    "visible": 9,
+    "name": 4,
+    "tooltip": 4,
+    "tintcolor": 2,
+    "scale": 2
    }
   },
   "container_my_realm_window_contribution_tooltip": {
@@ -2552,12 +2780,14 @@
     "onclick": 14
    }
   },
-  "widget_hud_main_tab": {
+  "coa_title_small": {
    "count": 16,
    "props": {
-    "datacontext": 12,
-    "name": 12,
-    "visible": 10
+    "visible": 8,
+    "datacontext": 6,
+    "parentanchor": 6,
+    "position": 4,
+    "size": 3
    }
   },
   "game_map_mode_button": {
@@ -2566,12 +2796,6 @@
     "raw_text": 16,
     "onclick": 16,
     "enabled": 16
-   }
-  },
-  "widget_value_breakdown_list": {
-   "count": 16,
-   "props": {
-    "datacontext": 7
    }
   },
   "cell_value_text": {
@@ -2608,17 +2832,18 @@
     "position": 2
    }
   },
-  "coa_realm_tiny": {
+  "button_replace": {
    "count": 15,
    "props": {
-    "visible": 8,
-    "position": 7,
-    "datacontext": 6,
-    "parentanchor": 4,
-    "using": 4,
-    "name": 2,
-    "tooltip_visible": 2,
-    "alwaystransparent": 2
+    "alwaystransparent": 15,
+    "parentanchor": 15
+   }
+  },
+  "editbox_standard_with_label": {
+   "count": 15,
+   "props": {
+    "layoutpolicy_horizontal": 14,
+    "size": 2
    }
   },
   "portrait_shoulders": {
@@ -2632,31 +2857,21 @@
     "position": 2
    }
   },
-  "vbox_filter_group": {
-   "count": 15,
-   "props": {
-    "layoutpolicy_horizontal": 15,
-    "datacontext": 15
-   }
-  },
-  "text_ledger_full": {
-   "count": 15,
-   "props": {
-    "text": 10,
-    "visible": 7,
-    "tooltip": 7,
-    "format_override": 3,
-    "tooltipwidget": 3,
-    "default_format": 3,
-    "using": 2
-   }
-  },
-  "divider": {
+  "marker": {
    "count": 14,
    "props": {
-    "layoutpolicy_horizontal": 11,
-    "modify_texture": 5,
-    "layoutpolicy_vertical": 2
+    "name": 13,
+    "widget": 10,
+    "widget_level_marker_no_anchor": 2
+   }
+  },
+  "coa_title_tiny_crown": {
+   "count": 14,
+   "props": {
+    "datacontext": 7,
+    "parentanchor": 5,
+    "using": 4,
+    "icon": 2
    }
   },
   "button_radio": {
@@ -2679,6 +2894,13 @@
     "spacing": 5
    }
   },
+  "button_decree_entry": {
+   "count": 14,
+   "props": {
+    "name": 14,
+    "datacontext": 14
+   }
+  },
   "button_rd_environment": {
    "count": 14,
    "props": {
@@ -2686,12 +2908,10 @@
     "text": 14
    }
   },
-  "marker": {
+  "widget_value_breakdown_tooltip": {
    "count": 13,
    "props": {
-    "name": 13,
-    "widget": 9,
-    "widget_level_marker_no_anchor": 2
+    "datacontext": 8
    }
   },
   "scrollbar": {
@@ -2722,6 +2942,32 @@
     "using": 6
    }
   },
+  "button_checkbox_label": {
+   "count": 13,
+   "props": {
+    "onclick": 12,
+    "tooltip": 5,
+    "visible": 3,
+    "enabled": 3,
+    "datacontext": 2
+   }
+  },
+  "button_select_arrow": {
+   "count": 13,
+   "props": {
+    "size": 13,
+    "alwaystransparent": 5,
+    "mirror": 5,
+    "visible": 4,
+    "parentanchor": 4,
+    "enabled": 4,
+    "onclick": 4,
+    "position": 2,
+    "tooltip": 2,
+    "using": 2,
+    "clicksound": 2
+   }
+  },
   "button_checkbox": {
    "count": 13,
    "props": {
@@ -2742,20 +2988,6 @@
     "scale": 4,
     "background": 4,
     "margin_bottom": 2
-   }
-  },
-  "button_dynastic_cycle_decision": {
-   "count": 13,
-   "props": {
-    "datacontext": 7,
-    "visible": 6,
-    "onclick": 4
-   }
-  },
-  "widget_value_breakdown_tooltip": {
-   "count": 12,
-   "props": {
-    "datacontext": 8
    }
   },
   "icon_contest_affinity_base": {
@@ -2816,46 +3048,47 @@
     "margin_left": 2
    }
   },
+  "drop_target": {
+   "count": 12,
+   "props": {
+    "is_drop_allowed": 12,
+    "on_receive_drop": 12,
+    "accept_draggable_id": 8,
+    "on_drag_enter": 6,
+    "on_drag_exit": 6
+   }
+  },
   "icon_maa_combat": {
    "count": 12,
    "props": {
     "visible": 12
    }
   },
-  "button_replace": {
-   "count": 11,
+  "widget_domicile_artifact_slot": {
+   "count": 12,
    "props": {
-    "parentanchor": 11,
-    "alwaystransparent": 10
+    "name": 12,
+    "datacontext": 12
    }
   },
-  "button_checkbox_label": {
+  "button_expand": {
    "count": 11,
    "props": {
-    "onclick": 10,
-    "visible": 3,
-    "tooltip": 3,
-    "enabled": 3,
-    "datacontext": 2
-   }
-  },
-  "coa_title_tiny_crown": {
-   "count": 11,
-   "props": {
-    "datacontext": 7,
-    "parentanchor": 4,
-    "using": 3,
-    "icon": 3
-   }
-  },
-  "coa_title_small": {
-   "count": 11,
-   "props": {
-    "visible": 6,
-    "parentanchor": 4,
-    "datacontext": 3,
-    "position": 3,
+    "frame": 6,
+    "onclick": 3,
+    "parentanchor": 3,
+    "alwaystransparent": 3,
     "size": 2
+   }
+  },
+  "coa_realm_small_crown": {
+   "count": 11,
+   "props": {
+    "visible": 9,
+    "parentanchor": 9,
+    "position": 6,
+    "scale": 3,
+    "datacontext": 2
    }
   },
   "achievements_disabled_icon": {
@@ -2873,38 +3106,47 @@
     "blockoverride": 11
    }
   },
-  "button_expand": {
-   "count": 10,
+  "widget_ledger_item": {
+   "count": 11,
    "props": {
-    "frame": 6,
-    "onclick": 3,
-    "alwaystransparent": 3,
-    "parentanchor": 2,
-    "size": 2
+    "datacontext": 11,
+    "size": 11,
+    "hbox": 9,
+    "widget": 2
    }
   },
-  "button_select_arrow": {
+  "coat_of_arms_icon": {
    "count": 10,
    "props": {
-    "size": 10,
-    "alwaystransparent": 4,
-    "mirror": 4,
-    "visible": 3,
-    "parentanchor": 3,
-    "enabled": 2,
-    "onclick": 2,
-    "tooltip": 2,
-    "using": 2,
-    "clicksound": 2
+    "size": 9,
+    "coat_of_arms_mask": 9,
+    "modify_texture": 8,
+    "parentanchor": 7,
+    "coat_of_arms": 7,
+    "coat_of_arms_slot": 7,
+    "visible": 6,
+    "coat_of_arms_offset": 2,
+    "coat_of_arms_scale": 2
    }
   },
   "coa_title_medium": {
    "count": 10,
    "props": {
-    "datacontext": 8,
+    "datacontext": 7,
     "name": 5,
     "visible": 5,
     "parentanchor": 3
+   }
+  },
+  "window_character_filter": {
+   "count": 10,
+   "props": {
+    "datacontext": 8,
+    "position": 6,
+    "name": 5,
+    "size": 4,
+    "parentanchor": 2,
+    "widgetanchor": 2
    }
   },
   "portrait_opinion": {
@@ -2924,17 +3166,12 @@
     "resizeparent": 2
    }
   },
-  "widget_level_marker_no_anchor": {
+  "icon_button_mapmode": {
    "count": 10,
    "props": {
-    "icon": 7,
-    "allow_outside": 5,
-    "parentanchor": 4,
-    "scale": 3,
+    "name": 7,
     "visible": 3,
-    "name": 3,
-    "widgetanchor": 3,
-    "text_single": 2
+    "size": 3
    }
   },
   "button_army_automation_option": {
@@ -2947,14 +3184,33 @@
     "alwaystransparent": 10
    }
   },
-  "widget_ledger_item": {
+  "name_entry_big": {
+   "count": 10,
+   "props": {}
+  },
+  "text_ledger_right": {
    "count": 10,
    "props": {
-    "datacontext": 10,
-    "size": 10,
-    "hbox": 7,
-    "vbox": 2,
-    "widget": 2
+    "text": 6,
+    "tooltip": 4,
+    "visible": 2,
+    "alpha": 2,
+    "datacontext": 2,
+    "tooltipwidget": 2,
+    "default_format": 2
+   }
+  },
+  "button_cancel": {
+   "count": 9,
+   "props": {
+    "parentanchor": 7,
+    "size": 4,
+    "alwaystransparent": 4,
+    "tooltip": 4,
+    "onclick": 3,
+    "using": 2,
+    "name": 2,
+    "state": 2
    }
   },
   "icon_trait": {
@@ -2979,18 +3235,20 @@
     "layoutpolicy_horizontal": 2
    }
   },
-  "coat_of_arms_icon": {
+  "draggable_behavior": {
    "count": 9,
    "props": {
-    "size": 8,
-    "coat_of_arms_mask": 8,
-    "modify_texture": 7,
-    "parentanchor": 6,
-    "coat_of_arms": 6,
-    "coat_of_arms_slot": 6,
-    "visible": 5,
-    "coat_of_arms_offset": 2,
-    "coat_of_arms_scale": 2
+    "drag_widget": 9,
+    "draggable_id": 7,
+    "on_drag_start": 4,
+    "on_drag_end": 4
+   }
+  },
+  "drag_widget": {
+   "count": 9,
+   "props": {
+    "draggable_object": 4,
+    "widget_building_item_draggable_object": 2
    }
   },
   "portrait_event": {
@@ -3006,15 +3264,43 @@
     "visible_at_creation": 3
    }
   },
-  "event_portrait_status_icons_left": {
+  "proportional_icon": {
    "count": 9,
    "props": {
-    "visible": 8,
-    "parentanchor": 5,
-    "position": 5,
-    "scale": 5,
-    "background": 5,
-    "datacontext": 4
+    "size": 9,
+    "texture": 8,
+    "using": 7,
+    "modify_texture": 7,
+    "visible": 6,
+    "mirror": 4
+   }
+  },
+  "button_outliner_header": {
+   "count": 9,
+   "props": {
+    "name": 9,
+    "layoutpolicy_horizontal": 9,
+    "visible": 8
+   }
+  },
+  "button_list": {
+   "count": 9,
+   "props": {
+    "size": 9,
+    "layoutpolicy_horizontal": 9,
+    "using": 9,
+    "name": 6,
+    "onclick": 6,
+    "down": 6,
+    "hbox": 5,
+    "onrightclick": 4,
+    "button_ignore": 4,
+    "state": 4,
+    "tooltipwidget": 4,
+    "datacontext": 3,
+    "margin_widget": 3,
+    "vbox": 2,
+    "build_queue_item": 2
    }
   },
   "hbox_character_interaction_acceptance": {
@@ -3034,15 +3320,20 @@
     "name": 4
    }
   },
-  "window_character_filter": {
+  "button_artifact": {
    "count": 9,
    "props": {
-    "datacontext": 7,
-    "position": 5,
+    "state": 8,
+    "size": 7,
     "name": 4,
-    "size": 3,
-    "parentanchor": 2,
-    "widgetanchor": 2
+    "datacontext": 4,
+    "visible": 4,
+    "parentanchor": 4,
+    "using": 4,
+    "down": 4,
+    "button_round": 4,
+    "onclick": 2,
+    "onrightclick": 2
    }
   },
   "colorpicker": {
@@ -3066,25 +3357,45 @@
     "using": 2
    }
   },
-  "widget_inventory_slot": {
+  "county_value_cooltip": {
    "count": 9,
    "props": {
-    "name": 9,
-    "datacontext": 9,
-    "parentanchor": 9,
-    "position": 9
+    "datacontext": 5
    }
   },
-  "text_ledger_right": {
+  "button_domicile_building_can_upgrade": {
    "count": 9,
    "props": {
-    "text": 7,
+    "datacontext": 13,
+    "visible": 8,
+    "size": 5
+   }
+  },
+  "button_domicile_building_cannot_upgrade": {
+   "count": 9,
+   "props": {
+    "datacontext": 15,
+    "visible": 8,
+    "size": 5
+   }
+  },
+  "text_ledger_c": {
+   "count": 9,
+   "props": {
+    "size": 9,
+    "text": 9,
+    "default_format": 5,
     "tooltip": 5,
-    "alpha": 3,
-    "visible": 2,
-    "datacontext": 2,
-    "tooltipwidget": 2,
+    "visible": 5,
     "format_override": 2
+   }
+  },
+  "widget_level_marker": {
+   "count": 8,
+   "props": {
+    "visible": 7,
+    "scale": 4,
+    "position": 2
    }
   },
   "widget_contest_structure": {
@@ -3106,6 +3417,13 @@
     "state": 2
    }
   },
+  "dropdown_menu_standard": {
+   "count": 8,
+   "props": {
+    "visible": 2,
+    "name": 2
+   }
+  },
   "coa_house_medium": {
    "count": 8,
    "props": {
@@ -3116,15 +3434,13 @@
     "position": 2
    }
   },
-  "proportional_icon": {
+  "coa_character_sigil": {
    "count": 8,
    "props": {
-    "size": 8,
-    "texture": 8,
-    "visible": 6,
-    "using": 6,
-    "modify_texture": 6,
-    "mirror": 4
+    "visible": 5,
+    "name": 4,
+    "datacontext": 3,
+    "alpha": 2
    }
   },
   "struggle_phase_based_widget": {
@@ -3132,6 +3448,28 @@
    "props": {
     "visible": 6,
     "datacontext": 5
+   }
+  },
+  "icon_building": {
+   "count": 8,
+   "props": {
+    "size": 7,
+    "texture": 6,
+    "name": 3,
+    "alpha": 3,
+    "visible": 2,
+    "parentanchor": 2
+   }
+  },
+  "coa_title_big": {
+   "count": 8,
+   "props": {
+    "datacontext": 7,
+    "parentanchor": 7,
+    "scale": 7,
+    "tooltip": 5,
+    "icon": 5,
+    "position": 2
    }
   },
   "button_color_selection_tab": {
@@ -3187,13 +3525,6 @@
     "position": 2
    }
   },
-  "widget_level_marker": {
-   "count": 7,
-   "props": {
-    "visible": 7,
-    "scale": 3
-   }
-  },
   "video_icon": {
    "count": 7,
    "props": {
@@ -3208,32 +3539,24 @@
     "restart_on_show": 4
    }
   },
-  "button_cancel": {
+  "button_change": {
    "count": 7,
    "props": {
-    "parentanchor": 5,
-    "alwaystransparent": 3,
-    "onclick": 3,
-    "tooltip": 3,
-    "name": 2,
-    "size": 2,
-    "state": 2
+    "onclick": 5,
+    "visible": 3,
+    "size": 3,
+    "name": 3,
+    "tooltip": 2,
+    "parentanchor": 2,
+    "position": 2,
+    "alwaystransparent": 2
    }
   },
-  "dropdown_menu_standard": {
+  "click_modifiers": {
    "count": 7,
    "props": {
-    "visible": 2,
-    "name": 2
-   }
-  },
-  "coa_realm_small_crown": {
-   "count": 7,
-   "props": {
-    "position": 6,
-    "parentanchor": 6,
-    "visible": 5,
-    "datacontext": 2
+    "ondefault": 7,
+    "onshift": 7
    }
   },
   "coa_title_small_crown": {
@@ -3258,6 +3581,26 @@
     "modify_texture": 2
    }
   },
+  "editbox_standard": {
+   "count": 7,
+   "props": {
+    "layoutpolicy_horizontal": 4,
+    "size": 3
+   }
+  },
+  "container_tenet_item_small": {
+   "count": 7,
+   "props": {
+    "datacontext": 10,
+    "parentanchor": 5,
+    "name": 4,
+    "visible": 4,
+    "using": 4,
+    "scale": 2,
+    "tooltip_parentanchor": 2,
+    "widget_cardinal_tenet_popularity": 2
+   }
+  },
   "icon_flat_standard_red": {
    "count": 7,
    "props": {
@@ -3265,14 +3608,6 @@
     "visible": 5,
     "texture": 4,
     "parentanchor": 4
-   }
-  },
-  "button_outliner_header": {
-   "count": 7,
-   "props": {
-    "name": 7,
-    "layoutpolicy_horizontal": 7,
-    "visible": 6
    }
   },
   "vbox_character_interaction_effects": {
@@ -3290,44 +3625,33 @@
     "layoutpolicy_horizontal": 4
    }
   },
-  "icon_doctrine": {
+  "icon_situation_phase_effect_participant_group_item": {
    "count": 7,
    "props": {
-    "size": 7,
-    "texture": 7,
-    "visible": 6,
-    "color": 4
-   }
-  },
-  "button_decision_entry": {
-   "count": 7,
-   "props": {
-    "visible": 6,
-    "onclick": 6,
-    "using": 6,
-    "name": 5,
     "datacontext": 5,
-    "size": 3
+    "using": 3
    }
   },
-  "name_entry_big": {
-   "count": 7,
-   "props": {}
-  },
-  "button_domicile_building_can_upgrade": {
+  "widget_district_item": {
    "count": 7,
    "props": {
-    "datacontext": 9,
-    "visible": 6,
-    "size": 3
+    "name": 7,
+    "visible": 7,
+    "datacontext": 7
    }
   },
-  "button_domicile_building_cannot_upgrade": {
+  "district_building_frame_icon": {
    "count": 7,
    "props": {
-    "datacontext": 11,
-    "visible": 6,
-    "size": 3
+    "texture": 6
+   }
+  },
+  "icon_holding_district_art": {
+   "count": 7,
+   "props": {
+    "visible": 7,
+    "texture": 7,
+    "size": 7
    }
   },
   "vbox_generic_object_card": {
@@ -3339,34 +3663,37 @@
     "datacontext": 2
    }
   },
-  "text_ledger_c": {
+  "button_dynastic_cycle_decision": {
    "count": 7,
    "props": {
-    "size": 7,
-    "text": 7,
-    "default_format": 5,
-    "tooltip": 5,
-    "visible": 3
+    "visible": 7,
+    "onclick": 5
    }
   },
   "widget_skill_item_ledger": {
    "count": 7,
    "props": {}
   },
+  "icon_flat_standard_black": {
+   "count": 7,
+   "props": {
+    "parentanchor": 5,
+    "size": 2,
+    "texture": 2
+   }
+  },
+  "hbox_complex_bar_progress_next": {
+   "count": 6,
+   "props": {
+    "layoutpolicy_horizontal": 6,
+    "tooltip": 5,
+    "using": 5
+   }
+  },
   "widget_coronation_character_item": {
    "count": 6,
    "props": {
     "datacontext_from_model": 6
-   }
-  },
-  "button_change": {
-   "count": 6,
-   "props": {
-    "onclick": 5,
-    "name": 3,
-    "tooltip": 2,
-    "visible": 2,
-    "size": 2
    }
   },
   "portrait_body": {
@@ -3379,6 +3706,13 @@
     "resizeparent": 2,
     "tooltip_visible": 2,
     "background": 2
+   }
+  },
+  "rightclick_modifiers": {
+   "count": 6,
+   "props": {
+    "ondefault": 6,
+    "onshift": 6
    }
   },
   "active_item": {
@@ -3403,6 +3737,13 @@
     "shortcut": 2
    }
   },
+  "coa_realm_medium_crown": {
+   "count": 6,
+   "props": {
+    "visible": 3,
+    "parentanchor": 3
+   }
+  },
   "animation_glow_event": {
    "count": 6,
    "props": {
@@ -3411,11 +3752,15 @@
     "using": 3
    }
   },
-  "editbox_standard": {
+  "event_portrait_status_icons_left": {
    "count": 6,
    "props": {
-    "layoutpolicy_horizontal": 4,
-    "size": 2
+    "visible": 5,
+    "datacontext": 4,
+    "parentanchor": 2,
+    "position": 2,
+    "scale": 2,
+    "background": 2
    }
   },
   "event_widget_name_child_option": {
@@ -3461,11 +3806,13 @@
     "frame": 3
    }
   },
-  "icon_hud_background": {
+  "hbox_trade_window_stat": {
    "count": 6,
    "props": {
-    "visible": 6,
-    "size": 6
+    "using": 6,
+    "datacontext": 5,
+    "tooltipwidget": 5,
+    "visible": 5
    }
   },
   "hbox_soldiers_and_quality_small": {
@@ -3474,6 +3821,24 @@
     "datacontext": 7,
     "layoutpolicy_vertical": 3,
     "layoutpolicy_horizontal": 2
+   }
+  },
+  "widget_character_icon": {
+   "count": 6,
+   "props": {
+    "state": 10,
+    "parentanchor": 5,
+    "size": 5,
+    "datacontext": 4,
+    "allow_outside": 3,
+    "visible": 3,
+    "name": 2
+   }
+  },
+  "market_good_balance_cell": {
+   "count": 6,
+   "props": {
+    "visible": 2
    }
   },
   "editbox": {
@@ -3490,6 +3855,13 @@
     "layoutpolicy_horizontal": 2,
     "onreturnpressed": 2,
     "using": 2
+   }
+  },
+  "button_round_interaction": {
+   "count": 6,
+   "props": {
+    "datacontext": 5,
+    "name": 4
    }
   },
   "coa_house_frame": {
@@ -3517,6 +3889,13 @@
    "count": 6,
    "props": {}
   },
+  "widget_in_build_queue_indicator": {
+   "count": 6,
+   "props": {
+    "parentanchor": 5,
+    "position": 5
+   }
+  },
   "progressbar_lifestyle_xp": {
    "count": 6,
    "props": {
@@ -3532,6 +3911,28 @@
     "texture": 6
    }
   },
+  "county_holding_stat": {
+   "count": 6,
+   "props": {
+    "tooltip": 4,
+    "size": 3,
+    "layoutpolicy_horizontal": 3,
+    "visible": 2,
+    "tooltip_visible": 2,
+    "tooltipwidget": 2,
+    "datacontext": 2
+   }
+  },
+  "hbox_ambition_members_bar": {
+   "count": 6,
+   "props": {
+    "datacontext": 6,
+    "visible": 6,
+    "minimumsize": 6,
+    "layoutstretchfactor_horizontal": 6,
+    "tooltip": 6
+   }
+  },
   "button_pillar_selection": {
    "count": 6,
    "props": {
@@ -3544,18 +3945,20 @@
    "count": 6,
    "props": {}
   },
-  "icon_flat_standard_black": {
+  "vbox_maa_stats_numbers_base": {
    "count": 6,
    "props": {
-    "parentanchor": 5
+    "datacontext": 4,
+    "layoutpolicy_horizontal": 2
    }
   },
-  "hbox_complex_bar_progress_next": {
+  "button_plus": {
    "count": 5,
    "props": {
-    "layoutpolicy_horizontal": 5,
-    "tooltip": 5,
-    "using": 5
+    "parentanchor": 5,
+    "alwaystransparent": 5,
+    "size": 3,
+    "name": 2
    }
   },
   "tournament_empty_contest_slot_widget": {
@@ -3589,13 +3992,6 @@
     "using": 2
    }
   },
-  "coa_realm_medium_crown": {
-   "count": 5,
-   "props": {
-    "parentanchor": 3,
-    "visible": 2
-   }
-  },
   "coa_dynasty_medium": {
    "count": 5,
    "props": {
@@ -3603,6 +3999,22 @@
     "name": 4,
     "visible": 4,
     "parentanchor": 2
+   }
+  },
+  "highlight_icon_building": {
+   "count": 5,
+   "props": {
+    "name": 5,
+    "size": 5,
+    "texture": 5,
+    "visible": 5,
+    "alpha": 2
+   }
+  },
+  "header_standard": {
+   "count": 5,
+   "props": {
+    "layoutpolicy_horizontal": 5
    }
   },
   "big_event_window": {
@@ -3661,11 +4073,44 @@
     "visible": 2
    }
   },
+  "button_menu": {
+   "count": 5,
+   "props": {
+    "onclick": 5,
+    "tooltip": 5,
+    "using": 3,
+    "visible": 2,
+    "shortcut": 2
+   }
+  },
   "animation_hud_daily_tick": {
    "count": 5,
    "props": {
     "visible": 5,
     "size": 5
+   }
+  },
+  "icon_hud_background": {
+   "count": 5,
+   "props": {
+    "visible": 5,
+    "size": 5
+   }
+  },
+  "button_hud_character_bar": {
+   "count": 5,
+   "props": {
+    "name": 5,
+    "datacontext": 5,
+    "onclick": 5,
+    "using": 5,
+    "tooltip_offset": 5,
+    "tooltipwidget": 5,
+    "visible": 3,
+    "shortcut": 2,
+    "highlight_icon": 2,
+    "parentanchor": 2,
+    "coa_house_tiny": 2
    }
   },
   "icon_flat_standard_green": {
@@ -3676,38 +4121,11 @@
     "parentanchor": 4
    }
   },
-  "button_list": {
-   "count": 5,
-   "props": {
-    "size": 5,
-    "layoutpolicy_horizontal": 5,
-    "down": 5,
-    "name": 4,
-    "onclick": 4,
-    "onrightclick": 4,
-    "button_ignore": 4,
-    "hbox": 4,
-    "using": 4,
-    "state": 2,
-    "datacontext": 2
-   }
-  },
   "widget_character_list_item": {
    "count": 5,
    "props": {
     "layoutpolicy_horizontal": 3,
     "size": 2
-   }
-  },
-  "widget_character_icon": {
-   "count": 5,
-   "props": {
-    "state": 8,
-    "datacontext": 4,
-    "visible": 4,
-    "parentanchor": 4,
-    "size": 4,
-    "name": 2
    }
   },
   "flowcontainer_warfare_status": {
@@ -3764,13 +4182,6 @@
     "visible": 2
    }
   },
-  "icon_situation_phase_effect_participant_group_item": {
-   "count": 5,
-   "props": {
-    "datacontext": 3,
-    "using": 2
-   }
-  },
   "skillitem_sort_icon": {
    "count": 5,
    "props": {
@@ -3790,12 +4201,21 @@
     "datacontext": 5
    }
   },
-  "widget_building_item": {
+  "widget_faith_character_tiny": {
    "count": 5,
    "props": {
-    "name": 4,
-    "datacontext": 4,
     "visible": 4
+   }
+  },
+  "widget_value_card_vertical": {
+   "count": 5,
+   "props": {}
+  },
+  "text_value_indicator": {
+   "count": 5,
+   "props": {
+    "parentanchor": 5,
+    "position": 5
    }
   },
   "editor_expand_button": {
@@ -3818,23 +4238,27 @@
     "datacontext": 5
    }
   },
+  "widget_artifact_entry": {
+   "count": 5,
+   "props": {
+    "datacontext": 6,
+    "visible": 3,
+    "tooltipwidget": 2,
+    "using": 2
+   }
+  },
+  "button_ledger_faith": {
+   "count": 5,
+   "props": {
+    "size": 5,
+    "enabled": 4,
+    "tooltip_visible": 4,
+    "datacontext_from_model": 2
+   }
+  },
   "widget_ledger_currency_wide": {
    "count": 5,
    "props": {}
-  },
-  "widget_building_item_ledger": {
-   "count": 5,
-   "props": {
-    "visible": 5,
-    "datacontext": 3
-   }
-  },
-  "vbox_maa_stats_numbers_base": {
-   "count": 5,
-   "props": {
-    "datacontext": 4,
-    "layoutpolicy_horizontal": 2
-   }
   },
   "dominance_pip": {
    "count": 5,
@@ -3867,6 +4291,14 @@
     "tooltip": 4
    }
   },
+  "coa_house_tiny": {
+   "count": 4,
+   "props": {
+    "parentanchor": 3,
+    "position": 3,
+    "scale": 2
+   }
+  },
   "coa_realm_tiny_crown": {
    "count": 4,
    "props": {
@@ -3874,20 +4306,33 @@
     "parentanchor": 2
    }
   },
-  "highlight_icon_building": {
+  "progressbar_green": {
    "count": 4,
    "props": {
-    "name": 4,
-    "size": 4,
-    "texture": 4,
-    "visible": 4,
-    "alpha": 2
+    "value": 3,
+    "layoutpolicy_horizontal": 2
    }
   },
-  "header_standard": {
+  "draggable_object": {
    "count": 4,
    "props": {
-    "layoutpolicy_horizontal": 4
+    "size": 2,
+    "parentanchor": 2,
+    "draggable_behavior": 2,
+    "position": 2,
+    "widgetanchor": 2
+   }
+  },
+  "button_close": {
+   "count": 4,
+   "props": {
+    "onclick": 3,
+    "clicksound": 3,
+    "size": 2,
+    "position": 2,
+    "parentanchor": 2,
+    "name": 2,
+    "tooltip": 2
    }
   },
   "event_portrait_status_icons_right": {
@@ -3957,29 +4402,64 @@
     "using": 2
    }
   },
-  "button_hud_character_bar": {
-   "count": 4,
-   "props": {
-    "name": 4,
-    "datacontext": 4,
-    "onclick": 4,
-    "using": 4,
-    "tooltip_offset": 4,
-    "tooltipwidget": 4,
-    "parentanchor": 3,
-    "highlight_icon": 2
-   }
-  },
   "struggle_highlight_icon": {
    "count": 4,
    "props": {
     "visible": 4
    }
   },
+  "widget_spiritual_fulfillment_bar_horizontal": {
+   "count": 4,
+   "props": {
+    "allow_outside": 3,
+    "visible": 2
+   }
+  },
+  "container_message_doctrine": {
+   "count": 4,
+   "props": {
+    "name": 4,
+    "datacontext": 4,
+    "visible": 4,
+    "parentanchor": 2
+   }
+  },
+  "container_message_faith": {
+   "count": 4,
+   "props": {
+    "name": 4,
+    "datacontext": 4,
+    "visible": 4,
+    "parentanchor": 2
+   }
+  },
+  "container_message_rite": {
+   "count": 4,
+   "props": {
+    "name": 4,
+    "datacontext": 4,
+    "visible": 4,
+    "parentanchor": 2
+   }
+  },
   "vbox_sender_portrait_message": {
    "count": 4,
    "props": {
     "layoutpolicy_horizontal": 4
+   }
+  },
+  "vbox_list_interaction_title_selection": {
+   "count": 4,
+   "props": {
+    "visible": 2,
+    "layoutpolicy_horizontal": 2
+   }
+  },
+  "hbox_market_toll": {
+   "count": 4,
+   "props": {
+    "datacontext": 4,
+    "visible": 3
    }
   },
   "domicile_location_icon": {
@@ -3997,6 +4477,16 @@
     "state": 8,
     "datacontext": 5,
     "visible": 3
+   }
+  },
+  "alert_icon": {
+   "count": 4,
+   "props": {
+    "size": 4,
+    "parentanchor": 3,
+    "tooltip": 3,
+    "visible": 2,
+    "using": 2
    }
   },
   "icon_culture_pillar": {
@@ -4044,15 +4534,6 @@
     "parentanchor": 3
    }
   },
-  "coa_title_big": {
-   "count": 4,
-   "props": {
-    "datacontext": 3,
-    "parentanchor": 2,
-    "position": 2,
-    "scale": 2
-   }
-  },
   "scrollbar_value_slider": {
    "count": 4,
    "props": {
@@ -4060,6 +4541,40 @@
     "max": 3,
     "onvaluechanged": 2,
     "value": 2
+   }
+  },
+  "base_dialog": {
+   "count": 4,
+   "props": {
+    "name": 3
+   }
+  },
+  "icon_title_succession": {
+   "count": 4,
+   "props": {
+    "parentanchor": 3,
+    "position": 3
+   }
+  },
+  "mini_map_mode": {
+   "count": 4,
+   "props": {
+    "parentanchor": 2,
+    "position": 2
+   }
+  },
+  "trade_needs_column_cell": {
+   "count": 4,
+   "props": {
+    "datacontext": 4,
+    "visible": 2
+   }
+  },
+  "vbox_law_desc": {
+   "count": 4,
+   "props": {
+    "minimumsize": 2,
+    "max_width": 2
    }
   },
   "vbox_army_automation_options": {
@@ -4078,11 +4593,40 @@
    "count": 4,
    "props": {}
   },
+  "widget_councillor_item": {
+   "count": 4,
+   "props": {
+    "datacontext": 8,
+    "background": 5,
+    "visible": 4,
+    "layoutpolicy_horizontal": 2,
+    "layoutpolicy_vertical": 2
+   }
+  },
   "council_task_icon_tooltip_widget_base": {
    "count": 4,
    "props": {
     "using": 4,
     "alwaystransparent": 2
+   }
+  },
+  "icon_construction_progress_indicator": {
+   "count": 4,
+   "props": {
+    "parentanchor": 4,
+    "size": 3,
+    "position": 2
+   }
+  },
+  "building_need_segment": {
+   "count": 4,
+   "props": {}
+  },
+  "vbox_construction_window_contents": {
+   "count": 4,
+   "props": {
+    "layoutpolicy_vertical": 2,
+    "visible": 2
    }
   },
   "innovation_progress_bar": {
@@ -4092,17 +4636,41 @@
     "visible": 2
    }
   },
+  "vassal_conversion_preview": {
+   "count": 4,
+   "props": {
+    "visible": 3,
+    "layoutpolicy_horizontal": 3,
+    "layoutpolicy_vertical": 3
+   }
+  },
+  "domicile_progress_bar": {
+   "count": 4,
+   "props": {
+    "parentanchor": 4,
+    "size": 4,
+    "position": 4
+   }
+  },
+  "widget_faith_character": {
+   "count": 4,
+   "props": {
+    "visible": 4
+   }
+  },
+  "icon_tenet_popularity": {
+   "count": 4,
+   "props": {
+    "name": 4,
+    "datacontext": 4,
+    "frame": 4
+   }
+  },
   "widget_project_plan_contribution_item": {
    "count": 4,
    "props": {
     "datacontext": 2,
     "layoutpolicy_horizontal": 2
-   }
-  },
-  "widget_own_scheme_item": {
-   "count": 4,
-   "props": {
-    "layoutpolicy_horizontal": 4
    }
   },
   "base_legend_seed_entry_vbox": {
@@ -4147,6 +4715,19 @@
     "modify_texture": 3
    }
   },
+  "widget_alert_prohibited_tenet": {
+   "count": 3,
+   "props": {
+    "visible": 3,
+    "position": 2
+   }
+  },
+  "widget_tenet_item": {
+   "count": 3,
+   "props": {
+    "datacontext": 6
+   }
+  },
   "widget_charioteer_item": {
    "count": 3,
    "props": {
@@ -4180,8 +4761,6 @@
    "props": {
     "onclick": 5,
     "size": 3,
-    "alwaystransparent": 2,
-    "down": 2,
     "tooltip_visible": 2
    }
   },
@@ -4190,8 +4769,6 @@
    "props": {
     "onclick": 5,
     "size": 3,
-    "alwaystransparent": 2,
-    "down": 2,
     "tooltip_visible": 2
    }
   },
@@ -4227,15 +4804,6 @@
     "widget": 2
    }
   },
-  "button_plus": {
-   "count": 3,
-   "props": {
-    "parentanchor": 3,
-    "name": 2,
-    "size": 2,
-    "alwaystransparent": 2
-   }
-  },
   "button_forward": {
    "count": 3,
    "props": {
@@ -4245,24 +4813,10 @@
     "size": 2
    }
   },
-  "click_modifiers": {
-   "count": 3,
-   "props": {
-    "ondefault": 3,
-    "onshift": 3
-   }
-  },
   "coa_realm_big": {
    "count": 3,
    "props": {
     "datacontext": 2
-   }
-  },
-  "coa_house_tiny": {
-   "count": 3,
-   "props": {
-    "parentanchor": 2,
-    "position": 2
    }
   },
   "coa_house_small": {
@@ -4318,14 +4872,8 @@
   "button_copy": {
    "count": 3,
    "props": {
-    "onclick": 3,
-    "tooltip": 3
-   }
-  },
-  "coa_character_sigil": {
-   "count": 3,
-   "props": {
-    "datacontext": 3
+    "onclick": 2,
+    "tooltip": 2
    }
   },
   "ironman_disabled_icon": {
@@ -4344,25 +4892,9 @@
     "size": 2
    }
   },
-  "error_horse": {
-   "count": 3,
-   "props": {
-    "visible": 3,
-    "parentanchor": 2,
-    "position": 2
-   }
-  },
   "animation_aggressive": {
    "count": 3,
    "props": {}
-  },
-  "button_menu": {
-   "count": 3,
-   "props": {
-    "onclick": 3,
-    "tooltip": 3,
-    "using": 3
-   }
   },
   "button_pause": {
    "count": 3,
@@ -4386,6 +4918,15 @@
     "size": 3
    }
   },
+  "icon_flat_standard_gold": {
+   "count": 3,
+   "props": {
+    "state": 4,
+    "size": 3,
+    "texture": 3,
+    "parentanchor": 2
+   }
+  },
   "widget_gold_breakdown_tooltip": {
    "count": 3,
    "props": {}
@@ -4399,8 +4940,7 @@
    "props": {
     "size": 2,
     "onclick": 2,
-    "tooltip": 2,
-    "parentanchor": 2
+    "tooltip": 2
    }
   },
   "button_cancel_small": {
@@ -4412,6 +4952,12 @@
     "using": 3
    }
   },
+  "widget_header_with_picture": {
+   "count": 3,
+   "props": {
+    "layoutpolicy_horizontal": 3
+   }
+  },
   "widget_character_interaction_four_characters": {
    "count": 3,
    "props": {
@@ -4419,11 +4965,9 @@
     "text_single": 2
    }
   },
-  "vbox_list_interaction_title_selection": {
+  "widget_interaction_option_item": {
    "count": 3,
-   "props": {
-    "layoutpolicy_horizontal": 3
-   }
+   "props": {}
   },
   "character_gold": {
    "count": 3,
@@ -4444,11 +4988,10 @@
     "layoutpolicy_horizontal": 3
    }
   },
-  "button_artifact": {
+  "widget_trade_good_net_balance_breakdown_tooltip": {
    "count": 3,
    "props": {
-    "size": 3,
-    "state": 2
+    "datacontext": 3
    }
   },
   "vbox_character_interaction_effects_me": {
@@ -4471,25 +5014,13 @@
     "position": 2
    }
   },
-  "icon_building": {
+  "widget_trade_good_balance_breakdown_tooltip": {
    "count": 3,
-   "props": {
-    "size": 3,
-    "texture": 3,
-    "name": 2,
-    "visible": 2,
-    "alpha": 2
-   }
+   "props": {}
   },
-  "alert_icon": {
+  "widget_trade_monopoly_icon": {
    "count": 3,
-   "props": {
-    "size": 3,
-    "visible": 2,
-    "parentanchor": 2,
-    "tooltip": 2,
-    "using": 2
-   }
+   "props": {}
   },
   "jominimultiplayercheckbutton": {
    "count": 3,
@@ -4507,6 +5038,10 @@
    "props": {
     "visible": 3
    }
+  },
+  "scrollable_object_tooltip_pop_out": {
+   "count": 3,
+   "props": {}
   },
   "vbox_maa_stats_numbers": {
    "count": 3,
@@ -4530,16 +5065,14 @@
    "count": 3,
    "props": {}
   },
+  "rite_tooltip": {
+   "count": 3,
+   "props": {}
+  },
   "court_position_effect": {
    "count": 3,
    "props": {
     "visible": 2
-   }
-  },
-  "base_dialog": {
-   "count": 3,
-   "props": {
-    "name": 2
    }
   },
   "portrait_status_icons_small": {
@@ -4579,16 +5112,46 @@
     "hbox": 3
    }
   },
+  "button_interactions_religion": {
+   "count": 3,
+   "props": {
+    "glow": 2
+   }
+  },
+  "widget_trade_good_category_tiny": {
+   "count": 3,
+   "props": {
+    "datacontext": 5,
+    "visible": 2
+   }
+  },
+  "widget_top_county_info_vertical": {
+   "count": 3,
+   "props": {
+    "datacontext": 7,
+    "tooltipwidget": 3,
+    "using": 3
+   }
+  },
   "fertility_bar": {
    "count": 3,
    "props": {
     "datacontext": 3
    }
   },
-  "hbox_title_shared_buttons": {
+  "widget_value_card": {
    "count": 3,
    "props": {
-    "datacontext": 6
+    "visible": 2
+   }
+  },
+  "widget_building_item_draggable_object": {
+   "count": 3,
+   "props": {
+    "visible": 2,
+    "alwaystransparent": 2,
+    "position": 2,
+    "widgetanchor": 2
    }
   },
   "icon_grandeur_level": {
@@ -4602,6 +5165,14 @@
    "count": 3,
    "props": {}
   },
+  "puppet_action_flag_widget": {
+   "count": 3,
+   "props": {
+    "parentanchor": 3,
+    "widgetanchor": 3,
+    "position": 2
+   }
+  },
   "vbox_great_project_cost": {
    "count": 3,
    "props": {}
@@ -4609,15 +5180,6 @@
   "hbox_diarch_succession_score": {
    "count": 3,
    "props": {}
-  },
-  "vassal_conversion_preview": {
-   "count": 3,
-   "props": {
-    "visible": 2,
-    "layoutpolicy_horizontal": 2,
-    "layoutpolicy_vertical": 2,
-    "size": 2
-   }
   },
   "hbox_domicile_building_cost_bar": {
    "count": 3,
@@ -4648,10 +5210,18 @@
     "layoutpolicy_horizontal": 3
    }
   },
-  "widget_doctrine_item": {
+  "holy_site_list": {
    "count": 3,
    "props": {
-    "visible": 3
+    "datamodel": 3
+   }
+  },
+  "vbox_participant_group_summary": {
+   "count": 3,
+   "props": {
+    "datacontext": 3,
+    "layoutpolicy_vertical": 3,
+    "layoutstretchfactor_horizontal": 3
    }
   },
   "hbox_doctrine_faith": {
@@ -4664,13 +5234,6 @@
    "count": 3,
    "props": {
     "datacontext": 3
-   }
-  },
-  "button_ledger_faith": {
-   "count": 3,
-   "props": {
-    "size": 3,
-    "datacontext_from_model": 2
    }
   },
   "widget_ledger_podium": {
@@ -4689,6 +5252,12 @@
   "change_maa_tooltip": {
    "count": 3,
    "props": {}
+  },
+  "hbox_merchant_stat": {
+   "count": 3,
+   "props": {
+    "tooltip": 2
+   }
   },
   "vbox_compact_subjects": {
    "count": 3,
@@ -4736,6 +5305,17 @@
    "props": {
     "visible": 3
    }
+  },
+  "hbox_suggested_clergy_item": {
+   "count": 3,
+   "props": {
+    "datacontext": 3,
+    "visible": 3
+   }
+  },
+  "hbox_planner_all_goods_misc": {
+   "count": 3,
+   "props": {}
   },
   "hbox_achievements_info": {
    "count": 2,
@@ -4888,6 +5468,14 @@
     "item": 2
    }
   },
+  "button_segmented": {
+   "count": 2,
+   "props": {
+    "tooltip": 2,
+    "using": 2,
+    "icon_flat_standard": 2
+   }
+  },
   "widget_activity_locale_fullscreen_event": {
    "count": 2,
    "props": {
@@ -4903,13 +5491,6 @@
     "alwaystransparent": 2,
     "focuspolicy": 2,
     "fontsize": 2
-   }
-  },
-  "rightclick_modifiers": {
-   "count": 2,
-   "props": {
-    "ondefault": 2,
-    "onshift": 2
    }
   },
   "gridbox_credits_portraits": {
@@ -4971,14 +5552,6 @@
    "props": {
     "name": 2,
     "position": 2
-   }
-  },
-  "button_religion_icon": {
-   "count": 2,
-   "props": {
-    "name": 2,
-    "datacontext": 2,
-    "size": 2
    }
   },
   "button_radio_label": {
@@ -5045,11 +5618,10 @@
     "highlight_icon": 2
    }
   },
-  "button_close": {
+  "button_rite_icon": {
    "count": 2,
    "props": {
-    "name": 2,
-    "clicksound": 2
+    "size": 2
    }
   },
   "button_group_map_character_selection": {
@@ -5099,6 +5671,13 @@
     "position": 2
    }
   },
+  "coa_merchant_bookmark": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "position": 2
+   }
+  },
   "sdk_login_accountwidget": {
    "count": 2,
    "props": {
@@ -5126,11 +5705,12 @@
     "size": 2
    }
   },
-  "loaded_mods_icon": {
+  "error_horse": {
    "count": 2,
    "props": {
     "visible": 2,
-    "tooltip": 2
+    "parentanchor": 2,
+    "position": 2
    }
   },
   "button_raise_disband_armies": {
@@ -5144,6 +5724,13 @@
     "clicksound": 2,
     "tooltip": 2,
     "animation_aggressive": 2
+   }
+  },
+  "flowcontainer_additional_mapmodes": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2,
+    "position": 2
    }
   },
   "button_merit_pool_item": {
@@ -5198,19 +5785,18 @@
     "modify_texture": 2
    }
   },
+  "widget_new_court_artifacts": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "position": 2,
+    "parentanchor": 2
+   }
+  },
   "powerful_family_bonus_icon": {
    "count": 2,
    "props": {
     "size": 2
-   }
-  },
-  "icon_flat_standard_gold": {
-   "count": 2,
-   "props": {
-    "state": 4,
-    "size": 2,
-    "texture": 2,
-    "parentanchor": 2
    }
   },
   "icon_epidemic": {
@@ -5223,6 +5809,16 @@
     "datacontext": 2
    }
   },
+  "hbox_complex_bar_progress": {
+   "count": 2,
+   "props": {
+    "layoutpolicy_horizontal": 2
+   }
+  },
+  "widget_map_mode_banner": {
+   "count": 2,
+   "props": {}
+  },
   "outliner_holdings_info": {
    "count": 2,
    "props": {}
@@ -5230,13 +5826,6 @@
   "button_unpin": {
    "count": 2,
    "props": {}
-  },
-  "widget_header_with_picture": {
-   "count": 2,
-   "props": {
-    "layoutpolicy_horizontal": 2,
-    "widget": 2
-   }
   },
   "vbox_ruler_objective_advice_item": {
    "count": 2,
@@ -5253,6 +5842,13 @@
   "vbox_arrangement_interaction_send_offer": {
    "count": 2,
    "props": {
+    "layoutpolicy_horizontal": 2
+   }
+  },
+  "vbox_character_interaction_three_characters": {
+   "count": 2,
+   "props": {
+    "visible": 2,
     "layoutpolicy_horizontal": 2
    }
   },
@@ -5301,7 +5897,21 @@
     "layoutpolicy_horizontal": 2
    }
   },
+  "toll_level_icon": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
   "editbox_search_field": {
+   "count": 2,
+   "props": {}
+  },
+  "widget_trade_post_icon": {
+   "count": 2,
+   "props": {}
+  },
+  "widget_trade_route_end_pin": {
    "count": 2,
    "props": {}
   },
@@ -5359,11 +5969,25 @@
     "size": 2
    }
   },
+  "flowcontainer_market_trade_info": {
+   "count": 2,
+   "props": {}
+  },
+  "trade_market_name_banner": {
+   "count": 2,
+   "props": {
+    "name": 2
+   }
+  },
   "text_grandeur_from_language": {
    "count": 2,
    "props": {
     "margin_bottom": 2
    }
+  },
+  "widget_company_size": {
+   "count": 2,
+   "props": {}
   },
   "container_unit_effect_icons": {
    "count": 2,
@@ -5396,6 +6020,29 @@
     "tooltip": 2
    }
   },
+  "button_generate_claim": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2,
+    "alwaystransparent": 2
+   }
+  },
+  "button_feudalize_holding": {
+   "count": 2,
+   "props": {
+    "size": 2,
+    "parentanchor": 2,
+    "alwaystransparent": 2
+   }
+  },
+  "button_tribalize_holding": {
+   "count": 2,
+   "props": {
+    "size": 2,
+    "parentanchor": 2,
+    "alwaystransparent": 2
+   }
+  },
   "vbox_emblem_basic_edit": {
    "count": 2,
    "props": {
@@ -5410,36 +6057,67 @@
     "parentanchor": 2
    }
   },
-  "realm_name_and_type_vbox": {
-   "count": 2,
-   "props": {
-    "datacontext": 2
-   }
-  },
   "army_automation_on": {
    "count": 2,
    "props": {
     "size": 2
    }
   },
-  "container_tenet_item": {
+  "house_unity_stage_tooltip": {
    "count": 2,
-   "props": {
-    "tooltip": 2,
-    "datacontext": 2
-   }
-  },
-  "vbox_title_type_text": {
-   "count": 2,
-   "props": {
-    "layoutpolicy_horizontal": 2
-   }
+   "props": {}
   },
   "hbox_tributary_information": {
    "count": 2,
    "props": {
     "visible": 2
    }
+  },
+  "icon_button_mapmode_dejure_duchies": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "icon_button_mapmode_dejure_kingdoms": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "icon_button_mapmode_dejure_empires": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "icon_button_mapmode_markets": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "icon_button_mapmode_top_production": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "icon_button_mapmode_landless_rulers": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "icon_button_mapmode_dejure_hegemonies": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
+  "button_expand_up_down": {
+   "count": 2,
+   "props": {}
   },
   "activity_pulse_action_popup_right": {
    "count": 2,
@@ -5449,12 +6127,41 @@
    "count": 2,
    "props": {}
   },
+  "trade_needs_holding_row": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "alpha": 2
+   }
+  },
+  "widget_market_tolls_tooltip_main_window": {
+   "count": 2,
+   "props": {
+    "datacontext": 4
+   }
+  },
+  "county_market_needs_tooltip": {
+   "count": 2,
+   "props": {}
+  },
   "vbox_gold_breakdown": {
    "count": 2,
    "props": {
     "name": 2,
     "layoutpolicy_horizontal": 2
    }
+  },
+  "vbox_approving_assembly_members": {
+   "count": 2,
+   "props": {}
+  },
+  "vbox_dissenting_assembly_members": {
+   "count": 2,
+   "props": {}
+  },
+  "widget_vassal_approval_bar": {
+   "count": 2,
+   "props": {}
   },
   "activity_phase_progress_timline_widget": {
    "count": 2,
@@ -5491,10 +6198,6 @@
     "visible": 2
    }
   },
-  "hbox_character_view_name_age_health": {
-   "count": 2,
-   "props": {}
-  },
   "tax_collector_aptitude_text": {
    "count": 2,
    "props": {
@@ -5513,11 +6216,52 @@
     "layoutpolicy_horizontal": 2
    }
   },
+  "text_cardinal_candidate_papabile_score": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "hbox_cardinal_voter_papabile_score": {
+   "count": 2,
+   "props": {}
+  },
+  "container_tenet_popularity": {
+   "count": 2,
+   "props": {}
+  },
+  "vbox_select_law_section": {
+   "count": 2,
+   "props": {
+    "layoutpolicy_horizontal": 2,
+    "layoutpolicy_vertical": 2,
+    "minimumsize": 2,
+    "spacing": 2
+   }
+  },
+  "button_law_choice_base": {
+   "count": 2,
+   "props": {
+    "size": 2
+   }
+  },
   "animation_soldier_loss": {
    "count": 2,
    "props": {
     "visible": 2,
     "position": 2
+   }
+  },
+  "hbox_confederation_character_trade_posts": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "hbox_confederation_character_profit_routes": {
+   "count": 2,
+   "props": {
+    "visible": 2
    }
   },
   "vbox_council_layout": {
@@ -5531,7 +6275,6 @@
   "kurultai_hbox": {
    "count": 2,
    "props": {
-    "visible": 2,
     "layoutpolicy_horizontal": 2,
     "layoutpolicy_vertical": 2,
     "margin": 2,
@@ -5539,23 +6282,49 @@
     "spacing": 2
    }
   },
+  "widget_top_county_info_vertical_no_indicator": {
+   "count": 2,
+   "props": {
+    "datacontext": 3,
+    "visible": 2,
+    "using": 2,
+    "tooltipwidget": 2
+   }
+  },
+  "county_holding_status_epidemic": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2
+   }
+  },
+  "county_holding_status_legend": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2
+   }
+  },
+  "button_tab_icon_only": {
+   "count": 2,
+   "props": {
+    "using": 4,
+    "onclick": 3,
+    "datacontext": 2,
+    "down": 2
+   }
+  },
+  "widget_value_card_large": {
+   "count": 2,
+   "props": {}
+  },
+  "icon_district_building_slot": {
+   "count": 2,
+   "props": {}
+  },
   "flowcontainer_change_court_component": {
    "count": 2,
    "props": {
     "datacontext": 3,
     "name": 2
-   }
-  },
-  "widget_court_amenity_left": {
-   "count": 2,
-   "props": {
-    "datacontext": 2
-   }
-  },
-  "widget_court_amenity_right": {
-   "count": 2,
-   "props": {
-    "datacontext": 2
    }
   },
   "caravan_master_travel_info": {
@@ -5631,17 +6400,16 @@
     "visible": 2
    }
   },
-  "domicile_progress_bar": {
-   "count": 2,
-   "props": {
-    "parentanchor": 2,
-    "size": 2,
-    "position": 2
-   }
-  },
   "button_domicile_building_unavailable": {
    "count": 2,
    "props": {}
+  },
+  "button_unity_decision": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "layoutpolicy_horizontal": 2
+   }
   },
   "house_unity_stage": {
    "count": 2,
@@ -5653,6 +6421,43 @@
    "count": 2,
    "props": {
     "layoutpolicy_horizontal": 2
+   }
+  },
+  "vbox_holy_order_group": {
+   "count": 2,
+   "props": {}
+  },
+  "button_holyorder_list_item": {
+   "count": 2,
+   "props": {}
+  },
+  "vbox_holy_site_effects": {
+   "count": 2,
+   "props": {
+    "spacing": 2
+   }
+  },
+  "button_interactions_faith": {
+   "count": 2,
+   "props": {
+    "glow": 2
+   }
+  },
+  "button_interactions": {
+   "count": 2,
+   "props": {}
+  },
+  "group_banner": {
+   "count": 2,
+   "props": {
+    "parentanchor": 2,
+    "position": 2
+   }
+  },
+  "group_score": {
+   "count": 2,
+   "props": {
+    "tooltipwidget": 2
    }
   },
   "hbox_theme_sort_options": {
@@ -5670,25 +6475,37 @@
    "count": 2,
    "props": {}
   },
+  "widget_assembly_approval": {
+   "count": 2,
+   "props": {}
+  },
+  "widget_republic_law": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
   "widget_ethos_selection_button": {
    "count": 2,
    "props": {
     "datacontext": 2
    }
   },
-  "vbox_secret_item": {
+  "hbox_secret_item": {
    "count": 2,
    "props": {
-    "datamodel": 2,
     "layoutpolicy_horizontal": 2
    }
   },
-  "widget_artifact_entry": {
+  "widget_puppet_interaction_group_base": {
    "count": 2,
    "props": {
-    "datacontext": 5,
     "visible": 2
    }
+  },
+  "widget_puppet_summary_button": {
+   "count": 2,
+   "props": {}
   },
   "kill_list_window": {
    "count": 2,
@@ -5727,10 +6544,6 @@
     "margin_left": 2
    }
   },
-  "hbox_province_stats": {
-   "count": 2,
-   "props": {}
-  },
   "hbox_title_stats": {
    "count": 2,
    "props": {
@@ -5755,6 +6568,14 @@
    "count": 2,
    "props": {
     "datacontext": 2
+   }
+  },
+  "portrait_ledger_tiny": {
+   "count": 2,
+   "props": {
+    "position": 2,
+    "alwaystransparent": 2,
+    "size": 2
    }
   },
   "active_legends_vbox": {
@@ -5813,19 +6634,52 @@
     "size": 2
    }
   },
-  "button_holyorder_list_item": {
-   "count": 2,
-   "props": {
-    "datacontext": 2,
-    "size": 2
-   }
-  },
   "widget_my_realm_header": {
    "count": 2,
    "props": {
     "datacontext": 2,
     "visible": 2
    }
+  },
+  "vbox_domicile_button": {
+   "count": 2,
+   "props": {
+    "name": 2
+   }
+  },
+  "hbox_church_tabs": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "vbox_schism_side": {
+   "count": 2,
+   "props": {
+    "datacontext": 2
+   }
+  },
+  "vbox_schism_supporters": {
+   "count": 2,
+   "props": {
+    "datacontext": 2
+   }
+  },
+  "situation_catalysts_history_window": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "personal_tenet_tooltip": {
+   "count": 2,
+   "props": {
+    "datacontext": 6
+   }
+  },
+  "vbox_rite_creation_details": {
+   "count": 2,
+   "props": {}
   },
   "widget_royal_court_screenshot_window_notification": {
    "count": 2,
@@ -5871,14 +6725,6 @@
    "count": 2,
    "props": {}
   },
-  "vbox_participant_group_summary": {
-   "count": 2,
-   "props": {
-    "datacontext": 2,
-    "layoutpolicy_vertical": 2,
-    "layoutstretchfactor_horizontal": 2
-   }
-  },
   "default_struggle_phase_banner": {
    "count": 2,
    "props": {
@@ -5891,20 +6737,6 @@
    "props": {
     "layoutpolicy_horizontal": 2,
     "visible": 2
-   }
-  },
-  "mini_map_mode": {
-   "count": 2,
-   "props": {
-    "parentanchor": 2,
-    "widgetanchor": 2,
-    "position": 2
-   }
-  },
-  "button_law_choice_base": {
-   "count": 2,
-   "props": {
-    "size": 2
    }
   },
   "vbox_heir": {
@@ -5937,12 +6769,39 @@
     "datacontext": 2
    }
   },
-  "vbox_strength_info": {
+  "vbox_trade_route_expertise": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "transaction_value": {
    "count": 2,
    "props": {
     "visible": 2,
     "datacontext": 2
    }
+  },
+  "hbox_trade_market_good_flow": {
+   "count": 2,
+   "props": {
+    "visible": 2,
+    "tooltipwidget": 2
+   }
+  },
+  "hbox_trade_market_misc_goods": {
+   "count": 2,
+   "props": {}
+  },
+  "widget_trade_good_slot": {
+   "count": 2,
+   "props": {
+    "visible": 2
+   }
+  },
+  "button_add_selected_trade_good": {
+   "count": 2,
+   "props": {}
   },
   "caravan_master_portrait_widget": {
    "count": 2,
@@ -5985,206 +6844,206 @@
   }
  },
  "globalProps": {
-  "name": 9533,
-  "size": 8889,
-  "layoutpolicy_horizontal": 7811,
-  "using": 7372,
-  "visible": 7104,
-  "texture": 4948,
-  "text": 4791,
-  "parentanchor": 4002,
-  "datacontext": 3495,
-  "hbox": 3035,
-  "text_single": 2939,
-  "icon": 2785,
-  "vbox": 2529,
-  "margin": 2510,
-  "onclick": 2504,
-  "position": 2442,
-  "spacing": 2346,
-  "tooltip": 2306,
-  "align": 2270,
-  "expand": 2185,
-  "layoutpolicy_vertical": 2181,
-  "state": 2151,
-  "background": 1946,
-  "modify_texture": 1900,
-  "alpha": 1773,
-  "default_format": 1743,
-  "widget": 1683,
-  "alwaystransparent": 1576,
-  "max_width": 1467,
-  "duration": 1276,
-  "margin_bottom": 1087,
-  "fontsize": 1083,
-  "margin_top": 1029,
-  "autoresize": 863,
-  "margin_left": 853,
-  "next": 821,
-  "iconsize": 821,
-  "item": 815,
-  "offset": 815,
-  "datamodel": 810,
-  "margin_right": 727,
-  "allow_outside": 699,
-  "raw_text": 654,
-  "enabled": 616,
-  "text_multi": 568,
-  "frame": 560,
-  "framesize": 558,
-  "tooltipwidget": 554,
-  "spritetype": 509,
-  "down": 463,
-  "flowcontainer": 443,
-  "button_standard": 427,
-  "shortcut": 421,
-  "text_label_center": 418,
-  "on_start": 417,
-  "minimumsize": 406,
-  "spriteborder": 385,
-  "ignoreinvisible": 371,
-  "fonttintcolor": 318,
-  "spacer": 316,
-  "min_width": 313,
-  "highlight_icon": 300,
-  "trigger_on_create": 288,
-  "container": 282,
-  "addcolumn": 279,
-  "addrow": 276,
-  "scrollbox": 270,
-  "maximumsize": 269,
-  "direction": 264,
-  "widgetanchor": 259,
-  "button": 250,
-  "layer": 245,
-  "color": 241,
-  "button_round": 238,
-  "texture_density": 236,
-  "scale": 230,
-  "delay": 216,
-  "format": 212,
-  "fixedgridbox": 201,
-  "divider_light": 200,
-  "value": 198,
-  "effectname": 197,
-  "flipdirection": 193,
-  "fontsize_min": 187,
-  "raw_tooltip": 176,
-  "mirror": 175,
-  "header_pattern": 169,
-  "fittype": 164,
-  "bezier": 163,
-  "widgetid": 161,
-  "text_label_left": 146,
-  "button_icon": 146,
-  "button_tab": 145,
-  "multiline": 144,
-  "tintcolor": 141,
-  "gfxtype": 137,
-  "trigger_when": 137,
-  "datamodel_wrap": 137,
-  "tooltip_visible": 134,
-  "on_finish": 133,
-  "visible_at_creation": 132,
-  "dockable_button": 127,
-  "button_primary": 125,
-  "position_x": 123,
-  "movable": 121,
-  "portrait_head_small": 117,
-  "soundeffect": 116,
-  "clicksound": 113,
-  "widget_value_breakdown_tooltip": 112,
-  "button_normal": 110,
+  "size": 11080,
+  "name": 10698,
+  "layoutpolicy_horizontal": 9872,
+  "visible": 9132,
+  "using": 8969,
+  "texture": 6110,
+  "text": 5944,
+  "parentanchor": 4940,
+  "datacontext": 4744,
+  "hbox": 3807,
+  "text_single": 3680,
+  "icon": 3452,
+  "margin": 3155,
+  "spacing": 3153,
+  "vbox": 3126,
+  "onclick": 2978,
+  "align": 2971,
+  "position": 2911,
+  "layoutpolicy_vertical": 2776,
+  "expand": 2731,
+  "tooltip": 2715,
+  "background": 2467,
+  "state": 2429,
+  "modify_texture": 2233,
+  "alpha": 2166,
+  "default_format": 2132,
+  "alwaystransparent": 2124,
+  "widget": 1987,
+  "max_width": 1823,
+  "duration": 1367,
+  "margin_bottom": 1331,
+  "margin_top": 1311,
+  "autoresize": 1241,
+  "fontsize": 1228,
+  "item": 1121,
+  "datamodel": 1119,
+  "margin_left": 1041,
+  "iconsize": 986,
+  "offset": 980,
+  "allow_outside": 946,
+  "margin_right": 899,
+  "next": 852,
+  "tooltipwidget": 797,
+  "enabled": 751,
+  "raw_text": 697,
+  "text_multi": 689,
+  "framesize": 637,
+  "frame": 632,
+  "down": 593,
+  "spritetype": 589,
+  "ignoreinvisible": 571,
+  "flowcontainer": 544,
+  "button_standard": 527,
+  "on_start": 506,
+  "shortcut": 470,
+  "minimumsize": 466,
+  "text_label_center": 458,
+  "spriteborder": 451,
+  "spacer": 442,
+  "min_width": 401,
+  "highlight_icon": 369,
+  "fonttintcolor": 369,
+  "color": 368,
+  "scrollbox": 352,
+  "addcolumn": 328,
+  "container": 325,
+  "addrow": 325,
+  "widgetanchor": 320,
+  "trigger_on_create": 310,
+  "button_round": 301,
+  "direction": 299,
+  "texture_density": 291,
+  "maximumsize": 290,
+  "divider_light": 282,
+  "layer": 277,
+  "scale": 277,
+  "button": 275,
+  "value": 237,
+  "effectname": 235,
+  "delay": 227,
+  "fixedgridbox": 227,
+  "flipdirection": 226,
+  "format": 224,
+  "header_pattern": 209,
+  "fittype": 203,
+  "trigger_when": 201,
+  "button_icon": 201,
+  "mirror": 200,
+  "fontsize_min": 197,
+  "widgetid": 195,
+  "raw_tooltip": 184,
+  "tooltip_visible": 183,
+  "button_tab": 178,
+  "text_label_left": 175,
+  "widget_value_breakdown_tooltip": 174,
+  "gfxtype": 167,
+  "bezier": 167,
+  "datamodel_wrap": 165,
+  "cooltip_paragraph": 161,
+  "visible_at_creation": 159,
+  "on_finish": 158,
+  "movable": 152,
+  "multiline": 151,
+  "portrait_head_small": 150,
+  "button_primary": 148,
+  "tintcolor": 147,
+  "layoutstretchfactor_horizontal": 137,
+  "position_x": 137,
+  "max": 132,
+  "dockable_button": 131,
+  "soundeffect": 124,
+  "clicksound": 121,
+  "shaderfile": 120,
+  "uv": 120,
+  "button_normal": 116,
+  "glow_radius": 114,
+  "object_tooltip_pop_out": 112,
+  "set_parent_size_to_minimum": 111,
+  "min": 109,
   "position_y": 109,
-  "max": 108,
-  "layoutstretchfactor_horizontal": 107,
-  "start_sound": 100,
-  "cooltip_paragraph": 100,
-  "set_parent_size_to_minimum": 97,
-  "shaderfile": 97,
-  "min": 94,
-  "button_checkbox_label": 93,
-  "scissor": 87,
-  "margin_widget": 85,
-  "progressbar_standard": 83,
-  "textbox": 82,
-  "upframe": 82,
-  "maxhorizontalslots": 79,
-  "object_tooltip_pop_out": 78,
+  "start_sound": 107,
+  "glow": 104,
+  "margin_widget": 103,
+  "button_checkbox_label": 100,
+  "progressbar_standard": 99,
+  "scissor": 95,
+  "min_height": 92,
+  "upframe": 92,
+  "button_ignore": 90,
+  "textbox": 86,
+  "maxhorizontalslots": 83,
+  "portrait_head": 78,
   "watch_textbox": 77,
+  "oncreate": 77,
   "vbox_component_entry": 76,
-  "button_ignore": 73,
-  "portrait_head": 72,
-  "icon_trait": 71,
-  "glow_radius": 71,
-  "filter_mouse": 66,
+  "onrightclick": 75,
+  "icon_trait": 73,
+  "icon_flat_standard": 73,
+  "filter_mouse": 69,
+  "downframe": 67,
+  "portrait_texture": 67,
   "scrollwidget": 65,
-  "onrightclick": 64,
-  "scrollbarpolicy_horizontal": 62,
+  "tooltip_offset": 64,
+  "coat_of_arms_icon": 64,
+  "divider": 63,
+  "scrollbarpolicy_horizontal": 63,
+  "coat_of_arms_mask": 63,
+  "coat_of_arms": 62,
+  "coat_of_arms_slot": 62,
+  "maxverticalslots": 62,
   "scrollarea": 61,
-  "glow": 61,
-  "maxverticalslots": 61,
-  "portrait_texture": 60,
-  "downframe": 59,
-  "coat_of_arms_icon": 58,
+  "warning_icon": 60,
+  "mask": 59,
   "scrollbar_vertical": 57,
-  "coat_of_arms_mask": 56,
-  "uv": 56,
-  "min_height": 55,
-  "coat_of_arms": 55,
-  "coat_of_arms_slot": 55,
-  "mask": 52,
-  "warning_icon": 51,
-  "icon_flat_standard": 51,
-  "format_override": 51,
-  "tooltip_offset": 50,
-  "portrait_button": 49,
-  "button_standard_clean": 47,
-  "coat_of_arms_offset": 47,
-  "coat_of_arms_scale": 47,
-  "dynamicgridbox": 46,
-  "button_tertiary": 46,
-  "ledger_filter_item": 46,
-  "oncreate": 45,
+  "button_standard_clean": 56,
+  "portrait_button": 56,
+  "format_override": 55,
+  "coat_of_arms_offset": 51,
+  "coat_of_arms_scale": 51,
+  "button_icon_highlight": 51,
+  "ledger_filter_item": 51,
+  "button_tertiary": 50,
+  "vbox_character_list": 49,
+  "button_standard_hover": 47,
+  "icon_flat_standard_gold": 47,
+  "proportional_icon": 46,
+  "dynamicgridbox": 45,
+  "progresspie": 45,
   "entity_instance": 44,
-  "overframe": 43,
+  "overframe": 44,
+  "coa_title_tiny_crown": 44,
+  "snap_to_pixels": 43,
   "property_scrollbar_hbox": 43,
-  "divider": 42,
-  "progresstexture": 41,
-  "coa_title_tiny_crown": 39,
-  "vbox_character_list": 39,
+  "progresstexture": 42,
+  "icon_round_button_base": 42,
+  "tooltip_when_disabled": 41,
+  "setitemsizefromcell": 41,
+  "icon_doctrine": 40,
+  "index": 40,
+  "button_group": 40,
+  "button_standard_list": 38,
   "noprogresstexture": 38,
-  "icon_flat_standard_gold": 38,
+  "elide": 38,
+  "button_expandable_toggle_field": 38,
+  "button_replace": 37,
+  "resizeparent": 37,
   "animation": 37,
-  "button_standard_list": 36,
-  "elide": 36,
-  "button_group": 36,
-  "button_icon_highlight": 36,
-  "setitemsizefromcell": 36,
-  "index": 35,
+  "window_character_filter": 37,
+  "disableframe": 36,
+  "uphoverframe": 36,
+  "button_primary_big": 35,
+  "dropdown_menu_standard": 35,
+  "datacontext_from_model": 34,
   "oversound": 34,
-  "icon_round_button_base": 34,
-  "snap_to_pixels": 33,
-  "window_character_filter": 33,
-  "button_primary_big": 32,
-  "proportional_icon": 32,
-  "dropdown_menu_standard": 32,
-  "button_standard_hover": 31,
-  "progresspie": 31,
-  "attachto": 30,
-  "disableframe": 30,
-  "portrait_shoulders": 30,
-  "datacontext_from_model": 29,
-  "button_replace": 29,
-  "autoresizescrollarea": 29,
-  "button_expandable_toggle_field": 29,
-  "uphoverframe": 28,
-  "resizeparent": 27,
-  "buttons_window_control": 27,
-  "inherit_visual_state": 27,
-  "icon_button_mapmode": 27,
-  "spriteborder_right": 26,
-  "uppressedframe": 26
+  "inherit_visual_state": 34,
+  "wrap_count": 34,
+  "uppressedframe": 33,
+  "soundparam": 33,
+  "button_change": 32,
+  "autoresizescrollarea": 32
  },
  "enums": {
   "align": [
@@ -6213,12 +7072,16 @@
    "vertical"
   ],
   "effectname": [
+   "doublevision",
+   "flickeringcandlelight",
    "greyedout",
+   "nightscene",
    "nohighlight",
    "pdxguicolorbutton",
    "pdxguidefault"
   ],
   "elide": [
+   "left",
    "middle",
    "right"
   ],
@@ -6264,6 +7127,10 @@
    "no",
    "yes"
   ],
+  "inherit_visual_state": [
+   "no",
+   "yes"
+  ],
   "layer": [
    "bottom",
    "confirmation",
@@ -6271,6 +7138,7 @@
    "events",
    "hud_layer",
    "middle",
+   "royal_court",
    "top",
    "windows_layer"
   ],

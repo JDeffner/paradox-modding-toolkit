@@ -2,7 +2,7 @@
   "name": "px-toolkit",
   "displayName": "Paradox Modding Toolkit",
   "description": "Modding toolkit for Paradox games (Crusader Kings III, Victoria 3, Europa Universalis V): completion, go-to-definition, hover docs, tiger diagnostics, inline localization, event graph and a visual GUI editor.",
-  "version": "0.5.5",
+  "version": "0.6.0",
   "publisher": "JDeffner",
   "author": {
     "name": "Joël Deffner"
@@ -1484,7 +1484,7 @@
             "default": "",
             "order": 3,
             "scope": "machine-overridable",
-            "markdownDescription": "Path to your own tiger binary (`ck3-tiger` or `vic3-tiger`, matching the active game). Leave empty to use the copy installed by `Paradox Tiger: Download or Update Binary` (also offered during Setup)."
+            "markdownDescription": "Path to any Tiger-compatible executable that supports the active game and accepts Tiger's command-line options and JSON report format. Leave empty to use the copy installed by `Paradox Tiger: Download or Update Binary` (also offered during Setup)."
           },
           "px.gameId": {
             "type": "string",

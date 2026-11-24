@@ -98,7 +98,7 @@ const LEGACY_KEY = "legacy";
 
 /** The two blocks whose rows are modifiers, in the harvest's own words. */
 const CHAR_MOD = "character_modifier";
-const DOCTRINE_MOD = "doctrine_character_modifier";
+const DOCTRINE_MOD_KEYS = ["faith_character_modifier", "doctrine_character_modifier"] as const;
 const TRAITS_KEY = "traits";
 /**
  * The line inside a doctrine modifier block that is the CONDITION and not a
@@ -190,8 +190,8 @@ interface Perk {
   loc: { pattern: string; field: Field<string> }[];
   /** Modifier blocks keep the entries no row can hold, so they survive a save. */
   mods: Record<string, { entries: ModifierEntry[]; field: Field<ModifierRow[]> }>;
-  /** `doctrine_character_modifier` as the 0..n blocks a perk really writes. */
-  doctrines: DoctrineField | null;
+  /** Repeated doctrine modifier blocks under the key used by this perk. */
+  doctrines: (DoctrineField & { key: string }) | null;
   /** The three blocks with a builder: can_be_picked, effect, ai_chance. */
   blocks: Record<string, BlockField>;
   /** The effect builder again, for the loc and the keys only it knows. */
@@ -592,29 +592,25 @@ const PERK_HELP = {
         { lead: "78 of the game's 105 perks", text: "carry this block." },
       ]
     ),
-  doctrines: (): HelpSpec =>
-    sectionHelp(
-      "Doctrine modifiers",
-      writesKey(perkForm, DOCTRINE_MOD, "One doctrine_character_modifier = { … } block per doctrine."),
-      [
-        {
-          lead: "It is a list, not one block.",
-          text: "The game's own erudition legacy writes three of them, so add as many as the perk needs.",
-        },
-        {
-          lead: "doctrine = <doctrine> is the condition, not a modifier.",
-          text: "The rows apply only to a dynasty member whose faith has that doctrine.",
-        },
-        {
-          lead: "name = <loc key> heads the group in the tooltip.",
-          text: "It follows the perk's key, and the sentence you type for it is written with the rest of the localization.",
-        },
-        {
-          lead: "A key written more than once cannot be edited line by line,",
-          text: "so a perk whose doctrine list moved is written back as a whole block.",
-        },
-      ]
-    ),
+  doctrines: (key: string): HelpSpec =>
+    sectionHelp("Doctrine modifiers", writesKey(perkForm, key, `One ${key} = { … } block per doctrine.`), [
+      {
+        lead: "It is a list, not one block.",
+        text: "The game's own erudition legacy writes three of them, so add as many as the perk needs.",
+      },
+      {
+        lead: "doctrine = <doctrine> is the condition, not a modifier.",
+        text: "The rows apply only to a dynasty member whose faith has that doctrine.",
+      },
+      {
+        lead: "name = <loc key> heads the group in the tooltip.",
+        text: "It follows the perk's key, and the sentence you type for it is written with the rest of the localization.",
+      },
+      {
+        lead: "A key written more than once cannot be edited line by line,",
+        text: "so a perk whose doctrine list moved is written back as a whole block.",
+      },
+    ]),
   traits: (): HelpSpec =>
     sectionHelp("Traits granted", writesKey(perkForm, TRAITS_KEY, "traits = { <trait> = <number> … }."), [
       {
@@ -1034,17 +1030,22 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
 
   modBlock(CHAR_MOD, "Modifiers for every dynasty member", true, PERK_HELP.characterModifier);
 
-  // A perk writes ONE `doctrine_character_modifier` per doctrine, and the
-  // game's own erudition_legacy_4 writes three, so the form holds a list.
-  const doctrineSpec = form.keys.find((k) => k.key === DOCTRINE_MOD);
-  if (doctrineSpec) {
-    const values = original ? valuesOf(original, DOCTRINE_MOD) : [];
-    const section = fold("Doctrine modifiers", doctrineSpec.doc, values.length > 0, PERK_HELP.doctrines);
-    section.title.dataset.tip = DOCTRINE_MOD;
-    const inner = form.blocks?.[DOCTRINE_MOD]?.find((k) => k.key === "doctrine");
+  // Preserve the key on existing perks. New perks use the field reported by the game schema.
+  const doctrineKey =
+    DOCTRINE_MOD_KEYS.find((key) => original && valuesOf(original, key).length > 0) ??
+    init?.installedDoctrineModifierKey ??
+    DOCTRINE_MOD_KEYS.find((key) => form.keys.some((spec) => spec.key === key));
+  if (doctrineKey) {
+    const spec = form.keys.find((k) => DOCTRINE_MOD_KEYS.some((key) => k.key === key));
+    const values = original ? valuesOf(original, doctrineKey) : [];
+    const section = fold("Doctrine modifiers", spec?.doc, values.length > 0, () =>
+      PERK_HELP.doctrines(doctrineKey)
+    );
+    section.title.dataset.tip = doctrineKey;
+    const inner = form.blocks?.[doctrineKey]?.find((k) => k.key === DOCTRINE_KEY);
     const kind = inner?.refKinds?.[0] ?? DOCTRINE_KEY;
     const doctrines = form.options[kind] ?? [];
-    perk.doctrines = doctrineField({
+    const field = doctrineField({
       values,
       perk: name,
       doctrines: doctrines.length > 0 ? refItems(kind) : [],
@@ -1054,8 +1055,9 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
       preview: (row) => gameLine(row.name, row.value),
       locOf: (locKey) => locValues.get(locKey),
     });
-    askLoc(perk.doctrines.keys());
-    section.body.append(perk.doctrines.el);
+    perk.doctrines = { ...field, key: doctrineKey };
+    askLoc(field.keys());
+    section.body.append(field.el);
     editor.append(section.el);
   }
 
@@ -1150,7 +1152,7 @@ function addPerk(loaded?: LoadedPerk, loc: Record<string, string> = {}): Perk {
     );
   }
 
-  const owned = [LEGACY_KEY, CHAR_MOD, DOCTRINE_MOD, TRAITS_KEY, ...BUILT_KEYS];
+  const owned = [LEGACY_KEY, CHAR_MOD, ...DOCTRINE_MOD_KEYS, TRAITS_KEY, ...BUILT_KEYS];
   const others = otherKeys(form, owned, original);
   if (others.length > 0) {
     const section = fold(
@@ -1273,7 +1275,9 @@ function perkBlock(perk: Perk): DefBlock {
   const form = perkForm!;
   const name = perkName(perk) || "unnamed_perk";
   const base = perk.original ? { ...perk.original, name } : newDefBlock(name);
-  const order = form.keys.map((k) => k.key);
+  const order = form.keys.map((k) =>
+    perk.doctrines && DOCTRINE_MOD_KEYS.some((key) => k.key === key) ? perk.doctrines.key : k.key
+  );
   const values: FieldValue[] = [{ key: LEGACY_KEY, value: trackName() || "unnamed_legacy_track" }];
   for (const [blockKey, mod] of Object.entries(perk.mods)) {
     values.push({
@@ -1297,7 +1301,7 @@ function perkBlock(perk: Perk): DefBlock {
   const block = applyValues(base, values, order);
   // The one key a perk may write more than once, so it is set as a list and
   // not as a value (script.ts `applyRepeated`).
-  return perk.doctrines ? applyRepeated(block, DOCTRINE_MOD, perk.doctrines.blocks(), order) : block;
+  return perk.doctrines ? applyRepeated(block, perk.doctrines.key, perk.doctrines.blocks(), order) : block;
 }
 
 /**
@@ -1307,8 +1311,9 @@ function perkBlock(perk: Perk): DefBlock {
  * moved is written as a whole block.
  */
 function doctrineMoved(perk: Perk): boolean {
-  const was = perk.original ? valuesOf(perk.original, DOCTRINE_MOD) : [];
-  const now = perk.doctrines?.blocks() ?? [];
+  if (!perk.doctrines) return false;
+  const was = perk.original ? valuesOf(perk.original, perk.doctrines.key) : [];
+  const now = perk.doctrines.blocks();
   return was.length !== now.length || was.some((value, i) => value !== now[i]);
 }
 

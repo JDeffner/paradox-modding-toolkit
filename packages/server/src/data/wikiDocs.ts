@@ -164,7 +164,7 @@ export function loadWikiTokens(dir: string): TokenData[] {
 export interface WikiMergeOptions {
   /**
    * Drop wiki NAMES that the script_docs dump does not have, instead of adding
-   * them. Pass this ONLY for the user's own dump.
+   * them. Use this with the user's own dump or an authoritative bundled snapshot.
    *
    * `script_docs` is what the engine registered when the game ran, so a name it
    * omits does not exist in that patch. The bundled wiki lists say as much

@@ -2031,6 +2031,68 @@
       "gameVersion": "1.20.0.3",
       "corpus": "Installed CK3 and five Cultivation workspace mods; Agent Courier excluded; asset indexing enabled",
       "note": "Sequential samples after verification and editor capture hosts stopped. OS caches and desktop background load were not controlled. The driver uses minimal completion and a synthetic save probe, leaving real mod and game roots read-only. These index measurements do not measure migration latency."
+    },
+    {
+      "version": "florin-release-before",
+      "recordedAt": "2026-11-18",
+      "workspace": "florin-release-perf.code-workspace",
+      "roots": 2,
+      "build": "d71163c baseline",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.18.1"
+      },
+      "results": {
+        "timeToIndexedMs": 65471,
+        "definitions": 578100,
+        "completionCold": 513,
+        "completionWarm": 13,
+        "semanticTokens": 4,
+        "hover": 15,
+        "documentSymbol": 1,
+        "completionAfterSave": 795,
+        "tokensAfterSave": 1,
+        "heapMb": 312,
+        "rssAtBuildMb": 982,
+        "internedIdentifiers": 657132,
+        "peakRssMb": 1093,
+        "rssSamples": 106
+      },
+      "gameVersion": "1.21.0",
+      "corpus": "Installed CK3 and configured Cultivation mod root",
+      "note": "One run per build. The automated test suite ran concurrently, and disk-cache state was uncontrolled. These timings do not establish a speed change."
+    },
+    {
+      "version": "florin-release-after",
+      "recordedAt": "2026-11-18",
+      "workspace": "florin-release-perf.code-workspace",
+      "roots": 2,
+      "build": "Florin candidate on d71163c",
+      "machine": {
+        "cpu": "AMD Ryzen 7 5800X 8-Core Processor             ",
+        "totalMemGb": 32,
+        "node": "v24.18.1"
+      },
+      "results": {
+        "timeToIndexedMs": 33050,
+        "definitions": 583448,
+        "completionCold": 483,
+        "completionWarm": 20,
+        "semanticTokens": 4,
+        "hover": 13,
+        "documentSymbol": 1,
+        "completionAfterSave": 337,
+        "tokensAfterSave": 2,
+        "heapMb": 316,
+        "rssAtBuildMb": 760,
+        "internedIdentifiers": 661948,
+        "peakRssMb": 896,
+        "rssSamples": 56
+      },
+      "gameVersion": "1.21.0",
+      "corpus": "Installed CK3 and configured Cultivation mod root",
+      "note": "One run per build. The automated test suite ran concurrently, and disk-cache state was uncontrolled. These timings do not establish a speed change."
     }
   ]
 }
