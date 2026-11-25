@@ -1,42 +1,42 @@
 {
   "": {
-    "arrowType": 18,
-    "entity": 3702,
-    "pdxmesh": 2964,
+    "arrowType": 20,
+    "entity": 4265,
+    "pdxmesh": 3391,
     "skeletal_animation_set": 2
   },
   "arrowType": {
-    "effect": 18,
-    "effectname": 9,
-    "name": 18,
-    "size": 11,
-    "subdivisions": 11,
-    "texture": 18
+    "effect": 20,
+    "effectname": 11,
+    "name": 20,
+    "size": 13,
+    "subdivisions": 13,
+    "texture": 20
   },
   "entity": {
-    "attach": 199,
-    "attribute": 8058,
-    "cull_radius": 14,
-    "default_state": 360,
-    "game_data": 1830,
+    "attach": 259,
+    "attribute": 8761,
+    "cull_radius": 18,
+    "default_state": 453,
+    "game_data": 2028,
     "get_state_from_parent": 67,
-    "locator": 1037,
-    "meshsettings": 119,
-    "name": 3702,
-    "pdxmesh": 3574,
-    "scale": 115,
-    "state": 6859
+    "locator": 1100,
+    "meshsettings": 120,
+    "name": 4265,
+    "pdxmesh": 4135,
+    "scale": 124,
+    "state": 7560
   },
   "entity/attribute": {
-    "additive_animation": 127,
-    "blend_shape": 7931,
-    "default": 131,
-    "name": 8058
+    "additive_animation": 131,
+    "blend_shape": 8630,
+    "default": 136,
+    "name": 8761
   },
   "entity/game_data": {
     "court_entity_user_data": 12,
-    "portrait_entity_user_data": 1792,
-    "throne_entity_user_data": 27
+    "portrait_entity_user_data": 1992,
+    "throne_entity_user_data": 28
   },
   "entity/game_data/court_entity_user_data": {
     "coat_of_arms": 12
@@ -44,8 +44,8 @@
   "entity/game_data/portrait_entity_user_data": {
     "coa_mask": 69,
     "coa_pattern": 4,
-    "color_mask_remap_interval": 302,
-    "portrait_accessory": 1482,
+    "color_mask_remap_interval": 316,
+    "portrait_accessory": 1670,
     "portrait_decal": 6
   },
   "entity/game_data/portrait_entity_user_data/coa_pattern": {
@@ -55,54 +55,54 @@
     "coa_staggered_offset": 4
   },
   "entity/game_data/portrait_entity_user_data/color_mask_remap_interval": {
-    "interval": 302
+    "interval": 316
   },
   "entity/game_data/portrait_entity_user_data/portrait_accessory": {
-    "pattern_mask": 1479,
-    "variation": 1479
+    "pattern_mask": 1667,
+    "variation": 1667
   },
   "entity/game_data/portrait_entity_user_data/portrait_decal": {
     "body_part": 6
   },
   "entity/game_data/throne_entity_user_data": {
-    "animation": 27,
-    "use_throne_transform": 27
+    "animation": 28,
+    "use_throne_transform": 28
   },
   "entity/locator": {
-    "name": 1037,
-    "position": 952,
-    "rotation": 761,
-    "scale": 719
+    "name": 1100,
+    "position": 1013,
+    "rotation": 819,
+    "scale": 721
   },
   "entity/meshsettings": {
     "additional_shader_defines": 7,
-    "index": 119,
-    "name": 119,
+    "index": 120,
+    "name": 120,
     "rasterizerstate": 3,
-    "shader": 109,
-    "shader_file": 109,
+    "shader": 110,
+    "shader_file": 110,
     "texture": 13,
-    "texture_diffuse": 119,
-    "texture_normal": 109,
-    "texture_specular": 109
+    "texture_diffuse": 120,
+    "texture_normal": 100,
+    "texture_specular": 100
   },
   "entity/meshsettings/texture": {
     "file": 13,
     "index": 13
   },
   "entity/state": {
-    "animation": 6460,
+    "animation": 7151,
     "animation_blend_time": 418,
     "animation_speed": 16,
     "chance": 2176,
-    "event": 2312,
-    "looping": 5475,
-    "name": 6859,
-    "next_state": 5505,
-    "propagate_state": 120,
-    "start_event": 1657,
-    "state_time": 346,
-    "time_offset": 54
+    "event": 2581,
+    "looping": 6147,
+    "name": 7560,
+    "next_state": 6190,
+    "propagate_state": 176,
+    "start_event": 1649,
+    "state_time": 353,
+    "time_offset": 81
   },
   "entity/state/chance": {
     "default": 8,
@@ -113,21 +113,21 @@
     "entity": 117,
     "entity_fade_speed": 14,
     "keep_entity": 3,
-    "keep_particle": 531,
+    "keep_particle": 678,
     "keep_sound": 2,
-    "life": 21,
-    "node": 707,
-    "particle": 603,
+    "life": 22,
+    "node": 856,
+    "particle": 752,
     "remove_attachment": 27,
-    "skip_forward": 17,
-    "sound": 1567,
+    "skip_forward": 21,
+    "sound": 1687,
     "soundparameter": 2055,
-    "time": 2223,
-    "trigger_once": 196,
+    "time": 2487,
+    "trigger_once": 346,
     "use_parent_nodes": 6
   },
   "entity/state/event/sound": {
-    "soundeffect": 1567,
+    "soundeffect": 1687,
     "stop_on_state_change": 7
   },
   "entity/state/start_event": {
@@ -137,8 +137,8 @@
     "keep_sound": 38,
     "life": 40,
     "light": 10,
-    "node": 1586,
-    "particle": 395,
+    "node": 1578,
+    "particle": 387,
     "remove_attachment": 33,
     "sound": 44,
     "soundparameter": 6,
@@ -149,67 +149,69 @@
     "soundeffect": 44
   },
   "pdxmesh": {
-    "additive_animation": 127,
-    "animation": 1882,
-    "blend_shape": 5241,
-    "cull_distance": 101,
-    "file": 2964,
+    "additive_animation": 131,
+    "animation": 2058,
+    "blend_shape": 5695,
+    "cull_distance": 189,
+    "file": 3391,
     "import": 6,
-    "lod_percentages": 853,
-    "meshsettings": 6787,
-    "name": 2964,
-    "scale": 283
+    "lod_percentages": 1104,
+    "meshsettings": 8895,
+    "name": 3391,
+    "scale": 312,
+    "streaming": 15
   },
   "pdxmesh/additive_animation": {
-    "id": 127,
-    "type": 127
+    "id": 131,
+    "type": 131
   },
   "pdxmesh/animation": {
-    "id": 1882,
-    "type": 1882
+    "id": 2058,
+    "type": 2058
   },
   "pdxmesh/blend_shape": {
     "data": 9,
-    "id": 5241,
-    "type": 5241
+    "id": 5695,
+    "type": 5695
   },
   "pdxmesh/import": {
     "name": 6,
     "type": 6
   },
   "pdxmesh/lod_percentages": {
-    "lod": 1606
+    "lod": 2109
   },
   "pdxmesh/lod_percentages/lod": {
-    "index": 1606,
-    "percent": 1606
+    "index": 2109,
+    "percent": 2109
   },
   "pdxmesh/meshsettings": {
-    "additional_shader_defines": 631,
-    "index": 6775,
-    "name": 6777,
-    "rasterizerstate": 96,
-    "shader": 6791,
-    "shader_file": 6789,
-    "shadow_shader": 4,
-    "subpass": 709,
-    "texture": 1390,
-    "texture_diffuse": 6782,
-    "texture_normal": 6778,
-    "texture_specular": 6765
+    "additional_shader_defines": 750,
+    "index": 8881,
+    "name": 8883,
+    "rasterizerstate": 175,
+    "shader": 8899,
+    "shader_file": 8897,
+    "shadow_shader": 9,
+    "subpass": 1245,
+    "texture": 2304,
+    "texture_diffuse": 8892,
+    "texture_normal": 8887,
+    "texture_specular": 8874
   },
   "pdxmesh/meshsettings/texture": {
-    "file": 1390,
-    "index": 1390,
-    "srgb": 53
+    "file": 2304,
+    "index": 2302,
+    "Index": 2,
+    "srgb": 125
   },
   "skeletal_animation_set": {
-    "animation": 1044,
+    "animation": 1184,
     "name": 2,
     "reference_skeleton": 2
   },
   "skeletal_animation_set/animation": {
-    "id": 1044,
-    "type": 1044
+    "id": 1184,
+    "type": 1184
   }
 }

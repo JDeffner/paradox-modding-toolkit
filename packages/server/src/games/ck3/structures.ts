@@ -35,6 +35,7 @@ export const STRUCTURE_SOURCES: Record<string, string> = {
   faith: "faith_types",
   rite: "rite_types",
   tenet: "tenet_types",
+  trade_good: "trade_good_types",
 };
 
 // --- dynamic description nodes (events/_events.info "Descriptions") ---
@@ -818,6 +819,16 @@ const CURATED: Record<string, StructureSpec> = {
   customizable_localization: CUSTOMIZABLE_LOCALIZATION,
   story_cycle: STORY_CYCLE,
   modifier_definition_format: MODIFIER_DEFINITION_FORMAT,
+  // _trade_good_type.info is a record. Its keys overlap with engine token names,
+  // so the automatic script-grammar filter skips it.
+  trade_good: {
+    topLevel: [
+      { key: "base_price", doc: "Integer base price before buy and sell modifiers." },
+      { key: "origin", values: "block", doc: "Optional map pixel coordinates for entrepot supply." },
+      { key: "category", doc: "Flag identifying the good's category." },
+      { key: "is_basic", values: "bool", doc: "Basic goods travel on distribution routes. Defaults to no." },
+    ],
+  },
 };
 
 /**
@@ -860,6 +871,8 @@ const KEY_PATCHES: Record<string, Record<string, Partial<KeySpec> & { doc?: stri
     name_list: { refKinds: ["name_list"] },
   },
   dynasty_perk: {
+    // Florin _dynasty_perks.info: the modifier block can name a doctrine.
+    faith_character_modifier: { refKinds: ["doctrine"] },
     // _dynasty_perks.info spells the block `traits = { trait_name = int }`, and
     // game/common/dynasty_perks/00_dynasty_perks.txt writes it that way
     // (blood_legacy_4: `beauty_good_1 = 100`, `fecund = 50`), so the entry keys

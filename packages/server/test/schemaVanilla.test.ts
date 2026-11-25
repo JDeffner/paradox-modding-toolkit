@@ -18,6 +18,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { extractDefinitions } from "../src/index/extract";
 import { CK3_SCHEMA } from "../src/games/ck3/schema";
+import { loadSchema } from "../src/schema/loader";
 import type { Definition } from "@px-lsp/protocol/types";
 import { devPath } from "../../../scripts/devPaths";
 
@@ -120,7 +121,9 @@ run("vanilla corpus extraction", () => {
 });
 
 run("requiredLoc coverage >= 95%", () => {
-  const locEntries = CK3_SCHEMA.filter((e) => e.requiredLoc && (e.ext ?? ".txt") === ".txt");
+  const locEntries = loadSchema(null, undefined, GAME).entries.filter(
+    (e) => e.requiredLoc && (e.ext ?? ".txt") === ".txt"
+  );
 
   it("each requiredLoc pattern is defined for >=95% of vanilla defs", () => {
     const keys = loadLocKeys(GAME!);

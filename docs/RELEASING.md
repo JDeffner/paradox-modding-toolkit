@@ -34,7 +34,7 @@ Extension ID: `JDeffner.px-toolkit`. Stable Marketplace publishing is the defaul
    `docs/release/<version>.md` (it becomes the GitHub Release body and
    the Discord post). Missing or empty notes fail preparation.
 
-   A preview may keep its product changes under an upcoming version heading. For the 0.5.5 prerelease, use `0.6.0 (upcoming; preview 0.5.5)` in the extension changelog while the root and extension manifests, tag and release-note filename remain 0.5.5. Label the server and protocol sections with their independent versions and the corresponding upcoming toolkit version. Do not present an unpublished draft section as release history.
+   Label preview changes as a prerelease in the changelogs. Keep the root and extension manifests, tag and release-note filename on the same version. Label the server and protocol sections with their independent versions and the corresponding Toolkit version.
 2. Regenerate bundled data if the game patched (see below), and check
    `THIRD-PARTY-NOTICES.md` still matches what actually ships: every imported
    or derived third-party source needs its entry, and the pinned commits in
@@ -42,9 +42,8 @@ Extension ID: `JDeffner.px-toolkit`. Stable Marketplace publishing is the defaul
    (`packages/server/src/games/eu5/schema.generated.ts`).
 3. Verify locally: `pnpm typecheck && pnpm lint && pnpm test && pnpm run compile`,
    plus `node scripts/check-game-boundary.mjs`.
-4. Build the artifacts and smoke the tarball (below), then open the release
-   PR and hand it to Joel; he squash-merges it into `main`.
-5. Create and publish a GitHub release or prerelease for `v<version>` from the merged commit. A tag push alone does not start publishing. **Prepare release** checks the tagged extension and root package versions first. A mismatch fails without changing the release. When versions match, it loads `docs/release/<version>.md`, sets the release body, and marks the release as a prerelease with Latest disabled. Draft releases are prepared when published. After fixing a preparation failure, rerun its failed Actions run.
+4. Build the artifacts and smoke the tarball (below). For stable, open the release PR for the maintainer to squash-merge into `main`. For an opt-in preview maintained on a separate development branch, use the verified commit on that branch as the release target.
+5. Create and publish a GitHub prerelease for `v<version>` from the release target. Use the merged commit for stable. A tag push alone does not start publishing. **Prepare release** checks the tagged extension and root package versions first. A mismatch fails without changing the release. When versions match, it loads `docs/release/<version>.md`, sets the release body, and marks the release as a prerelease with Latest disabled. Draft releases are prepared when published. After fixing a preparation failure, rerun its failed Actions run.
 6. Wait for **Prepare release** to succeed. In **Actions > Release > Run workflow**, leave the workflow branch on `main`, enter the prepared tag, and choose whether to **Mark as pre-release**. This run always builds the tag, checks its versions and prepared notes again, runs checks, and attaches the VSIX and both standalone server archives. Archive filenames use the server's independent version.
 7. The workflow uploads the VSIX to the Marketplace, then sets the final GitHub release channel. Discord is notified only after Marketplace publishing succeeds. npm packages publish afterward when their versions are absent from npm. A failed Marketplace upload leaves the GitHub release as a prerelease and sends no Discord notification.
 
@@ -148,7 +147,7 @@ node dist/build-freqs.cjs --game vic3    # vic3
 | Completion frequencies | `build-freqs.ts [--game <id>]` | `packages/server/data/<id>/freqs.json` |
 | Definition skeletons | `build-skeletons.ts [--game <id>]` | `packages/server/data/<id>/skeletons.json` |
 | Asset vocabulary | `build-asset-vocabulary.ts [--game <id>]` | `packages/server/data/<id>/assetVocabulary.json` |
-| CK3 bundled datatypes | `build-data-types-json.ts` | `packages/server/data/ck3/dataTypes.json`, from bundled `wikidocs/Data_types.md`, not live dumps |
+| CK3 compact datatype fallback | `build-data-types-json.ts` | `packages/server/data/ck3/dataTypes.json`, from bundled `wikidocs/Data_types.md`; packaged servers also read the current `data_types/` dump |
 | Schema coverage audit | `audit-schema-coverage.ts [--game <id>]` | stdout; gaps should be 0 or documented |
 | EU5 schema table | `import-cwt-types.ts <path-to-cwtools-eu5-config-clone>` | `packages/server/src/games/eu5/schema.generated.ts` |
 

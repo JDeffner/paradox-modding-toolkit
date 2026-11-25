@@ -98,7 +98,7 @@ describe("the property vocabulary", () => {
 
   it("offers the tree-wide ranking as the fallback for a type it does not know", () => {
     const { commonProperties } = computeGuiVocabulary(DOC, CK3_GUI_SCHEMA);
-    expect(commonProperties![0]).toBe("name");
+    expect(commonProperties![0]).toBe("size"); // Florin's most frequent property
     expect(commonProperties!.length).toBe(COMMON_PROPERTY_LIMIT);
   });
 

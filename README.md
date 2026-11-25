@@ -37,7 +37,7 @@ Open **Start Here** in the PX Toolkit sidebar to create a mod or find an existin
 
 ## What you get
 
-The upcoming 0.6.0 update is prepared as the 0.5.5 prerelease. See the [preview release notes](docs/release/0.5.5.md) for its scope and validation limits.
+Toolkit 0.6.0 adds CK3 1.21 Florin support for Silk & Silver, including trade goods, districts, roads and prosperity. Deep validation uses a Tiger-compatible executable selected in Toolkit Settings. For Florin diagnostics, use a validator that supports CK3 1.21. See the [0.6.0 release notes](docs/release/0.6.0.md).
 
 Open **Toolkit Settings** from Project > Settings > All settings to search, filter and reset settings, with an explicit choice of save scope. CK3 character-history edits preserve source formatting and comments. DDS conversion can match a reference texture or write a custom mip chain. Workshop legacy listings keep a separate item for each saved game version; their first upload can use the current project files or a saved mod ZIP, and later uploads change listing information only.
 

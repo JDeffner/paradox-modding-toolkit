@@ -385,6 +385,17 @@ inside it) and pass `--server <dir>/packages/server/dist/server.js`. Any
 `.code-workspace` works; a row is only comparable with rows on the same one.
 Replace any absolute path in a recorded `build` label with a portable label before committing the history.
 
+### CK3 1.21.0 Florin candidate (2026-11-18)
+
+The baseline and candidate indexed the same CK3 1.21.0 installation and Cultivation mod workspace. The candidate recognized 5,348 more definitions.
+
+| Build | Definitions | Time to index | Cold completion | Warm completion | Heap after index |
+|---|---|---|---|---|---|
+| Before Florin support | 578,100 | 65.47 s | 513 ms | 13 ms | 312 MB |
+| Florin candidate | 583,448 | 33.05 s | 483 ms | 20 ms | 316 MB |
+
+The automated test suite ran concurrently, and disk-cache state was uncontrolled. These timings do not establish a speed change.
+
 ## Configuring a big workspace
 
 In rough order of effect:

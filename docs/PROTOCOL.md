@@ -219,7 +219,7 @@ Bundled data is per-game: everything the server loads from disk lives under
 `<root>/<gameId>/`, where the root is `dataDir` when the client sends one and
 otherwise `data/` next to `dist/server.js`. `wikidocs/` and `freqs.json` are
 resolved independently under that folder, and the root is re-resolved against
-the new `gameId` when the game changes. CK3 and Victoria 3 also ship `script_docs/` snapshots; all three games ship data-type dump snapshots. User-generated dumps take priority. A missing per-game bundle is supported and can leave a category without definitions.
+the new `gameId` when the game changes. CK3 and Victoria 3 also ship `script_docs/` snapshots; all three games ship data-type dump snapshots. User-generated dumps take priority. CK3's Florin snapshot supplies the names for the categories it covers. Wiki pages enrich those entries and supply names for uncovered categories. A missing per-game bundle is supported and can leave a category without definitions.
 
 `wikidocsDir` is a **deprecated** narrow override kept for older clients: it
 replaces the `wikidocs/` folder alone, leaves `freqs.json` on the `dataDir`/

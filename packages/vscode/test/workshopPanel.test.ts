@@ -205,11 +205,12 @@ it("offers Steam compatibility versions and persists the exact tag with existing
       "Older",
       "1.19 'Scribe'",
       "1.20 'Crozier'",
+      "1.21 'Florin'",
     ])
   );
-  const saved = await send({ type: "setTags", tags: ["Gameplay", "1.20 'Crozier'"], target: mainTarget() });
-  expect(saved.tags).toEqual(["Gameplay", "1.20 'Crozier'"]);
-  expect(fs.readFileSync(path.join(root, "descriptor.mod"), "utf8")).toContain("\"1.20 'Crozier'\"");
+  const saved = await send({ type: "setTags", tags: ["Gameplay", "1.21 'Florin'"], target: mainTarget() });
+  expect(saved.tags).toEqual(["Gameplay", "1.21 'Florin'"]);
+  expect(fs.readFileSync(path.join(root, "descriptor.mod"), "utf8")).toContain("\"1.21 'Florin'\"");
 });
 
 beforeEach(async () => {

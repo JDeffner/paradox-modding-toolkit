@@ -26,6 +26,8 @@ export interface IconEntry {
 }
 
 export interface CreatorInit {
+  /** Repeated modifier key documented by the selected game installation, if available. */
+  installedDoctrineModifierKey?: "faith_character_modifier" | "doctrine_character_modifier";
   /** The `dynasty_legacy` form: folder, loc patterns, icon folder, keys. */
   legacy: DefinitionForm;
   /** The `dynasty_perk` form: the seven documented keys and the vocabularies. */

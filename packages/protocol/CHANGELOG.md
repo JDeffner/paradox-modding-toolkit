@@ -6,9 +6,9 @@ the shared helpers change. Before the split it moved inside the extension's
 version (up to 0.3.2); that history is in the extension changelog
 (`packages/vscode/CHANGELOG.md`).
 
-## 0.2.8 (upcoming)
+## 0.2.8
 
-Prepared for Toolkit 0.6.0, first available in the 0.5.5 prerelease. This section includes the unpublished 0.2.7 draft; the protocol keeps its independent version.
+First published with the 0.5.5 preview and included in Toolkit 0.6.0. This section includes the unpublished 0.2.7 draft; the protocol keeps its independent version.
 
 - Add optional game reference context to `paradox/exampleWiki` and `paradox/exampleWikiEntry`. Identify the reference game in catalogue results and allow refresh without changing workspace settings. Existing requests retain their workspace behavior.
 - Add optional `EventDetail.sourceHash` for the decoded text behind event coordinates. Older servers remain supported through client source checks.

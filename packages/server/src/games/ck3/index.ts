@@ -4,6 +4,7 @@
  */
 import type { GameProfile } from "../profile";
 import type { SkeletonData } from "../../schema/skeletons";
+import type { SchemaEntry } from "../../schema/types";
 import { ck3Meta } from "./meta";
 import { BLOCK_REF_FIELDS, CK3_SCHEMA, PREFIX_REFS, REF_FIELDS } from "./schema";
 import { STRUCTURE_SOURCES } from "./structures";
@@ -19,6 +20,20 @@ import GUI_SCHEMA from "../../../data/ck3/guiSchema.json";
 // Definition skeletons measured over the vanilla tree (scripts/build-skeletons.ts).
 import SKELETONS from "../../../data/ck3/skeletons.json";
 
+function installedSchema(read: (relativePath: string) => string): SchemaEntry[] {
+  const buildings = read("localization/english/buildings_l_english.yml");
+  // The same vanilla building uses a bare key in Florin and a prefixed key in 1.18.
+  const name = /^\s*castle_02:/m.test(buildings)
+    ? "$"
+    : /^\s*building_castle_02:/m.test(buildings)
+      ? "building_$"
+      : null;
+  if (!name) return CK3_SCHEMA;
+  return CK3_SCHEMA.map((entry) =>
+    entry.kind === "building" ? { ...entry, requiredLoc: [name], locPatterns: [name, `${name}_desc`] } : entry
+  );
+}
+
 export const ck3Profile: GameProfile = {
   ...ck3Meta,
   migrations: [
@@ -28,6 +43,7 @@ export const ck3Profile: GameProfile = {
     ck3PortraitMaskMigration12003,
   ],
   schema: CK3_SCHEMA,
+  installedSchema,
   refFields: REF_FIELDS,
   prefixRefs: PREFIX_REFS,
   blockRefFields: BLOCK_REF_FIELDS,
@@ -41,6 +57,14 @@ export const ck3Profile: GameProfile = {
     Custom: "customizable_localization",
     Custom2: "customizable_localization",
     Custom2_Title: "customizable_localization",
+    // Florin DumpDataTypes: global lookups taking a database key.
+    GetBuildingType: "building",
+    GetDistrictType: "district",
+    GetTitleType: "title_type",
+    GetTollLevel: "trade_market_toll_level",
+    GetTradeGoodCategory: "trade_good_category",
+    GetTradeGoodType: "trade_good",
+    GetTradeTaskType: "trade_task",
   },
   structureSources: STRUCTURE_SOURCES,
   // Events declare `scope = character|landed_title|…` and default to character
@@ -69,5 +93,7 @@ export const ck3Profile: GameProfile = {
   skeletons: (SKELETONS as unknown as SkeletonData).kinds,
   saveSchema: CK3_SAVE_SCHEMA,
   wikiNote: "Source: CK3 wiki (may lag behind the current game version)",
+  // The Florin dumps supersede names from pre-Florin wiki tables.
+  authoritativeScriptDocsSnapshot: true,
   diagnosticSource: "ck3-script",
 };

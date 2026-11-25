@@ -56,13 +56,15 @@ describe("data-type source reporting", () => {
       const baseline = loadDataTypes([bundled, local], bundled);
       expect(baseline.source).toBe("bundled dump");
       expect(baseline.globals.get("SourceProbe")?.src).toBe("bundled");
+      expect(baseline.types.has("Character")).toBe(false);
       fs.writeFileSync(path.join(local, "data_types.log"), "not a usable dump");
       expect(loadDataTypes([bundled, local], bundled).source).toBe("bundled dump");
-      fs.writeFileSync(path.join(local, "data_types.log"), dump);
+      fs.writeFileSync(path.join(local, "data_types.log"), dump.replace("Character", "[unregistered]"));
       const generated = loadDataTypes([bundled, local], bundled);
       expect(generated.source).toBe("data_types.log");
       expect(generated.count).toBe(baseline.count);
       expect(generated.globals.get("SourceProbe")?.src).toBe("dump");
+      expect(generated.globals.get("SourceProbe")?.ret).toBeNull();
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }

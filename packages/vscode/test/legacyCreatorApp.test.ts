@@ -475,31 +475,69 @@ describe("dynasty legacy creator app", () => {
       "}",
   };
 
-  it("shows every doctrine modifier a loaded perk has, and writes them all back", () => {
-    const app = boot();
-    const document = app.window.document;
-    app.post({ type: "loaded", track: LEGACY_FORM, perks: [THREE_DOCTRINES], loc: {} });
+  it.each(["doctrine_character_modifier", "faith_character_modifier"])(
+    "preserves and edits repeated %s blocks from a loaded perk",
+    (key) => {
+      const app = boot({ ...INIT, installedDoctrineModifierKey: "faith_character_modifier" });
+      const document = app.window.document;
+      const loaded = {
+        ...THREE_DOCTRINES,
+        text: THREE_DOCTRINES.text.replaceAll("doctrine_character_modifier", key),
+      };
+      app.post({ type: "loaded", track: LEGACY_FORM, perks: [loaded], loc: {} });
+      app.cards()[0].click();
+      const editor = document.getElementById("perkEditor") as HTMLElement;
+      expect(editor.querySelectorAll(".doctrineblock")).toHaveLength(2);
+
+      // Untouched, the two blocks come out exactly as the file has them (the
+      // one line that moves is the link, which always follows the open track).
+      expect(app.save().perks[0].block).toBe(
+        loaded.text.replace("legacy = erudition_legacy_track", "legacy = px_legacy_track")
+      );
+
+      // A third block is added with its own doctrine and its name line.
+      buttonWith(editor, "Add a doctrine modifier").click();
+      const cards = [...editor.querySelectorAll<HTMLElement>(".doctrineblock")];
+      expect(cards).toHaveLength(3);
+      buttonWith(cards[2], "not set").click();
+      app.pick("doctrine_spiritual_head");
+      const written = app.save().perks[0];
+      expect(written.block.split(`${key} = {`)).toHaveLength(4);
+      // A repeated key cannot go through setProperties, which rewrites the last
+      // entry only, so a moved list is written as the whole block.
+      expect(written.changed).toBeUndefined();
+    }
+  );
+
+  it("writes a new doctrine modifier with the installed game's key", () => {
+    const app = boot({ ...INIT, installedDoctrineModifierKey: "faith_character_modifier" });
     app.cards()[0].click();
-    const editor = document.getElementById("perkEditor") as HTMLElement;
-    expect(editor.querySelectorAll(".doctrineblock")).toHaveLength(2);
-
-    // Untouched, the two blocks come out exactly as the file has them (the
-    // one line that moves is the link, which always follows the open track).
-    expect(app.save().perks[0].block).toBe(
-      THREE_DOCTRINES.text.replace("legacy = erudition_legacy_track", "legacy = px_legacy_track")
-    );
-
-    // A third block is added with its own doctrine and its name line.
+    const editor = app.window.document.getElementById("perkEditor") as HTMLElement;
     buttonWith(editor, "Add a doctrine modifier").click();
-    const cards = [...editor.querySelectorAll<HTMLElement>(".doctrineblock")];
-    expect(cards).toHaveLength(3);
-    buttonWith(cards[2], "not set").click();
+    buttonWith(editor.querySelector(".doctrineblock")!, "not set").click();
+    app.pick("doctrine_spiritual_head");
+    expect(app.save().perks[0].block).toContain("faith_character_modifier = {");
+  });
+
+  it("preserves both modifier spellings when a loaded perk contains both", () => {
+    const app = boot({ ...INIT, installedDoctrineModifierKey: "faith_character_modifier" });
+    const loaded = {
+      ...THREE_DOCTRINES,
+      text: THREE_DOCTRINES.text.replace("doctrine_character_modifier", "faith_character_modifier"),
+    };
+    app.post({ type: "loaded", track: LEGACY_FORM, perks: [loaded], loc: {} });
+    app.cards()[0].click();
+    const editor = app.window.document.getElementById("perkEditor") as HTMLElement;
+    buttonWith(editor, "Add a doctrine modifier").click();
+    buttonWith(editor.querySelectorAll(".doctrineblock")[1], "not set").click();
     app.pick("doctrine_spiritual_head");
     const written = app.save().perks[0];
-    expect(written.block.match(/doctrine_character_modifier = \{/g)).toHaveLength(3);
-    // A repeated key cannot go through setProperties, which rewrites the last
-    // entry only, so a moved list is written as the whole block.
     expect(written.changed).toBeUndefined();
+    expect(written.block.match(/faith_character_modifier = \{/g)).toHaveLength(2);
+    expect(written.block).toContain(
+      "\tdoctrine_character_modifier = {\n\t\tname = erudition_legacy_4_modifier_name"
+    );
+    expect(written.block).toContain("\t\treligious_head_opinion = 15");
   });
 
   it("takes an empty script area back to its builder", () => {

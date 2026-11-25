@@ -18,6 +18,7 @@ import { clientCapabilities, resolveClientCapabilities, setClientCapabilities } 
 import { BROWSER_DATA_VERSION, type BakedDocs, type BakedToken, type BakedTokens } from "../src/browser/data";
 import { loadTokenDataFromLogs, parseOnActionsLog } from "../src/data/docsParser";
 import { loadWikiTokens, mergeWikiTokens } from "../src/data/wikiDocs";
+import { ck3Profile } from "../src/games/ck3";
 
 const DATA = path.resolve(__dirname, "..", "data", "ck3");
 
@@ -30,7 +31,9 @@ beforeAll(() => {
   // rather than reading dist/ means the suite does not depend on a build step.
   const logs = path.join(DATA, "script_docs");
   const loaded = loadTokenDataFromLogs(logs);
-  const merged = mergeWikiTokens(loaded.tokens, loadWikiTokens(path.join(DATA, "wikidocs"))).tokens;
+  const merged = mergeWikiTokens(loaded.tokens, loadWikiTokens(path.join(DATA, "wikidocs")), {
+    dropUnknownNames: ck3Profile.authoritativeScriptDocsSnapshot,
+  }).tokens;
   const hot: BakedToken[] = [];
   const prose: Array<[string, string]> = [];
   for (const t of merged) {
@@ -85,6 +88,16 @@ tutorial.0001 = {
 `;
 
 describe("browser language service", () => {
+  it("uses Florin prosperity documentation without restoring removed development triggers", () => {
+    const text = EVENT.replace("is_ruler = yes", "prosperity_level >= 1\n\t\tdevelopment_level >= 1");
+    const doc = service().openDocument("events/florin.txt", text);
+    try {
+      expect(JSON.stringify(doc.hover(text.indexOf("prosperity_level") + 2))).toContain("prosperity level");
+      expect(doc.hover(text.indexOf("development_level") + 2)).toBeFalsy();
+    } finally {
+      doc.dispose();
+    }
+  });
   it("renders browser hovers without host commands and restores the enclosing host", () => {
     const before = clientCapabilities();
     const rich = resolveClientCapabilities({ clientCommands: true });

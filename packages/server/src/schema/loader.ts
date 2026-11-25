@@ -78,9 +78,25 @@ function buildStructureIndex(profile: GameProfile, entries: SchemaEntry[]): Stru
   };
 }
 
-export function loadSchema(modPath: string | string[] | null, log?: (msg: string) => void): SchemaData {
+export function loadSchema(
+  modPath: string | string[] | null,
+  log?: (msg: string) => void,
+  gamePath?: string | null
+): SchemaData {
   const profile = activeProfile();
-  const entries = [...profile.schema];
+  const installed =
+    gamePath &&
+    profile.installedSchema?.((relativePath) => {
+      try {
+        return fs.readFileSync(path.join(gamePath, relativePath), "utf8");
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          log?.(`could not read installed schema source ${relativePath}: ${String(error)}`);
+        }
+        return "";
+      }
+    });
+  const entries = [...(installed || profile.schema)];
   const refFields = new Map<string, RefField>();
   for (const f of profile.refFields) refFields.set(f.key, f);
   const prefixRefs: Record<string, string[]> = { ...profile.prefixRefs };

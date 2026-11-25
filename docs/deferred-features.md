@@ -4,17 +4,17 @@ Features and experiments that are not ready to expose. Each entry identifies the
 
 ## Future creators
 
-The [Artifact Creator](https://github.com/JDeffner/paradox-modding-toolkit/issues/79) and [Province Painter](https://github.com/JDeffner/paradox-modding-toolkit/issues/80) are excluded from the 0.5.5 preview. Artifact Creator has research and interactive design studies but no production implementation. Province Painter needs a researched scope before implementation.
+The [Artifact Creator](https://github.com/JDeffner/paradox-modding-toolkit/issues/79) and [Province Painter](https://github.com/JDeffner/paradox-modding-toolkit/issues/80) are outside Toolkit 0.6.0. Artifact Creator has research and interactive design studies but no production implementation. Province Painter needs a researched scope before implementation.
 
 ## Compatch
 
-Compatch is available in the 0.5.5 preview of the upcoming 0.6.0 update when `px.experimentalFeatures` is enabled. It remains experimental. A clean text merge does not establish gameplay compatibility; validate against the target installation and test the mod in game.
+Compatch is available in Toolkit 0.6.0 when `px.experimentalFeatures` is enabled. It remains experimental. A clean text merge does not establish gameplay compatibility; validate against the target installation and test the mod in game.
 
 ### Compatibility Patch
 
 The experimental maintained-patch workbench supports ordered source mods, conditional saved decisions, a bounded CK3 semantic set, manual-work records, three-way output maintenance and journal recovery. It does not establish complete playset compatibility. Ordinary cross-file duplicates without verified precedence, first-in-wins replacement constraints, `replace_path` effects, additive histories, nested databases and GUI semantics still need explicit rules or manual work. Binary assets remain an inventory for external review. Source refresh rereads the selected inputs; persistent incremental indexing is not implemented. No Crozier-compatible validator is available.
 
-Mod-to-mod gameplay acceptance is deferred beyond this preview and tracked in [issue #81](https://github.com/JDeffner/paradox-modding-toolkit/issues/81). It is not a release acceptance requirement for 0.5.5.
+Mod-to-mod gameplay acceptance remains deferred and is tracked in [issue #81](https://github.com/JDeffner/paradox-modding-toolkit/issues/81).
 
 ### Mod Compatibility
 

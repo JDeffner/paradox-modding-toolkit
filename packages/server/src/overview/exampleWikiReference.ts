@@ -62,7 +62,9 @@ async function loadReference(
   const ownDump = !!own?.tokens.length;
   const dump = ownDump ? own! : loadTokenDataFromLogs(path.join(gameData, "script_docs"), profile);
   const wiki = loadWikiTokens(path.join(gameData, "wikidocs"));
-  const tokens = mergeWikiTokens(dump.tokens, wiki, { dropUnknownNames: ownDump }).tokens;
+  const tokens = mergeWikiTokens(dump.tokens, wiki, {
+    dropUnknownNames: ownDump || profile.authoritativeScriptDocsSnapshot,
+  }).tokens;
   const bundledTypes = path.join(gameData, "data_types");
   const typeDirs: Array<string | null> = [bundledTypes];
   if (logsPath) {

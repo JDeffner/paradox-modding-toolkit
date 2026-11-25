@@ -142,11 +142,16 @@ export function buildEvalEnv(opts: {
   gamePath?: string | null;
   modPath: string | string[];
 }): EvalEnv {
-  setActiveProfile(resolveProfile(opts.gameId));
+  const profile = resolveProfile(opts.gameId);
+  setActiveProfile(profile);
   const data = new ServerData();
   const wikiTokens = loadWikiTokens(opts.wikidocsDir);
   const scriptTokens = opts.scriptDocsDir ? loadTokenDataFromLogs(opts.scriptDocsDir).tokens : [];
-  data.setTokens(scriptTokens.length > 0 ? mergeWikiTokens(scriptTokens, wikiTokens).tokens : wikiTokens);
+  data.setTokens(
+    mergeWikiTokens(scriptTokens, wikiTokens, {
+      dropUnknownNames: profile.authoritativeScriptDocsSnapshot,
+    }).tokens
+  );
   const schema = loadSchema(opts.modPath);
   data.completableKinds = new Set([
     ...schema.entries.filter((e) => e.completable !== false).flatMap(definitionKinds),

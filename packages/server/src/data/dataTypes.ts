@@ -180,15 +180,16 @@ export function parseDataTypesDump(
 /**
  * Insert a dump entry without losing information: the dump lists some members
  * twice (e.g. `Character.GetFather` once as a Promote with a real return type
- * and once as a Function returning "[unregistered]"), and the wiki baseline
- * may already hold a typed entry. An entry with a known return type is never
- * clobbered by one without; desc/args fill in whichever survivor lacks them.
+ * and once as a Function returning "[unregistered]"). Keep the known type
+ * within one dump. An entry from a higher-priority dump supplies its own
+ * return type, including an unregistered one.
  */
 function insertMember(
   data: DataTypesData,
   map: Map<string, DataTypeMember>,
   name: string,
-  member: DataTypeMember
+  member: DataTypeMember,
+  sameDump = true
 ): void {
   const prev = map.get(name);
   if (!prev) {
@@ -196,7 +197,8 @@ function insertMember(
     data.count++;
     return;
   }
-  const keep = prev.ret !== null && member.ret === null ? prev : member;
+  const keep =
+    sameDump && prev.src === member.src && prev.ret !== null && member.ret === null ? prev : member;
   const other = keep === prev ? member : prev;
   if (!keep.desc && other.desc) keep.desc = other.desc;
   if (!keep.args && other.args) keep.args = other.args;
@@ -230,9 +232,9 @@ function dumpFilesIn(dir: string): string[] {
 }
 
 /**
- * Bundled baseline upgraded by dumps. `dirs` are searched in order and later
- * directories win on conflicts, so callers list them lowest priority first
- * (bundled dump, then the user's folders). A single string is accepted for
+ * The bundled dump supplies the baseline when present. The compact wiki
+ * tables are a fallback for clients without the dump files. Local `dirs`
+ * are searched from lowest to highest priority. A single string is accepted for
  * convenience. Games whose script_docs live outside logs/ (newer Jomini
  * titles) dump data types to logs/ anyway, so callers pass both folders.
  */
@@ -241,10 +243,9 @@ export function loadDataTypes(
   bundledDir?: string,
   profile: Pick<GameProfile, "bundledDataTypes"> = activeProfile()
 ): DataTypesData {
-  const data = loadBundledDataTypes(profile);
   const list = (Array.isArray(dirs) ? dirs : [dirs]).filter((d): d is string => d !== null);
-  for (const dir of list) {
-    const source = dir === bundledDir ? "bundled dump" : "data_types.log";
+  function readDump(dir: string, source: "bundled dump" | "data_types.log"): DataTypesData {
+    const data = emptyDataTypes();
     for (const file of dumpFilesIn(dir)) {
       try {
         parseDataTypesDump(fs.readFileSync(file, "utf8"), data, source);
@@ -252,6 +253,20 @@ export function loadDataTypes(
         /* unreadable dump: keep what we have */
       }
     }
+    return data;
+  }
+  const bundled = bundledDir && list.includes(bundledDir) ? readDump(bundledDir, "bundled dump") : undefined;
+  const data = bundled?.count ? bundled : loadBundledDataTypes(profile);
+  for (const dir of list) {
+    if (dir === bundledDir) continue;
+    const local = readDump(dir, "data_types.log");
+    if (local.count === 0) continue;
+    for (const [name, member] of local.globals) insertMember(data, data.globals, name, member, false);
+    for (const [type, members] of local.types) {
+      const target = typeMembers(data, type);
+      for (const [name, member] of members) insertMember(data, target, name, member, false);
+    }
+    data.source = local.source;
   }
   return data;
 }

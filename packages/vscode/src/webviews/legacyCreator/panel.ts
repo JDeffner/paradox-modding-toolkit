@@ -227,12 +227,28 @@ export class LegacyCreatorPanel {
     }
     this.legacyForm = legacy;
     this.perkForm = perk;
+    let installedDoctrineModifierKey: string | undefined;
+    if (cfg.gamePath) {
+      try {
+        installedDoctrineModifierKey = fs
+          .readFileSync(path.join(cfg.gamePath, perk.folder, "_dynasty_perks.info"), "utf8")
+          .match(/^\s*(faith_character_modifier|doctrine_character_modifier)\s*=/m)?.[1];
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          console.warn("Dynasty Legacy Creator could not read the installed perk docs.", error);
+        }
+      }
+    }
     const icons = this.resolveIcons(legacy.iconFolder, this.iconFiles);
     this.post({
       type: "init",
       init: {
         legacy,
         perk,
+        ...(installedDoctrineModifierKey === "faith_character_modifier" ||
+        installedDoctrineModifierKey === "doctrine_character_modifier"
+          ? { installedDoctrineModifierKey }
+          : {}),
         formats: formats?.formats ?? null,
         refIconFolders: await this.refIconFolders(perk, modRoot),
         locLanguage: cfg.locLanguage,

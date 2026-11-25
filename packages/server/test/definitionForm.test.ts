@@ -10,8 +10,10 @@ import * as os from "os";
 import * as path from "path";
 import { pathToFileURL } from "url";
 import { computeDefinitionForm } from "../src/creators/definitionForm";
+import { computeRequiredLocDiagnostics } from "../src/features/diagnostics";
 import { loadSchema, type SchemaData } from "../src/schema/loader";
 import { ServerData } from "../src/serverData";
+import type { Definition } from "@px-lsp/protocol/types";
 
 const TRAITS_TXT = `# A mod trait.
 px_stoic = {
@@ -135,6 +137,29 @@ afterAll(() => {
 });
 
 describe("computeDefinitionForm", () => {
+  it.each(["", "building_"])("uses the installed building localization prefix %j", (prefix) => {
+    const install = path.join(dir, prefix || "florin");
+    const english = path.join(install, "localization", "english");
+    fs.mkdirSync(english, { recursive: true });
+    fs.writeFileSync(
+      path.join(english, "buildings_l_english.yml"),
+      `l_english:\n ${prefix}castle_02:1 "Keep"\n`
+    );
+    const installed = loadSchema(null, undefined, install);
+    const buildings = new ServerData();
+    const def: Definition = { name: "castle_02", kind: "building", file: "test.txt", line: 0, source: "mod" };
+    const entry = installed.entries.find((item) => item.kind === "building")!;
+    buildings.index.addAll([def]);
+    expect(computeRequiredLocDiagnostics([def], entry, buildings)[0]?.data?.key).toBe(`${prefix}castle_02`);
+    buildings.index.addAll([
+      { name: `${prefix}castle_02`, kind: "loc_key", file: "loc.yml", line: 0, source: "mod", value: "Keep" },
+    ]);
+    expect(computeRequiredLocDiagnostics([def], entry, buildings)).toEqual([]);
+    const form = computeDefinitionForm(buildings, installed, { kind: "building" });
+    expect(form?.locPatterns).toEqual([`${prefix}$`, `${prefix}$_desc`]);
+    expect(form?.existing[0]?.label).toBe("Keep");
+  });
+
   it("loads the requested duplicate source even outside the focused mod, with no fallback", () => {
     const other = path.join(dir, "other traits.txt");
     fs.writeFileSync(other, TRAITS_TXT.replace("martial = 2", "martial = 3"));
@@ -181,9 +206,9 @@ describe("computeDefinitionForm", () => {
     // icon gfx/interface/icons/traits/<trait>.dds.
     expect(form.locPatterns).toEqual(["trait_$", "trait_$_desc"]);
     expect(form.iconFolder).toBe("gfx/interface/icons/traits");
-    // The harvest's 60 documented trait keys, in its own order (most used first).
+    // The Florin harvest's 60 documented trait keys, most used first.
     expect(form.keys).toHaveLength(60);
-    expect(form.keys.slice(0, 3).map((k) => k.key)).toEqual(["desc", "category", "culture_modifier"]);
+    expect(form.keys.slice(0, 3).map((k) => k.key)).toEqual(["flag", "desc", "culture_modifier"]);
     const category = form.keys.find((k) => k.key === "category")!;
     expect(category.doc).toContain("category");
     expect(category.freq).toBeGreaterThan(0);
@@ -257,7 +282,7 @@ describe("computeDefinitionForm", () => {
     expect(form.iconFolder).toBeUndefined();
     // The harvest's own keys, most used first: `layers` and `category` are what
     // _traditions.info adds on top of the shared cultural-trait shape.
-    expect(form.keys.slice(0, 4).map((k) => k.key)).toEqual(["layers", "category", "cost", "parameters"]);
+    expect(form.keys.slice(0, 4).map((k) => k.key)).toEqual(["layers", "category", "cost", "ai_will_do"]);
 
     // _dynasty_legacies.info states $_name; all 21 vanilla tracks also define
     // $_desc, and window_dynasty_legacy.gui reads the picture off the key.
@@ -278,9 +303,10 @@ describe("computeDefinitionForm", () => {
       "character_modifier",
       "can_be_picked",
       "ai_chance",
-      "doctrine_character_modifier",
+      "faith_character_modifier",
       "traits",
     ]);
+    expect(perk.keys.find((k) => k.key === "faith_character_modifier")?.refKinds).toEqual(["doctrine"]);
     // `traits = { trait_name = int }`: the entry keys are trait names.
     expect(perk.keys.find((k) => k.key === "traits")?.refKinds).toEqual(["trait"]);
     expect(perk.options.trait.map((i) => i.value)).toEqual(["px_stoic", "brave", "craven"]);

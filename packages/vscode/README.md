@@ -25,7 +25,7 @@ New to modding? Start with [Getting Started](https://github.com/JDeffner/paradox
 
 This is a beta. Check generated content in the game before publishing it. After game patches, regenerate your dumps to match the installed version.
 
-The upcoming 0.6.0 update is prepared as the 0.5.5 prerelease. Its changes are listed under **0.6.0** in the [changelog](CHANGELOG.md).
+Toolkit 0.6.0 adds CK3 1.21 Florin support for Silk & Silver. Completion, hover help and navigation cover trade goods, districts, roads and prosperity. See the [changelog](CHANGELOG.md).
 
 ## At the cursor
 
@@ -39,7 +39,7 @@ The upcoming 0.6.0 update is prepared as the 0.5.5 prerelease. Its changes are l
 - **Documentation from the game:** hover descriptions, scope information, localized text and texture previews, plus searchable vanilla examples.
 - **Graphics assets:** CK3 and Victoria 3 `.asset` indexing, context-specific completion, reference navigation and DDS previews. Use `px.indexAssets` to toggle scanning.
 - **Section folding:** `### Title` or longer hash headings fold through the next heading or the end of the file, across closing braces.
-- **Validation:** instant structural checks for malformed files, encodings and folder mistakes. CK3 and Victoria 3 also integrate tiger for deeper validation.
+- **Validation:** instant structural checks for malformed files, encodings and folder mistakes. For CK3 and Victoria 3, select any Tiger-compatible executable in Toolkit Settings under Validation. Accurate reports require support for your game version.
 - **Localization:** coverage, inlay hints, quick fixes and workflows for adding languages or making a translation mod. File and folder actions reuse owned entries, follow related localization files and offer mod-specific author defaults.
 - **Project settings:** shared authoring rules travel with `.px-toolkit/project.json`; personal paths stay in your VS Code User profile. Both are available in the same settings catalogue. Existing settings upgrade with conflict reporting and source preservation.
 - **Mod Compatibility (experimental):** exact game-version routes, reusable compatibility notes and migration recipes, required choices, reviewed changes and recovery. Includes CK3 faith/rite and portrait mask mip migrations. A custom faith and mask fixture passed CK3 1.20.0.3 playtesting, including a separate clothes-gene merge; this does not establish compatibility for other mods. Enable `px.experimentalFeatures` to try it.
